@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import objectdetector
 import bboxtracker
+import threading
 
 def gst_pipeline(
     capture_size=(1920, 1080),
@@ -32,11 +33,25 @@ def gst_pipeline(
     )
 
 
-def draw(frame, detections, tracks, tracker):
-    # [det.draw(frame) for det in detections]
-    [track.draw(frame) for track in tracks.values()]
+def draw(frame, detections, tracker):
+    [track.draw(frame) for track in tracker.tracks.values()]
+    [det.draw(frame) for det in detections]
     if tracker is not None:
         tracker.draw_bkg_feature_match(frame)
+
+
+def capture_frames(cap, frame_queue, capture_rate=None):
+    while not exit_event.is_set():
+        ret, frame = cap.read()
+        with cond:
+            if ret == False:
+                exit_event.set()
+                cond.notify()
+                break
+            frame_queue.append(frame)
+            cond.notify()
+        if capture_rate is not None:
+            time.sleep(1 / capture_rate)
 
 
 if __name__ == '__main__':
@@ -69,89 +84,132 @@ if __name__ == '__main__':
 
     # paramters
     capture_size = (1920, 1080)
-    frame_rate = 30
+    camera_frame_rate = 30
     proc_size = (1280, 720)
-    detector_frame_skip = 60
+    detector_frame_skip = 10
     # classes = set([1])
     classes = set([1, 2, 3, 22, 24]) # person, bicycle, car, elephant, zebra
 
-    cap = cv2.VideoCapture(gst_pipeline(capture_size=capture_size, display_size=proc_size, frame_rate=frame_rate, flip_method=args['flip']), cv2.CAP_GSTREAMER) if args['input'] is None else cv2.VideoCapture(args['input'])
+    cap = cv2.VideoCapture(gst_pipeline(capture_size=capture_size, display_size=proc_size, frame_rate=camera_frame_rate, flip_method=args['flip']), cv2.CAP_GSTREAMER) if args['input'] is None else cv2.VideoCapture(args['input'])
     if cap.isOpened():
+        cond = threading.Condition()
+        exit_event = threading.Event()
+        frame_queue = []
         elapsed_time = 0
         frame_count = 0
-        
+        capture_rate = camera_frame_rate if args['input'] is None else 40
+        # account for display and output overhead
+        if args['gui']:
+            capture_rate = 1 / (1 / capture_rate + 0.02)
+        if args['output'] is not None:
+            capture_rate = 1 / (1 / capture_rate + 0.06)
+
+        capture_thread = threading.Thread(target=capture_frames, args=(cap, frame_queue, capture_rate))
+        if args['enable_detector']:
+            print('[INFO] Loading detector model...')
+            detector = objectdetector.ObjectDetector(proc_size, classes=classes)
+            tracker = bboxtracker.BBoxTracker(proc_size, estimate_camera_motion=True)
+            track_id = -1
+        if args['output'] is not None:
+            Path(args['output']).parent.mkdir(parents=True, exist_ok=True)
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            writer = cv2.VideoWriter(args["output"], fourcc, frame_rate, proc_size, True)
+        print('[INFO] Starting capturing thread...')
+        capture_thread.start()
+
         if args['gui']:
             cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
         try:
             while not args['gui'] or cv2.getWindowProperty("Video", 0) >= 0:
-                tic = time.time()
-                ret, frame = cap.read() # TODO: capture thread with queue
-                if ret == False:
-                    break
+                tic = time.perf_counter()
+                # grab frame when available
+                with cond:
+                    # print('frame queue size:', len(frame_queue))
+                    while len(frame_queue) == 0 and not exit_event.is_set():
+                        cond.wait()
+                    if exit_event.is_set():
+                        break
+                    frame = frame_queue.pop(0)
+
                 if frame_count == 0:
                     print('[INFO] Video dimension %dx%d' % (frame.shape[1], frame.shape[0]))
-                    if args['enable_detector']:
-                        print('[INFO] Loading detector model...')
-                        detector = objectdetector.ObjectDetector(proc_size, classes=classes)
-                        tracker = bboxtracker.BBoxTracker(proc_size, estimate_camera_motion=True)
-                    if args['output'] is not None:
-                        Path(args['output']).parent.mkdir(parents=True, exist_ok=True)
-                        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                        writer = cv2.VideoWriter(args["output"], fourcc, 30, proc_size, True)
-
                 if args['input'] is not None:
                     frame = cv2.resize(frame, proc_size)
                     # frame = cv2.medianBlur(frame, 3)
                 
-                detections = []
-                tracks = {}
                 if args['enable_detector']:
-                    if frame_count % detector_frame_skip == 0:
-                        detections = detector.detect(frame)
-                        if frame_count == 0:
-                            tracker.init(frame, detections)
-                        else:
-                            tracks = tracker.update(frame, detections, detector.get_cur_tile(scale_for_overlap=True))
-                        detector.draw_cur_tile(frame)
-                        # frame_small = cv2.resize(frame, None, fx=0.5, fy=0.5)
-                        # trackers = []
-                        # for det in detections:
-                        #     tracker = cv2.TrackerKCF_create()
-                        #     tracker.init(frame_small, det.bbox.scale(0.5, 0.5).cv_rect())
-                        #     trackers.append(tracker)
+                    detections = []
+                    if frame_count == 0:
+                        detections = detector.detect_sync(frame)
+                        tracker.init(frame, detections)
                     else:
-                        tracks, H_camera = tracker.track(frame)
-                        # frame_small = cv2.resize(frame, None, fx=0.5, fy=0.5)
-                        # for i, tracker in enumerate(trackers):
-                        #     success, bbox = tracker.update(frame_small)
-                        #     if success:
-                        #         (x, y, w, h) = [int(2 * v) for v in bbox]
-                        #         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                        #     else:
-                        #         print('[INFO] Tracker failed')
-                        #         del trackers[i]
+                        if track_id not in tracker.tracks:
+                            acquire = True
+                        if frame_count % 100 == 0:
+                            if len(tracker.tracks) > 0:
+                                track_id = tracker.lock_on()
+                                acquire = False
 
-                if args['gui'] or args['output'] is not None:
-                    draw(frame, detections, tracks, tracker)
+                        if frame_count % detector_frame_skip == 0:
+                            detector.preprocess(frame, tracker.tracks, acquire=acquire)
+                            detector.infer_async()
+                        tracker.track(frame)
+                        if frame_count % detector_frame_skip == 0:
+                            detections = detector.postprocess()
+                            tracker.update(detections, detector.roi, detector.tile_overlap, acquire=acquire)
+                        # else:
+                        #     tracks, H_camera = tracker.track(frame)
+                            # frame_small = cv2.resize(frame, None, fx=0.5, fy=0.5)
+                            # trackers = []
+                            # for det in detections:
+                            #     tracker = cv2.TrackerKCF_create()
+                            #     tracker.init(frame_small, det.bbox.scale(0.5, 0.5).cv_rect())
+                            #     trackers.append(tracker)
 
-                toc = time.time()
+                            # frame_small = cv2.resize(frame, None, fx=0.5, fy=0.5)
+                            # for i, tracker in enumerate(trackers):
+                            #     success, bbox = tracker.update(frame_small)
+                            #     if success:
+                            #         (x, y, w, h) = [int(2 * v) for v in bbox]
+                            #         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                            #     else:
+                            #         print('[INFO] Tracker failed')
+                            #         del trackers[i]
+
+                    if args['gui'] or args['output'] is not None:
+                        draw(frame, detections, tracker)
+                        if frame_count % detector_frame_skip == 0:
+                            detector.roi.draw(frame)
+
+                toc = time.perf_counter()
                 fps = round(1 / (toc - tic))
                 elapsed_time += toc - tic
+
+                # tic = time.perf_counter()
                 if args['gui']:
                     cv2.putText(frame, '%d FPS' % fps, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
                     cv2.imshow('Video', frame)
                     if cv2.waitKey(1) & 0xFF == 27:
+                        exit_event.set()
                         break
                 else:
                     print('[INFO] FPS: %d' % fps)
+                # toc = time.perf_counter()
+                # print('gui', toc - tic)
 
+                # tic = time.perf_counter()
                 if writer is not None:
                     writer.write(frame)
+                # toc = time.perf_counter()
+                # print('writer', toc - tic)
                 frame_count += 1
         finally:
+            # clean up resources
             if writer is not None:
                 writer.release()
-            cap.release()
+            if args['input'] is not None:
+                # gst cleans up automatically
+                cap.release()
             cv2.destroyAllWindows()
 
         avg_fps = round(frame_count / elapsed_time)
