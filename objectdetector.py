@@ -25,24 +25,24 @@ class Detection:
     def draw(self, frame):
         text = "%s: %.2f" % (coco_labels[self.label], self.conf) 
         (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
-        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), (0, 165, 255), 3)
-        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), (0, 165, 255), cv2.FILLED)
+        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), (127, 255, 0), 2)
+        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), (127, 255, 0), cv2.FILLED)
         cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, (143, 48, 0), 2, cv2.LINE_AA)
 
 
 class ObjectDetector:
-    def __init__(self, size, classes=set(range(len(coco_labels))), conf_threshold=0.6, tiling_grid=(1, 1), max_det=20):
+    def __init__(self, size, classes=set(range(len(coco_labels))), conf_threshold=0.6, schedule_tiles=True):
         # initialize parameters
+        self.size = size
         self.classes = classes
         self.conf_threshold = conf_threshold
-        self.max_det = max_det
+        self.max_det = 20
         self.batch_size = 1
         self.tile_overlap = 0.25
-        self.tiles = self._generate_tiles(size, tiling_grid, self.tile_overlap)
-        self.mode = 'acquisition'
-        if max_det > model.topk:
-            raise Exception('Maximum number of detections must be less than %s' % model.topk)
-        # TODO: acquisition vs tracking mode
+        self.tile_size = model.input_shape[1:][::-1]
+        self.tiles = self._generate_tiles(self.size, self.tile_size, (3, 2), self.tile_overlap)
+        self.tile_aging = np.zeros(len(self.tiles))
+        self.schedule_tiles = schedule_tiles
 
         # initialize TensorRT
         ctypes.CDLL("lib/libflattenconcat.so")
@@ -54,6 +54,7 @@ class ObjectDetector:
         with open(model.path, 'rb') as f:
             buf = f.read()
             engine = runtime.deserialize_cuda_engine(buf)
+        assert self.max_det <= model.topk
         assert self.batch_size <= engine.max_batch_size
 
         # create buffer
@@ -78,33 +79,53 @@ class ObjectDetector:
 
         self.context = engine.create_execution_context()
         self.input_batch = np.zeros((self.batch_size, trt.volume(model.input_shape)))
-        self.cur_tile = 0
+        self.cur_tile = -1
     
-    def detect(self, frame):
-        # preprocess
-        # full = cv2.resize(frame, model.input_shape[1:], interpolation=cv2.INTER_AREA)
-        # full = cv2.cvtColor(full, cv2.COLOR_BGR2RGB)
-        # full = full * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
-        # full = np.transpose(full, (2, 0, 1)) # HWC -> CHW
-        # self.input_batch[-1] = full.ravel()
-        
-        # tic = time.time()
-        tile_rect = self.tiles[self.cur_tile]
-        tile = tile_rect.crop(frame)
+    def preprocess(self, frame, tracks={}, acquire=True):
+        if acquire:
+            # tile scheduling
+            if self.schedule_tiles:
+                sx = sy = 1 - self.tile_overlap
+                tile_num_tracks = np.zeros(len(self.tiles))
+                for tile_id, tile in enumerate(self.tiles):
+                    scaled_tile = tile.scale(sx, sy)
+                    for track in tracks.values():
+                        if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox):
+                            tile_num_tracks[tile_id] += 1
+                max_aging = max(self.tile_aging)
+                max_num_tracks = max(tile_num_tracks)
+                tile_scores = self.tile_aging * (0.6 / (max_aging if max_aging > 0 else 1)) + tile_num_tracks * (0.4 / (max_num_tracks if max_num_tracks > 0 else 1))
+                self.cur_tile = np.argmax(tile_scores)
+                self.tile_aging += 1
+                self.tile_aging[self.cur_tile] = 0
+            else:
+                self.cur_tile = (self.cur_tile + 1) % len(self.tiles)
+            self.roi = self.tiles[self.cur_tile]
+        else:
+            if len(tracks) > 0:
+                track = next(iter(tracks.values()))
+                xmin, ymin = np.int_(np.round(track.bbox.center() - (np.array(self.tile_size) - 1) / 2))
+                xmin = min(xmin, self.size[0] - self.tile_size[0])
+                ymin = min(ymin, self.size[1] - self.tile_size[1])
+                self.roi = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
+
+        tile = self.roi.crop(frame)
         tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
         tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
         tile = np.transpose(tile, (2, 0, 1)) # HWC -> CHW
         self.input_batch[-1] = tile.ravel()
         np.copyto(self.host_inputs[0], self.input_batch.ravel())
 
+    def infer_async(self):
         # inference
         cuda.memcpy_htod_async(self.cuda_inputs[0], self.host_inputs[0], self.stream)
         self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
         cuda.memcpy_dtoh_async(self.host_outputs[1], self.cuda_outputs[1], self.stream)
         cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
-        self.stream.synchronize()
         # print('[INFO] Latency: %.3f' % (time.time() - tic))
 
+    def postprocess(self):
+        self.stream.synchronize()
         output = self.host_outputs[0]
         detections = []
         for det_idx in range(self.max_det):
@@ -112,19 +133,18 @@ class ObjectDetector:
             # index = int(output[offset])
             label = int(output[offset + 1])
             conf  = output[offset + 2]
-            xmin  = int(round(output[offset + 3] * tile_rect.size[0])) + tile_rect.xmin
-            ymin  = int(round(output[offset + 4] * tile_rect.size[1])) + tile_rect.ymin
-            xmax  = int(round(output[offset + 5] * tile_rect.size[0])) + tile_rect.xmin
-            ymax  = int(round(output[offset + 6] * tile_rect.size[1])) + tile_rect.ymin
+            xmin  = int(round(output[offset + 3] * self.roi.size[0])) + self.roi.xmin
+            ymin  = int(round(output[offset + 4] * self.roi.size[1])) + self.roi.ymin
+            xmax  = int(round(output[offset + 5] * self.roi.size[0])) + self.roi.xmin
+            ymax  = int(round(output[offset + 6] * self.roi.size[1])) + self.roi.ymin
             if conf > self.conf_threshold and label in self.classes:
                 bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
                 det = Detection(bbox, label, conf)
                 detections.append(det)
                 print('[Detector] Detected: %s' % det)
-        
-        # print('[Detector] Latency: %.3f' % (time.time() - tic))
 
-        self.cur_tile = (self.cur_tile + 1) % len(self.tiles)
+        # TODO: NMS
+        # print('[Detector] Latency: %.3f' % (time.time() - tic))
         # discard = set()
         # for i in range(len(detections)):
         #     if i not in discard:
@@ -137,21 +157,17 @@ class ObjectDetector:
         #     if detections[i].conf < self.conf_threshold:
         #         discard.add(i)
         # merged_detections = np.delete(detections, list(discard))
-
         return detections
 
-    def get_cur_tile(self, scale_for_overlap=False):
-        sx = sy = 1
-        if scale_for_overlap:
-            sx = sy = 1 - self.tile_overlap
-        return self.tiles[self.cur_tile].scale(sx, sy)
+    def detect_sync(self, frame, tracks={}, acquire=True):
+        self.preprocess(frame, tracks, acquire)
+        self.infer_async()
+        return self.postprocess()
 
-    def draw_cur_tile(self, frame):
-        self.tiles[self.cur_tile].draw(frame)
-
-    def _generate_tiles(self, size, tiling_grid, overlap=0.25):
+    def _generate_tiles(self, size, tile_size, tiling_grid, overlap):
+        # TODO: dynamic tiling
         width, height = size
-        tile_height, tile_width = model.input_shape[1:]
+        tile_width, tile_height = tile_size
         step = 1 - overlap
         total_width = (tiling_grid[0] - 1) * tile_width * step + tile_width
         total_height = (tiling_grid[1] - 1) * tile_height * step + tile_height
