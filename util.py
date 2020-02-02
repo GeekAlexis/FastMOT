@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import math
 
 
 class Rect:
@@ -17,7 +18,11 @@ class Rect:
         return "Rect(tf_rect=(%r, %r, %r, %r))" % (self.xmin, self.ymin, self.xmax, self.ymax)
 
     def __contains__(self, point):
+        assert isinstance(point, tuple) and len(point) == 2
         return point[0] >= self.xmin and point[1] >= self.ymin and point[0] <= self.xmax and point[1] <= self.ymax
+
+    def contains_rect(self, other):
+        return other.xmin >= self.xmin and other.ymin >= self.ymin and other.xmax <= self.xmax and other.ymax <= self.ymax
 
     def tf_rect(self):
         return (self.xmin, self.ymin, self.xmax, self.ymax)
@@ -65,6 +70,10 @@ def iou(rect1, rect2):
     inter_area = max(0, inter_xmax - inter_xmin + 1) * max(0, inter_ymax - inter_ymin + 1)
     iou = inter_area / (rect1.area() + rect2.area() - inter_area)
     return iou
+
+
+def l2_dist(point1, point2):
+    return math.sqrt(np.sum((np.array(point1) - point2)**2))
 
 
 coco_labels = [
