@@ -21,6 +21,23 @@ class Rect:
         assert isinstance(point, tuple) and len(point) == 2
         return point[0] >= self.xmin and point[1] >= self.ymin and point[0] <= self.xmax and point[1] <= self.ymax
 
+    def __and__(self, other):
+        xmin = max(self.xmin, other.xmin)
+        ymin = max(self.ymin, other.ymin)
+        xmax = min(self.xmax, other.xmax)
+        ymax = min(self.ymax, other.ymax)
+        inter_rect = Rect(tf_rect=(xmin, ymin, xmax, ymax))
+        if inter_rect.size[0] <= 0 or inter_rect.size[1] <= 0:
+            return None
+        return inter_rect
+
+    def __or__(self, other):
+        xmin = min(self.xmin, other.xmin)
+        ymin = min(self.ymin, other.ymin)
+        xmax = max(self.xmax, other.xmax)
+        ymax = max(self.ymax, other.ymax)
+        return Rect(tf_rect=(xmin, ymin, xmax, ymax))
+
     def contains_rect(self, other):
         return other.xmin >= self.xmin and other.ymin >= self.ymin and other.xmax <= self.xmax and other.ymax <= self.ymax
 
@@ -50,13 +67,6 @@ class Rect:
         xmin, ymin = np.int_(np.round(self.center() - half_size))
         xmax, ymax = np.int_(np.round(self.center() + half_size))
         return Rect(tf_rect=(xmin, ymin, xmax, ymax))
-
-    def merge(self, other):
-        xmin = min(self.xmin, other.xmin)
-        ymin = min(self.ymin, other.ymin)
-        xmax = max(self.xmax, other.xmax)
-        ymax = max(self.ymax, other.ymax)
-        return Rect(tf_rect=(xmin, ymin, xmax, ymax))
     
     def draw(self, frame):
         cv2.rectangle(frame, self.tl(), self.br(), 0, 2)
@@ -73,7 +83,7 @@ def iou(rect1, rect2):
 
 
 def l2_dist(point1, point2):
-    return math.sqrt(np.sum((np.array(point1) - point2)**2))
+    return math.sqrt(np.sum((np.asarray(point1) - point2)**2))
 
 
 coco_labels = [
