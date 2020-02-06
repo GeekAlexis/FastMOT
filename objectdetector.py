@@ -25,24 +25,25 @@ class Detection:
     def draw(self, frame):
         text = "%s: %.2f" % (coco_labels[self.label], self.conf) 
         (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
-        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), (127, 255, 0), 2)
-        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), (127, 255, 0), cv2.FILLED)
-        cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, (143, 48, 0), 2, cv2.LINE_AA)
+        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), (112, 25, 25), 2)
+        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), (112, 25, 25), cv2.FILLED)
+        cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, (102, 255, 255), 2, cv2.LINE_AA)
 
 
 class ObjectDetector:
-    def __init__(self, size, classes=set(range(len(coco_labels))), conf_threshold=0.6, schedule_tiles=True):
+    def __init__(self, size, classes=set(range(len(coco_labels))), conf_threshold=0.5, schedule_tiles=True):
         # initialize parameters
         self.size = size
         self.classes = classes
         self.conf_threshold = conf_threshold
+        self.schedule_tiles = schedule_tiles
         self.max_det = 20
         self.batch_size = 1
         self.tile_overlap = 0.25
         self.tile_size = model.input_shape[1:][::-1]
         self.tiles = self._generate_tiles(self.size, self.tile_size, (3, 2), self.tile_overlap)
-        self.tile_aging = np.zeros(len(self.tiles))
-        self.schedule_tiles = schedule_tiles
+        self.tile_ages = np.zeros(len(self.tiles))
+        self.tile_acquisition_weight = 0.6
 
         # initialize TensorRT
         ctypes.CDLL("lib/libflattenconcat.so")
@@ -81,7 +82,7 @@ class ObjectDetector:
         self.input_batch = np.zeros((self.batch_size, trt.volume(model.input_shape)))
         self.cur_tile = -1
     
-    def preprocess(self, frame, tracks={}, acquire=True):
+    def preprocess(self, frame, tracks={}, acquire=True, track_id=None):
         if acquire:
             # tile scheduling
             if self.schedule_tiles:
@@ -92,22 +93,21 @@ class ObjectDetector:
                     for track in tracks.values():
                         if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox):
                             tile_num_tracks[tile_id] += 1
-                max_aging = max(self.tile_aging)
+                max_age = max(self.tile_ages)
                 max_num_tracks = max(tile_num_tracks)
-                tile_scores = self.tile_aging * (0.6 / (max_aging if max_aging > 0 else 1)) + tile_num_tracks * (0.4 / (max_num_tracks if max_num_tracks > 0 else 1))
+                tile_scores = self.tile_ages * (self.tile_acquisition_weight / (max_age if max_age > 0 else 1)) + tile_num_tracks * ((1 - self.tile_acquisition_weight) / (max_num_tracks if max_num_tracks > 0 else 1))
                 self.cur_tile = np.argmax(tile_scores)
-                self.tile_aging += 1
-                self.tile_aging[self.cur_tile] = 0
+                self.tile_ages += 1
+                self.tile_ages[self.cur_tile] = 0
             else:
                 self.cur_tile = (self.cur_tile + 1) % len(self.tiles)
             self.roi = self.tiles[self.cur_tile]
         else:
-            if len(tracks) > 0:
-                track = next(iter(tracks.values()))
-                xmin, ymin = np.int_(np.round(track.bbox.center() - (np.array(self.tile_size) - 1) / 2))
-                xmin = min(xmin, self.size[0] - self.tile_size[0])
-                ymin = min(ymin, self.size[1] - self.tile_size[1])
-                self.roi = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
+            assert len(tracks) > 0 and track_id is not None
+            xmin, ymin = np.int_(np.round(tracks[track_id].bbox.center() - (np.array(self.tile_size) - 1) / 2))
+            xmin = max(min(xmin, self.size[0] - self.tile_size[0]), 0)
+            ymin = max(min(ymin, self.size[1] - self.tile_size[1]), 0)
+            self.roi = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
 
         tile = self.roi.crop(frame)
         tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
@@ -133,11 +133,11 @@ class ObjectDetector:
             # index = int(output[offset])
             label = int(output[offset + 1])
             conf  = output[offset + 2]
-            xmin  = int(round(output[offset + 3] * self.roi.size[0])) + self.roi.xmin
-            ymin  = int(round(output[offset + 4] * self.roi.size[1])) + self.roi.ymin
-            xmax  = int(round(output[offset + 5] * self.roi.size[0])) + self.roi.xmin
-            ymax  = int(round(output[offset + 6] * self.roi.size[1])) + self.roi.ymin
             if conf > self.conf_threshold and label in self.classes:
+                xmin  = int(round(output[offset + 3] * self.roi.size[0])) + self.roi.xmin
+                ymin  = int(round(output[offset + 4] * self.roi.size[1])) + self.roi.ymin
+                xmax  = int(round(output[offset + 5] * self.roi.size[0])) + self.roi.xmin
+                ymax  = int(round(output[offset + 6] * self.roi.size[1])) + self.roi.ymin
                 bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
                 det = Detection(bbox, label, conf)
                 detections.append(det)
@@ -163,6 +163,10 @@ class ObjectDetector:
         self.preprocess(frame, tracks, acquire)
         self.infer_async()
         return self.postprocess()
+
+    def get_tiling_region(self):
+        assert len(self.tiles) > 0
+        return Rect(tf_rect=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
 
     def _generate_tiles(self, size, tile_size, tiling_grid, overlap):
         # TODO: dynamic tiling
