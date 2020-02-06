@@ -33,12 +33,18 @@ def gst_pipeline(
     )
 
 
-def draw(frame, detections, tracker):
-    [track.draw(frame) for track in tracker.tracks.values()]
+def draw(frame, detections, tracks, acquire, track_id):
+    for _track_id, track in tracks.items():
+        if not acquire and _track_id == track_id:
+            track.draw(frame, follow=True, draw_feature_match=True)
+        else:
+            track.draw(frame, draw_feature_match=True)
     [det.draw(frame) for det in detections]
-    if tracker is not None:
-        tracker.draw_bkg_feature_match(frame)
-
+    if acquire:
+        cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
+    elif track_id in tracks:
+        cv2.putText(frame, 'Tracking %d' % track_id, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
+        
 
 def capture_frames(cap, frame_queue, capture_rate=None):
     while not exit_event.is_set():
@@ -86,7 +92,7 @@ if __name__ == '__main__':
     capture_size = (1920, 1080)
     camera_frame_rate = 30
     proc_size = (1280, 720)
-    detector_frame_skip = 10
+    detector_frame_skip = 8
     # classes = set([1])
     classes = set([1, 2, 3, 22, 24]) # person, bicycle, car, elephant, zebra
 
@@ -100,7 +106,7 @@ if __name__ == '__main__':
         capture_rate = camera_frame_rate if args['input'] is None else 40
         # account for display and output overhead
         if args['gui']:
-            capture_rate = 1 / (1 / capture_rate + 0.02)
+            capture_rate = 1 / (1 / capture_rate + 0.025)
         if args['output'] is not None:
             capture_rate = 1 / (1 / capture_rate + 0.06)
 
@@ -109,11 +115,13 @@ if __name__ == '__main__':
             print('[INFO] Loading detector model...')
             detector = objectdetector.ObjectDetector(proc_size, classes=classes)
             tracker = bboxtracker.BBoxTracker(proc_size, estimate_camera_motion=True)
+            acquire = True
+            acquisition_start_frame = 0
             track_id = -1
         if args['output'] is not None:
             Path(args['output']).parent.mkdir(parents=True, exist_ok=True)
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            writer = cv2.VideoWriter(args["output"], fourcc, frame_rate, proc_size, True)
+            writer = cv2.VideoWriter(args["output"], fourcc, capture_rate, proc_size, True)
         print('[INFO] Starting capturing thread...')
         capture_thread.start()
 
@@ -143,15 +151,21 @@ if __name__ == '__main__':
                         detections = detector.detect_sync(frame)
                         tracker.init(frame, detections)
                     else:
-                        if track_id not in tracker.tracks:
+                        if acquire:
+                            if frame_count - acquisition_start_frame == 100:
+                                if len(tracker.tracks) > 0:
+                                    track_id = tracker.get_nearest_track()
+                                    acquire = False
+                                    print('[INFO] Following: %s' % tracker.tracks[track_id])
+                                else:
+                                    acquisition_start_frame = frame_count
+                        elif track_id not in tracker.tracks:
                             acquire = True
-                        if frame_count % 100 == 0:
-                            if len(tracker.tracks) > 0:
-                                track_id = tracker.lock_on()
-                                acquire = False
+                            acquisition_start_frame = frame_count
+                            print('[INFO] Acquiring new targets')
 
                         if frame_count % detector_frame_skip == 0:
-                            detector.preprocess(frame, tracker.tracks, acquire=acquire)
+                            detector.preprocess(frame, tracker.tracks, acquire=acquire, track_id=track_id)
                             detector.infer_async()
                         tracker.track(frame)
                         if frame_count % detector_frame_skip == 0:
@@ -177,7 +191,9 @@ if __name__ == '__main__':
                             #         del trackers[i]
 
                     if args['gui'] or args['output'] is not None:
-                        draw(frame, detections, tracker)
+                        # draw tracks and detections
+                        draw(frame, detections, tracker.tracks, acquire, track_id)
+                        tracker.draw_bkg_feature_match(frame)
                         if frame_count % detector_frame_skip == 0:
                             detector.roi.draw(frame)
 
@@ -187,7 +203,7 @@ if __name__ == '__main__':
 
                 # tic = time.perf_counter()
                 if args['gui']:
-                    cv2.putText(frame, '%d FPS' % fps, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+                    # cv2.putText(frame, '%d FPS' % fps, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
                     cv2.imshow('Video', frame)
                     if cv2.waitKey(1) & 0xFF == 27:
                         exit_event.set()
