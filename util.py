@@ -1,6 +1,59 @@
+import math
 import numpy as np
 import cv2
-import math
+
+
+class Detection:
+    def __init__(self, bbox, label, conf):
+        self.bbox = bbox
+        self.label = label
+        self.conf = conf
+
+    def __repr__(self):
+        return "Detection(bbox=%r, label=%r, conf=%r)" % (self.bbox, self.label, self.conf)
+
+    def __str__(self):
+        return "%.2f %s at %s" % (self.conf, coco_labels[self.label], self.bbox.cv_rect())
+    
+    def draw(self, frame):
+        text = "%s: %.2f" % (coco_labels[self.label], self.conf) 
+        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
+        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), (112, 25, 25), 2)
+        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), (112, 25, 25), cv2.FILLED)
+        cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, (102, 255, 255), 2, cv2.LINE_AA)
+
+
+class Track:
+    def __init__(self, label, bbox, track_id):
+        self.label = label
+        self.bbox = bbox
+        self.init_bbox = bbox
+        self.track_id = track_id
+        self.age = 0
+        self.conf = 1
+        self.feature_pts = None
+        self.prev_feature_pts = None
+        self.frames_since_acquisition = 0
+
+    def __repr__(self):
+        return "Track(label=%r, bbox=%r, track_id=%r)" % (self.label, self.bbox, self.track_id)
+
+    def __str__(self):
+        return "%s ID%d at %s" % (coco_labels[self.label], self.track_id, self.bbox.cv_rect())
+
+    def draw(self, frame, follow=False, draw_feature_match=False):
+        bbox_color = (127, 255, 0) if follow else (0, 165, 255)
+        text_color = (143, 48, 0)
+        text = "%s%d" % (coco_labels[self.label], self.track_id) 
+        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
+        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), bbox_color, 2)
+        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), bbox_color, cv2.FILLED)
+        cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, text_color, 2, cv2.LINE_AA)
+        if draw_feature_match:
+            if self.feature_pts is not None:
+                [cv2.circle(frame, tuple(pt), 1, (0, 255, 255), -1) for pt in np.int_(np.round(self.feature_pts))]
+                if self.prev_feature_pts is not None:
+                    [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 255, 255), 1, cv2.LINE_AA) for pt1, pt2 in zip(np.int_(np.round(self.prev_feature_pts)), np.int_(np.round(self.feature_pts)))]
 
 
 class Rect:
@@ -18,10 +71,11 @@ class Rect:
         return "Rect(tf_rect=(%r, %r, %r, %r))" % (self.xmin, self.ymin, self.xmax, self.ymax)
 
     def __contains__(self, point):
-        assert isinstance(point, tuple) and len(point) == 2
+        assert isinstance(point, (tuple, list, np.ndarray)) and len(point) == 2
         return point[0] >= self.xmin and point[1] >= self.ymin and point[0] <= self.xmax and point[1] <= self.ymax
 
     def __and__(self, other):
+        # intersection
         xmin = max(self.xmin, other.xmin)
         ymin = max(self.ymin, other.ymin)
         xmax = min(self.xmax, other.xmax)
@@ -32,6 +86,7 @@ class Rect:
         return inter_rect
 
     def __or__(self, other):
+        # minimum rect that contains both rects
         xmin = min(self.xmin, other.xmin)
         ymin = min(self.ymin, other.ymin)
         xmax = max(self.xmax, other.xmax)
@@ -70,7 +125,7 @@ class Rect:
     
     def draw(self, frame):
         cv2.rectangle(frame, self.tl(), self.br(), 0, 2)
-    
+
 
 def iou(rect1, rect2):
     inter_xmin = max(rect1.xmin, rect2.xmin) 
