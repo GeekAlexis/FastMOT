@@ -38,7 +38,7 @@ class ObjectDetector:
         self.tile_overlap = 0.25
         if self.detector_type == DetectorType.ACQUISITION:
             self.model = ssd.MobileNetV1
-            self.conf_threshold = 0.6
+            self.conf_threshold = 0.5
             self.schedule_tiles = True
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
             self.tiles = self._generate_tiles(self.size, self.tile_size, (3, 2), self.tile_overlap)
