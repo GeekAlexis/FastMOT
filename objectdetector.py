@@ -1,64 +1,62 @@
+import ctypes
 import numpy as np
 import cv2
-import ctypes
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 from util import *
-# import models.ssd_mobilenet_v2 as model
-import models.ssd_inception_v2 as model
-import time
+import models.ssd as ssd
 
 
-class Detection:
-    def __init__(self, bbox, label, conf):
-        self.bbox = bbox
-        self.label = label
-        self.conf = conf
-
-    def __repr__(self):
-        return "Detection(bbox=%r, label=%r, conf=%r)" % (self.bbox, self.label, self.conf)
-
-    def __str__(self):
-        return "%s at %s with %.2f confidence" % (coco_labels[self.label], self.bbox.cv_rect(), self.conf)
-    
-    def draw(self, frame):
-        text = "%s: %.2f" % (coco_labels[self.label], self.conf) 
-        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
-        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), (112, 25, 25), 2)
-        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), (112, 25, 25), cv2.FILLED)
-        cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, (102, 255, 255), 2, cv2.LINE_AA)
+class DetectorType:
+    """
+    enumeration type for object detector type
+    """
+    TRACKING = 0
+    ACQUISITION = 1
 
 
 class ObjectDetector:
-    def __init__(self, size, classes=set(range(len(coco_labels))), conf_threshold=0.5, schedule_tiles=True):
+    runtime = None
+
+    @classmethod
+    def init_backend(cls): 
+        # initialize TensorRT
+        ctypes.CDLL("lib/libflattenconcat.so")
+        trt_logger = trt.Logger(trt.Logger.INFO)
+        trt.init_libnvinfer_plugins(trt_logger, '')
+        ObjectDetector.runtime = trt.Runtime(trt_logger)
+
+    def __init__(self, size, classes=set(range(len(coco_labels))), detector_type=DetectorType.ACQUISITION):
         # initialize parameters
         self.size = size
         self.classes = classes
-        self.conf_threshold = conf_threshold
-        self.schedule_tiles = schedule_tiles
+        self.detector_type = detector_type
         self.max_det = 20
         self.batch_size = 1
-        self.tile_overlap = 0.25
-        self.tile_size = model.input_shape[1:][::-1]
-        self.tiles = self._generate_tiles(self.size, self.tile_size, (3, 2), self.tile_overlap)
-        self.tile_ages = np.zeros(len(self.tiles))
-        self.tile_acquisition_weight = 0.6
 
-        # initialize TensorRT
-        ctypes.CDLL("lib/libflattenconcat.so")
-        TRT_LOGGER = trt.Logger(trt.Logger.INFO)
-        trt.init_libnvinfer_plugins(TRT_LOGGER, '')
-        runtime = trt.Runtime(TRT_LOGGER)
+        self.tile_overlap = 0.25
+        if self.detector_type == DetectorType.ACQUISITION:
+            self.model = ssd.MobileNetV1
+            self.conf_threshold = 0.6
+            self.schedule_tiles = True
+            self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
+            self.tiles = self._generate_tiles(self.size, self.tile_size, (3, 2), self.tile_overlap)
+            self.tile_ages = np.zeros(len(self.tiles))
+            self.age_to_object_ratio = 0.5
+        elif self.detector_type == DetectorType.TRACKING:
+            self.model = ssd.InceptionV2
+            self.conf_threshold = 0.5
+            self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
 
         # load model and create engine
-        with open(model.path, 'rb') as f:
+        with open(self.model.PATH, 'rb') as f:
             buf = f.read()
-            engine = runtime.deserialize_cuda_engine(buf)
-        assert self.max_det <= model.topk
+            engine = ObjectDetector.runtime.deserialize_cuda_engine(buf)
+        assert self.max_det <= self.model.TOPK
         assert self.batch_size <= engine.max_batch_size
 
-        # create buffer
+        # create buffers
         self.host_inputs  = []
         self.cuda_inputs  = []
         self.host_outputs = []
@@ -79,11 +77,12 @@ class ObjectDetector:
                 self.cuda_outputs.append(cuda_mem)
 
         self.context = engine.create_execution_context()
-        self.input_batch = np.zeros((self.batch_size, trt.volume(model.input_shape)))
-        self.cur_tile = -1
+        self.input_batch = np.zeros((self.batch_size, trt.volume(self.model.INPUT_SHAPE)))
+        self.cur_tile_id = -1
+        self.cur_tile = None
     
-    def preprocess(self, frame, tracks={}, acquire=True, track_id=None):
-        if acquire:
+    def preprocess(self, frame, tracks={}, track_id=None):
+        if self.detector_type == DetectorType.ACQUISITION:
             # tile scheduling
             if self.schedule_tiles:
                 sx = sy = 1 - self.tile_overlap
@@ -93,23 +92,21 @@ class ObjectDetector:
                     for track in tracks.values():
                         if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox):
                             tile_num_tracks[tile_id] += 1
-                max_age = max(self.tile_ages)
-                max_num_tracks = max(tile_num_tracks)
-                tile_scores = self.tile_ages * (self.tile_acquisition_weight / (max_age if max_age > 0 else 1)) + tile_num_tracks * ((1 - self.tile_acquisition_weight) / (max_num_tracks if max_num_tracks > 0 else 1))
-                self.cur_tile = np.argmax(tile_scores)
+                tile_scores = self.tile_ages * self.age_to_object_ratio + tile_num_tracks
+                self.cur_tile_id = np.argmax(tile_scores)
                 self.tile_ages += 1
-                self.tile_ages[self.cur_tile] = 0
+                self.tile_ages[self.cur_tile_id] = 0
             else:
-                self.cur_tile = (self.cur_tile + 1) % len(self.tiles)
-            self.roi = self.tiles[self.cur_tile]
-        else:
+                self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
+            self.cur_tile = self.tiles[self.cur_tile_id]
+        elif self.detector_type == DetectorType.TRACKING:
             assert len(tracks) > 0 and track_id is not None
             xmin, ymin = np.int_(np.round(tracks[track_id].bbox.center() - (np.array(self.tile_size) - 1) / 2))
             xmin = max(min(xmin, self.size[0] - self.tile_size[0]), 0)
             ymin = max(min(ymin, self.size[1] - self.tile_size[1]), 0)
-            self.roi = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
+            self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
 
-        tile = self.roi.crop(frame)
+        tile = self.cur_tile.crop(frame)
         tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
         tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
         tile = np.transpose(tile, (2, 0, 1)) # HWC -> CHW
@@ -122,45 +119,28 @@ class ObjectDetector:
         self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
         cuda.memcpy_dtoh_async(self.host_outputs[1], self.cuda_outputs[1], self.stream)
         cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
-        # print('[INFO] Latency: %.3f' % (time.time() - tic))
 
     def postprocess(self):
         self.stream.synchronize()
         output = self.host_outputs[0]
         detections = []
         for det_idx in range(self.max_det):
-            offset = det_idx * model.output_layout
+            offset = det_idx * self.model.OUTPUT_LAYOUT
             # index = int(output[offset])
             label = int(output[offset + 1])
-            conf  = output[offset + 2]
+            conf = output[offset + 2]
             if conf > self.conf_threshold and label in self.classes:
-                xmin  = int(round(output[offset + 3] * self.roi.size[0])) + self.roi.xmin
-                ymin  = int(round(output[offset + 4] * self.roi.size[1])) + self.roi.ymin
-                xmax  = int(round(output[offset + 5] * self.roi.size[0])) + self.roi.xmin
-                ymax  = int(round(output[offset + 6] * self.roi.size[1])) + self.roi.ymin
+                xmin = int(round(output[offset + 3] * self.cur_tile.size[0])) + self.cur_tile.xmin
+                ymin = int(round(output[offset + 4] * self.cur_tile.size[1])) + self.cur_tile.ymin
+                xmax = int(round(output[offset + 5] * self.cur_tile.size[0])) + self.cur_tile.xmin
+                ymax = int(round(output[offset + 6] * self.cur_tile.size[1])) + self.cur_tile.ymin
                 bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
-                det = Detection(bbox, label, conf)
-                detections.append(det)
-                print('[Detector] Detected: %s' % det)
-
-        # TODO: NMS
-        # print('[Detector] Latency: %.3f' % (time.time() - tic))
-        # discard = set()
-        # for i in range(len(detections)):
-        #     if i not in discard:
-        #         for j in range(len(detections)):
-        #             if j not in discard:
-        #                 if detections[i].tile_id != detections[j].tile_id and detections[i].label == detections[j].label and iou(detections[i].bbox, detections[j].bbox) > self.merging_iou_threshold: #and det.conf < other.conf:    
-        #                         detections[i].bbox.merge(detection[j].bbox)
-        #                         detections[i].conf = max(detections[i].conf, detections[j].conf)
-        #                         discard.add(j)
-        #     if detections[i].conf < self.conf_threshold:
-        #         discard.add(i)
-        # merged_detections = np.delete(detections, list(discard))
+                detections.append(Detection(bbox, label, conf))
+                # print('[ObjectDetector] Detected: %s' % det)
         return detections
 
-    def detect_sync(self, frame, tracks={}, acquire=True):
-        self.preprocess(frame, tracks, acquire)
+    def detect_sync(self, frame, tracks={}, track_id=None):
+        self.preprocess(frame, tracks, track_id)
         self.infer_async()
         return self.postprocess()
 
@@ -169,7 +149,6 @@ class ObjectDetector:
         return Rect(tf_rect=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
 
     def _generate_tiles(self, size, tile_size, tiling_grid, overlap):
-        # TODO: dynamic tiling
         width, height = size
         tile_width, tile_height = tile_size
         step = 1 - overlap
