@@ -9,11 +9,11 @@ import bboxtracker
 
 
 def gst_pipeline(
-    capture_size=(1920, 1080),
-    display_size=(1280, 720),
-    frame_rate=30,
-    flip_method=0,
-):  
+        capture_size=(1920, 1080),
+        display_size=(1280, 720),
+        frame_rate=30,
+        flip_method=0
+    ):
     return (
         "nvarguscamerasrc ! "
         "video/x-raw(memory:NVMM), "
@@ -93,8 +93,8 @@ def main():
     capture_size = (1920, 1080)
     camera_frame_rate = 30
     proc_size = (1280, 720)
-    acq_detector_frame_skip = 4
-    trk_detector_frame_skip = 6
+    acq_detector_frame_skip = 3
+    trk_detector_frame_skip = 5
     # classes = set([1])
     classes = set([1, 2, 3, 22, 24]) # person, bicycle, car, elephant, zebra
 
