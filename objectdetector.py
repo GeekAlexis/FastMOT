@@ -36,6 +36,8 @@ class ObjectDetector:
         self.batch_size = 1
 
         self.tile_overlap = 0.25
+        self.tiles = None
+        self.cur_tile = None
         if self.detector_type == DetectorType.ACQUISITION:
             self.model = ssd.MobileNetV1
             self.conf_threshold = 0.5
@@ -43,7 +45,8 @@ class ObjectDetector:
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
             self.tiles = self._generate_tiles(self.size, self.tile_size, (3, 2), self.tile_overlap)
             self.tile_ages = np.zeros(len(self.tiles))
-            self.age_to_object_ratio = 0.5
+            self.age_to_object_ratio = 0.4
+            self.cur_tile_id = -1
         elif self.detector_type == DetectorType.TRACKING:
             self.model = ssd.InceptionV2
             self.conf_threshold = 0.5
@@ -78,8 +81,6 @@ class ObjectDetector:
 
         self.context = engine.create_execution_context()
         self.input_batch = np.zeros((self.batch_size, trt.volume(self.model.INPUT_SHAPE)))
-        self.cur_tile_id = -1
-        self.cur_tile = None
     
     def preprocess(self, frame, tracks={}, track_id=None):
         if self.detector_type == DetectorType.ACQUISITION:
@@ -102,8 +103,8 @@ class ObjectDetector:
         elif self.detector_type == DetectorType.TRACKING:
             assert len(tracks) > 0 and track_id is not None
             xmin, ymin = np.int_(np.round(tracks[track_id].bbox.center() - (np.array(self.tile_size) - 1) / 2))
-            xmin = max(min(xmin, self.size[0] - self.tile_size[0]), 0)
-            ymin = max(min(ymin, self.size[1] - self.tile_size[1]), 0)
+            xmin = max(min(self.size[0] - self.tile_size[0], xmin), 0)
+            ymin = max(min(self.size[1] - self.tile_size[1], ymin), 0)
             self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
 
         tile = self.cur_tile.crop(frame)
@@ -145,7 +146,7 @@ class ObjectDetector:
         return self.postprocess()
 
     def get_tiling_region(self):
-        assert len(self.tiles) > 0
+        assert self.detector_type == DetectorType.ACQUISITION and len(self.tiles) > 0
         return Rect(tf_rect=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
 
     def _generate_tiles(self, size, tile_size, tiling_grid, overlap):
