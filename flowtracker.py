@@ -11,12 +11,11 @@ class FlowTracker:
         self.bkg_feature_scaling = (0.1, 0.1)
         self.optflow_scaling = (0.5, 0.5)
         self.feature_density = 0.005
+        self.opt_flow_err_thresh = 100
         self.min_bkg_inlier_count = 5
         self.feature_dist_scaling = 0.06
-        self.ransac_max_iter = 20
+        self.ransac_max_iter = 50
         self.ransac_conf = 0.98
-        self.target_feature_detector_type = 'gftt'
-        self.bkg_feature_detector_type = 'fast'
 
         # parameters for corner detection
         self.gftt_target_feature_params = dict( 
@@ -34,7 +33,7 @@ class FlowTracker:
         self.fast_feature_thresh = 15
 
         # parameters for lucas kanade optical flow
-        self.optflow_params = dict( 
+        self.optflow_params = dict(
             winSize=(5, 5),
             maxLevel=5,
             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
@@ -58,19 +57,15 @@ class FlowTracker:
             if track.feature_pts is not None:
                 # only propagate feature points inside the bounding box
                 track.feature_pts = np.array([pt for pt in track.feature_pts if pt in inside_bbox])
-            if track.feature_pts is None or len(track.feature_pts) / track.bbox.area() < self.feature_density:
+            if track.feature_pts is None or len(track.feature_pts) / inside_bbox.area() < self.feature_density:
                 roi = inside_bbox.crop(prev_frame_gray)
-                object_mask = inside_bbox.crop(bkg_mask)
-                if self.target_feature_detector_type == 'gftt':
-                    est_min_ft_dist = round(math.sqrt(np.count_nonzero(object_mask)) * self.feature_dist_scaling)
-                    self.gftt_target_feature_params['minDistance'] = est_min_ft_dist if est_min_ft_dist > 1 else 1
-                    keypoints = cv2.goodFeaturesToTrack(roi, mask=object_mask, **self.gftt_target_feature_params)
-                else:
-                    keypoints = self.fast_feature_detector.detect(roi, mask=object_mask)
-                    keypoints = np.float32([kp.pt for kp in keypoints])
+                target_mask = inside_bbox.crop(bkg_mask)
+                target_area = np.count_nonzero(target_mask)
+                self.gftt_target_feature_params['minDistance'] = self._estimate_feature_dist(target_area)
+                keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, **self.gftt_target_feature_params)
                 if keypoints is None or len(keypoints) == 0:
                     del tracks[track_id]
-                    # print('[FlowTracker] Target lost (no corners detected): %s' % track)
+                    print('[FlowTracker] Target lost (no corners detected): %s' % track)
                     continue
                 else:
                     keypoints = keypoints.reshape(-1, 2) + inside_bbox.tl()
@@ -88,12 +83,10 @@ class FlowTracker:
         if self.estimate_camera_motion:
             prev_frame_small_bkg = cv2.resize(prev_frame_gray, None, fx=self.bkg_feature_scaling[0], fy=self.bkg_feature_scaling[1])
             bkg_mask = cv2.resize(bkg_mask, None, fx=self.bkg_feature_scaling[0], fy=self.bkg_feature_scaling[1], interpolation=cv2.INTER_NEAREST)
-            if self.bkg_feature_detector_type == 'gftt':
-                keypoints = cv2.goodFeaturesToTrack(prev_frame_small_bkg, mask=bkg_mask, **self.gftt_bkg_feature_params)
-            else:
-                keypoints = self.fast_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask)
-                keypoints = np.float32([kp.pt for kp in keypoints])
+            # keypoints = cv2.goodFeaturesToTrack(prev_frame_small_bkg, mask=bkg_mask, **self.gftt_bkg_feature_params)
+            keypoints = self.fast_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask)
             if keypoints is not None and len(keypoints) > 0:
+                keypoints = np.float32([kp.pt for kp in keypoints])
                 prev_bkg_pts = keypoints.reshape(-1, 2) / self.bkg_feature_scaling * self.optflow_scaling
             else:
                 tracks.clear()
@@ -105,12 +98,12 @@ class FlowTracker:
 
         # level, pyramid = cv2.buildOpticalFlowPyramid(frame_small, self.optflow_params['winSize'], self.optflow_params['maxLevel'])
 
-        # TODO use initial estimate?
         all_prev_pts = np.float32(all_prev_pts).reshape(-1, 1, 2)
         all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, all_prev_pts, None, **self.optflow_params)
-        # all_prev_pts_r, status, err = cv2.calcOpticalFlowPyrLK(frame_small, self.prev_frame_small, all_cur_pts, None, **self.optflow_params)
-        # status_mask = abs(all_prev_pts - all_prev_pts_r).reshape(-1, 2).max(-1) < 1
-        status_mask = np.bool_(status) 
+        # print(np.max(err[status==1]))
+        with np.errstate(invalid='ignore'):
+            status_mask = (status == 1) & (err < self.opt_flow_err_thresh) 
+        # status_mask = np.bool_(status)
 
         if self.estimate_camera_motion:
             # print(len(all_prev_pts), bkg_begin_idx)
@@ -148,12 +141,12 @@ class FlowTracker:
                 del tracks[track_id]
                 # print('[FlowTracker] Target lost (failed to match): %s' % track)
                 continue
-            H_A, inlier_mask = cv2.estimateAffinePartial2D(prev_pts, matched_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
-            if H_A is None:
+            H_affine, inlier_mask = cv2.estimateAffinePartial2D(prev_pts, matched_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+            if H_affine is None:
                 del tracks[track_id]
                 # print('[FlowTracker] Target lost (no inlier): %s' % track)
                 continue
-            est_bbox = self._estimate_bbox(track.bbox, H_A)
+            est_bbox = self._estimate_bbox(track.bbox, H_affine)
             # delete track when it goes outside the frame
             inside_bbox = est_bbox & Rect(cv_rect=(0, 0, self.size[0], self.size[1]))
             if inside_bbox is None:
@@ -164,8 +157,9 @@ class FlowTracker:
             inlier_mask = np.bool_(inlier_mask.ravel())
             track.feature_pts = matched_pts[inlier_mask].reshape(-1, 2)
             track.prev_feature_pts = prev_pts[inlier_mask].reshape(-1, 2)
-            # use the ratio of # points matched as confidence
-            track.conf = len(track.feature_pts) / (end - begin) 
+            # use inlier ratio as confidence
+            inlier_ratio = len(track.feature_pts) / (end - begin)
+            track.conf = inlier_ratio
             # zero out current track in foreground mask
             track.bbox.crop(fg_mask)[:] = 0
         return self.H_camera
@@ -176,12 +170,31 @@ class FlowTracker:
         if self.prev_bkg_feature_pts is not None:
             [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in zip(np.int_(np.round(self.prev_bkg_feature_pts)), np.int_(np.round(self.bkg_feature_pts)))]
     
-    def _estimate_bbox(self, bbox, H_A):
-        warped_tl = cv2.transform(np.float32(bbox.tl()).reshape(1, 1, 2), H_A)
+    def _estimate_feature_dist(self, target_area):
+        est_ft_dist = round(math.sqrt(target_area) * self.feature_dist_scaling)
+        return max(est_ft_dist, 1)
+
+    def _estimate_bbox(self, bbox, H_affine):
+        warped_tl = cv2.transform(np.float32(bbox.tl()).reshape(1, 1, 2), H_affine)
         warped_tl = np.int_(np.round(warped_tl.ravel()))
-        s = math.sqrt(H_A[0, 0]**2 + H_A[1, 0]**2)
-        s = 1.0 if s < 0.9 or s > 1.1 else s
+        s = math.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
+        # s = 1.0 if s < 0.9 or s > 1.1 else s
+        s = max(min(s, 1.1), 0.9)
         new_bbox = Rect(cv_rect=(warped_tl[0], warped_tl[1], int(round(s * bbox.size[0])), int(round(s * bbox.size[1]))))
+
+        # warped_center = cv2.transform(np.float32(bbox.center()).reshape(1, 1, 2), H_affine)
+        # warped_center = warped_center.ravel()
+        # s = math.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
+        # # s = 1.0 if s < 0.9 or s > 1.1 else s
+        # s = max(min(s, 1.1), 0.9)
+        # new_size = s * np.asarray(bbox.size)
+        # xmin, ymin = np.int_(np.round(warped_center - (new_size - 1) / 2))
+        # width, height = np.int_(np.round(new_size))
+        # new_bbox = Rect(cv_rect=(xmin, ymin, width, height))
+
+        # warped = cv2.transform(np.float32([bbox.tl(), bbox.br()]).reshape(2, 1, 2), H_affine)
+        # warped = np.int_(np.round(warped.ravel()))
+        # new_bbox = Rect(tf_rect=warped)
         return new_bbox
 
     def _ellipse_filter(self, pts, bbox):
