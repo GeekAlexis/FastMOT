@@ -33,7 +33,7 @@ class Track:
         self.conf = 1
         self.feature_pts = None
         self.prev_feature_pts = None
-        self.frames_since_acquisition = 0
+        self.frames_since_acquired = 0
 
     def __repr__(self):
         return "Track(label=%r, bbox=%r, track_id=%r)" % (self.label, self.bbox, self.track_id)
@@ -111,6 +111,9 @@ class Rect:
     def center(self):
         return ((self.xmin + self.xmax) / 2, (self.ymin + self.ymax) / 2)
 
+    def corners(self):
+        return (self.xmin, self.ymin), (self.xmax, self.ymin), (self.xmax, self.ymax), (self.xmin, self.ymax)
+
     def area(self):
         return self.size[0] * self.size[1]
 
@@ -135,10 +138,6 @@ def iou(rect1, rect2):
     inter_area = max(0, inter_xmax - inter_xmin + 1) * max(0, inter_ymax - inter_ymin + 1)
     iou = inter_area / (rect1.area() + rect2.area() - inter_area)
     return iou
-
-
-def l2_dist(point1, point2):
-    return math.sqrt(np.sum((np.asarray(point1) - point2)**2))
 
 
 coco_labels = [
