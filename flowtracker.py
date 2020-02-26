@@ -65,7 +65,7 @@ class FlowTracker:
                 keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, **self.gftt_target_feature_params)
                 if keypoints is None or len(keypoints) == 0:
                     del tracks[track_id]
-                    print('[FlowTracker] Target lost (no corners detected): %s' % track)
+                    # print('[Flow] Target lost (no corners detected): %s' % track)
                     continue
                 else:
                     keypoints = keypoints.reshape(-1, 2) + inside_bbox.tl()
@@ -91,7 +91,7 @@ class FlowTracker:
             else:
                 tracks.clear()
                 self._reset_bkg_reg()
-                print('[FlowTracker] Background registration failed')
+                print('[Flow] Background registration failed')
                 return self.H_camera
             bkg_begin_idx = len(all_prev_pts)
             all_prev_pts = np.concatenate((all_prev_pts, prev_bkg_pts), axis=0)
@@ -102,7 +102,7 @@ class FlowTracker:
         all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, all_prev_pts, None, **self.optflow_params)
         # print(np.max(err[status==1]))
         with np.errstate(invalid='ignore'):
-            status_mask = (status == 1) & (err < self.opt_flow_err_thresh) 
+            status_mask = (status == 1) & (err < self.opt_flow_err_thresh)
         # status_mask = np.bool_(status)
 
         if self.estimate_camera_motion:
@@ -118,7 +118,7 @@ class FlowTracker:
                     # clear tracks on background reg failure
                     tracks.clear()
                     self._reset_bkg_reg()
-                    print('[FlowTracker] Background registration failed')
+                    print('[Flow] Background registration failed')
                     return self.H_camera
                 else:
                     inlier_mask = np.bool_(inlier_mask.ravel())
@@ -127,7 +127,7 @@ class FlowTracker:
             else:
                 tracks.clear()
                 self._reset_bkg_reg()
-                print('[FlowTracker] Background registration failed')
+                print('[Flow] Background registration failed')
                 return self.H_camera
 
         fg_mask = np.ones(self.size[::-1], dtype=np.uint8) * 255
@@ -139,19 +139,19 @@ class FlowTracker:
             prev_pts, matched_pts = self._fg_filter(prev_pts, matched_pts, fg_mask)
             if len(matched_pts) < 3:
                 del tracks[track_id]
-                # print('[FlowTracker] Target lost (failed to match): %s' % track)
+                # print('[Flow] Target lost (failed to match): %s' % track)
                 continue
             H_affine, inlier_mask = cv2.estimateAffinePartial2D(prev_pts, matched_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
             if H_affine is None:
                 del tracks[track_id]
-                # print('[FlowTracker] Target lost (no inlier): %s' % track)
+                # print('[Flow] Target lost (no inlier): %s' % track)
                 continue
             est_bbox = self._estimate_bbox(track.bbox, H_affine)
             # delete track when it goes outside the frame
             inside_bbox = est_bbox & Rect(cv_rect=(0, 0, self.size[0], self.size[1]))
             if inside_bbox is None:
                 del tracks[track_id]
-                # print('[FlowTracker] Target lost (out of frame): %s' % track)
+                # print('[Flow] Target lost (out of frame): %s' % track)
                 continue
             track.bbox = est_bbox
             inlier_mask = np.bool_(inlier_mask.ravel())
@@ -178,8 +178,8 @@ class FlowTracker:
         warped_tl = cv2.transform(np.float32(bbox.tl()).reshape(1, 1, 2), H_affine)
         warped_tl = np.int_(np.round(warped_tl.ravel()))
         s = math.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
-        # s = 1.0 if s < 0.9 or s > 1.1 else s
-        s = max(min(s, 1.1), 0.9)
+        s = 1.0 if s < 0.9 or s > 1.1 else s
+        # s = max(min(s, 1.1), 0.9)
         new_bbox = Rect(cv_rect=(warped_tl[0], warped_tl[1], int(round(s * bbox.size[0])), int(round(s * bbox.size[1]))))
 
         # warped_center = cv2.transform(np.float32(bbox.center()).reshape(1, 1, 2), H_affine)
