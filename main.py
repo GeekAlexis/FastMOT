@@ -212,6 +212,7 @@ def main():
                             avg_fps = round(frame_count / elapsed_time)
                             print('[INFO] Average FPS: %d' % avg_fps)
                     elif msg == Msg.TERMINATE:
+                        exit_event.set()
                         break
 
             if enable_analytics:
