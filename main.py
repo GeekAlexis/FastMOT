@@ -21,7 +21,7 @@ PROC_SIZE = (1280, 720)
 ACQ_DETECTOR_FRAME_SKIP = 3
 TRK_DETECTOR_FRAME_SKIP = 5
 ACQUISITION_INTERVAL = 100
-# CLASSES = set([1])
+# CLASSES = set([1]) # person only
 CLASSES = set([1, 2, 3, 22, 24]) # person, bicycle, car, elephant, zebra
 
 
@@ -34,7 +34,7 @@ class Msg:
     @staticmethod
     def convert_bbox_to_bytes(bbox):
         length = MSG_LENGTH // 4
-        return b''.join(coord.to_bytes(length, byteorder='big') for coord in bbox.tf_rect())
+        return b''.join(int(coord).to_bytes(length, byteorder='big') for coord in bbox.tf_rect())
 
 
 def gst_pipeline(
@@ -66,15 +66,15 @@ def gst_pipeline(
 def draw(frame, detections, tracks, acquire, track_id):
     for _track_id, track in tracks.items():
         if not acquire and _track_id == track_id:
-            track.draw(frame, follow=True, draw_feature_match=True)
+            track.draw(frame, follow=True, draw_feature_match=False)
         else:
-            track.draw(frame, draw_feature_match=True)
-    [det.draw(frame) for det in detections]
+            track.draw(frame, draw_feature_match=False)
+    # [det.draw(frame) for det in detections]
     if acquire:
         cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
     elif track_id in tracks:
         cv2.putText(frame, 'Tracking %d' % track_id, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
-        
+
 
 def capture_frames(cap, frame_queue, cond, exit_event, capture_delay=None):
     while not exit_event.is_set():
@@ -134,12 +134,14 @@ def main():
     vid_size = (cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print('[INFO] Video stream: %dx%d @ %d FPS' % (vid_size[0], vid_size[1], vid_fps))
     capture_dt = 1 / vid_fps
-    # account for display and output overhead so that capture queue won't overflow
+    # account for display overhead so that capture queue won't overflow
     capture_delay = capture_dt if args['input'] is None else 1 / 40 # video has max performance at 40 FPS
     if args['gui']:
+        capture_delay += 0.02
+    # if args['output'] is not None:
+    #     capture_delay += 0.04
+    if args['analytics'] and (args['gui'] or args['output']):
         capture_delay += 0.025
-    if args['output'] is not None:
-        capture_delay += 0.06
     if args['input'] is None:
         # camera only grabs the most recent frame
         capture_dt = capture_delay
@@ -160,9 +162,9 @@ def main():
         acquisition_start_frame = 0
         track_id = -1
     if args['output'] is not None:
-        Path(args['output']).parent.mkdir(parents=True, exist_ok=True)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(args["output"], fourcc, vid_fps, PROC_SIZE, True)
+        Path(args['output']).mkdir(parents=True, exist_ok=True)
+        # fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        # writer = cv2.VideoWriter(args["output"], fourcc, vid_fps, PROC_SIZE, True)
     if args['socket']:
         assert args['analytics'], 'Analytics must be turned on for communication'
         sock = socket.socket()
@@ -183,7 +185,7 @@ def main():
                 # print('frame queue size:', len(frame_queue))
                 while len(frame_queue) == 0 and not exit_event.is_set():
                     cond.wait()
-                if exit_event.is_set():
+                if len(frame_queue) == 0 and exit_event.is_set():
                     break
                 frame = frame_queue.pop(0)
             
@@ -258,11 +260,10 @@ def main():
                         tracker.track(frame)
 
                 if args['gui'] or args['output'] is not None:
-                    # draw tracks and detections
                     draw(frame, detections, tracker.tracks, acquire, track_id)
-                    tracker.flow_tracker.draw_bkg_feature_match(frame)
-                    if frame_count % detector_frame_skip == 0:
-                        detector.draw_cur_tile(frame)
+                    # tracker.flow_tracker.draw_bkg_feature_match(frame)
+                    # if frame_count % detector_frame_skip == 0:
+                    #     detector.draw_cur_tile(frame)
 
             if args['gui']:
                 # cv2.putText(frame, '%d FPS' % fps, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
@@ -271,18 +272,19 @@ def main():
                     exit_event.set()
                     break
             if args['output'] is not None:
-                writer.write(frame)
+                # writer.write(frame)
+                output_path = str(Path(args['output']) / ('%05d.jpg' % frame_count))
+                cv2.imwrite(output_path, frame)
             
             toc = time.perf_counter()
-            # fps = round(1 / (toc - tic))
             elapsed_time += toc - tic
             frame_count += 1
     finally:
         # clean up resources
-        if writer is not None:
-            writer.release()
+        # if writer is not None:
+        #     writer.release()
         if args['input'] is not None:
-            # gst cleans up automatically
+            # gstreamer cleans up automatically
             cap.release()
         if sock is not None:
             sock.close()
