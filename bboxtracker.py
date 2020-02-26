@@ -39,6 +39,7 @@ class BBoxTracker:
         self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4, dtype=np.float32))
         self.acc_cov[4:, :4] = np.eye(4, dtype=np.float32) * (0.5 * self.dt**3)
         self.acc_cov[:4, 4:] = np.eye(4, dtype=np.float32) * (0.5 * self.dt**3)
+        self.meas_mat = np.eye(4, 8, dtype=np.float32)
 
         self.min_std_cnn = (5, 5)
         self.min_std_flow = (5, 5)
@@ -46,7 +47,6 @@ class BBoxTracker:
         self.std_factor_flow = (0.16, 0.16)
         self.init_std_pos_factor = 20
         self.init_std_vel_factor = 10
-        self.meas_mat = np.eye(4, 8, dtype=np.float32)
         self.vel_coupling = 0.6
         self.vel_half_life = 1
         self.max_vel = 10000
@@ -60,6 +60,9 @@ class BBoxTracker:
         self.flow_tracker = flowtracker.FlowTracker(self.size, estimate_camera_motion=True)
 
     def track(self, frame, use_flow=True):
+        """
+        Track targets across frames. This function should be called in every frame.
+        """
         assert self.prev_frame_gray is not None
         assert self.prev_frame_small is not None
 
@@ -83,7 +86,7 @@ class BBoxTracker:
                             track.feature_pts = flow_track.feature_pts
                             track.prev_feature_pts = flow_track.prev_feature_pts
                     else:
-                        print('[BBoxTracker] Target lost (flow): %s' % track)
+                        print('[Tracker] Target lost (flow): %s' % track)
                         del self.tracks[track_id]
                 else:
                     # track using kalman filter and flow measurement
@@ -108,7 +111,7 @@ class BBoxTracker:
                         track.bbox = next_bbox
                         self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
                     else:
-                        print('[BBoxTracker] Target lost (outside frame): %s' % track)
+                        print('[Tracker] Target lost (outside frame): %s' % track)
                         del self.tracks[track_id]
                         del self.kalman_filters[track_id]
         else:
@@ -120,13 +123,19 @@ class BBoxTracker:
         # self.prev_pyramid = pyramid
 
     def init(self, frame, detections):
+        """
+        Initialize the tracker from detections in the first frame
+        """
         self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.flow_tracker.optflow_scaling[0], fy=self.flow_tracker.optflow_scaling[1])
         for new_track_id, det in enumerate(detections):
             self.tracks[new_track_id] = Track(det.label, det.bbox, new_track_id)
-            print('[BBoxTracker] Track registered: %s' % self.tracks[new_track_id])
+            print('[Tracker] Track registered: %s' % self.tracks[new_track_id])
 
     def update(self, detections, tile, overlap, acquire=True):
+        """
+        Update tracks using detections
+        """
         # filter out tracks and detections not in tile
         sx = sy = 1 - overlap
         scaled_tile = tile.scale(sx, sy)
@@ -183,7 +192,7 @@ class BBoxTracker:
                             self.tracks[track_id].age = 0
                             self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
                         else:
-                            print('[BBoxTracker] Target lost (out of frame): %s' % self.tracks[track_id])
+                            print('[Tracker] Target lost (out of frame): %s' % self.tracks[track_id])
                             del self.tracks[track_id]
                             del self.kalman_filters[track_id]
                     else:
@@ -204,18 +213,21 @@ class BBoxTracker:
                     while new_track_id in self.tracks:
                         new_track_id += 1
                     self.tracks[new_track_id] = Track(detections[det_idx].label, detections[det_idx].bbox, new_track_id)
-                    print('[BBoxTracker] Track registered: %s' % self.tracks[new_track_id])
+                    print('[Tracker] Track registered: %s' % self.tracks[new_track_id])
 
         # clean up lost tracks
         max_age = self.acquisition_max_age if acquire else self.tracking_max_age
         for track_id, track in list(self.tracks.items()):
             if track.age > max_age:
-                print('[BBoxTracker] Target lost (age): %s' % self.tracks[track_id])
+                print('[Tracker] Target lost (age): %s' % self.tracks[track_id])
                 del self.tracks[track_id]
                 if track_id in self.kalman_filters:
                     del self.kalman_filters[track_id]
 
     def get_nearest_track(self):
+        """
+        Compute the nearest track by estimating the relative distance
+        """
         if not self.tracks:
             return -1
         nearest_track_id = max(self.tracks.items(), key=self._compare_dist)[0]
