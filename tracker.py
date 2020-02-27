@@ -17,7 +17,7 @@ class MeasType:
     CNN = 1
 
 
-class BBoxTracker:
+class Tracker:
     # 0.95 quantile of the chi-square distribution with 4 degrees of freedom
     CHI_SQ_INV_95 = 9.4877
     INF_COST = 1e5
