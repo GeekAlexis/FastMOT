@@ -11,6 +11,6 @@
 - tqdm
 
 ### Example runs
-- With camera: `python3 main.py --analytics`
-- Input video: `python3 main.py --analytics --input video.mp4`
+- With camera: `python3 main.py -a`
+- Input video: `python3 main.py -a -i video.mp4`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
