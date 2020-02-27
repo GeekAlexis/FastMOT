@@ -4,7 +4,7 @@ import cv2
 from util import *
 
 
-class FlowTracker:
+class Flow:
     def __init__(self, size, estimate_camera_motion=False):
         self.size = size
         self.estimate_camera_motion = estimate_camera_motion
