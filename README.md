@@ -11,7 +11,5 @@
 - tqdm
 
 ### Example runs
-- With camera
-  `python3 main.py --analytics --gui`
-- Input video
-  `python3 main.py --analytics --input video.mp4`
+- With camera: `python3 main.py --analytics --gui`
+- Input video: `python3 main.py --analytics --input video.mp4`
