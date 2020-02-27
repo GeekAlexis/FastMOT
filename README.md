@@ -3,7 +3,7 @@
 - Guardian is an autonomous drone solution for human-elephant conflict common in Africa and Asia
 
 ### Dependencies
-- OpenCV
+- OpenCV (Built with Gstreamer)
 - Numpy
 - Scipy
 - PyCuda
