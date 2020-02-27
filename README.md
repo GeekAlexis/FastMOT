@@ -9,3 +9,6 @@
 - PyCuda
 - TensorRT
 - tqdm
+
+### Example run
+`python3 main.py --analytics --gui`
