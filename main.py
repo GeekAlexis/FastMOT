@@ -6,8 +6,8 @@ import threading
 import socket
 
 import cv2
-import objectdetector
-import bboxtracker
+import detector
+import tracker
 
 
 """
