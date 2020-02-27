@@ -16,7 +16,7 @@ class DetectorType:
     ACQUISITION = 1
 
 
-class ObjectDetector:
+class Detector:
     runtime = None
 
     @classmethod
