@@ -9,6 +9,7 @@
 - PyCuda
 - TensorRT
 - tqdm
+- DJI OSDK
 
 ### Example runs
 - With camera: `python3 main.py -a`
