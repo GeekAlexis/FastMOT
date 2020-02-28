@@ -5,7 +5,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.linalg import solve_triangular
 import numpy as np
 import cv2
-import flowtracker
+import flow
 from util import *
 
 
@@ -17,7 +17,7 @@ class MeasType:
     CNN = 1
 
 
-class Tracker:
+class BBoxTracker:
     # 0.95 quantile of the chi-square distribution with 4 degrees of freedom
     CHI_SQ_INV_95 = 9.4877
     INF_COST = 1e5
@@ -57,7 +57,7 @@ class Tracker:
         # self.prev_pyramid = None
         self.tracks = OrderedDict()
         self.kalman_filters = {}
-        self.flow_tracker = flowtracker.FlowTracker(self.size, estimate_camera_motion=True)
+        self.flow = flow.Flow(self.size, estimate_camera_motion=True)
 
     def track(self, frame, use_flow=True):
         """
@@ -67,10 +67,10 @@ class Tracker:
         assert self.prev_frame_small is not None
 
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_small = cv2.resize(frame_gray, None, fx=self.flow_tracker.optflow_scaling[0], fy=self.flow_tracker.optflow_scaling[1])
+        frame_small = cv2.resize(frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
         self.tracks = OrderedDict(sorted(self.tracks.items(), key=self._compare_dist, reverse=True))
         flow_tracks = deepcopy(self.tracks)
-        H_camera = self.flow_tracker.predict(flow_tracks, self.prev_frame_gray, self.prev_frame_small, frame_small)
+        H_camera = self.flow.predict(flow_tracks, self.prev_frame_gray, self.prev_frame_small, frame_small)
         if H_camera is not None:
             for track_id, track in list(self.tracks.items()):
                 track.frames_since_acquired += 1
@@ -95,7 +95,7 @@ class Tracker:
                     self._clip_vel_and_size(track_id)
                     if use_flow and track_id in flow_tracks:
                         flow_track = flow_tracks[track_id]
-                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, MeasType.FLOW, flow_track.conf)
+                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, MeasType.FLOW) # flow_track.conf
                         flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
                         next_state = self.kalman_filters[track_id].correct(flow_meas)
                         self._clip_vel_and_size(track_id)
@@ -127,7 +127,7 @@ class Tracker:
         Initialize the tracker from detections in the first frame
         """
         self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.flow_tracker.optflow_scaling[0], fy=self.flow_tracker.optflow_scaling[1])
+        self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
         for new_track_id, det in enumerate(detections):
             self.tracks[new_track_id] = Track(det.label, det.bbox, new_track_id)
             print('[Tracker] Track registered: %s' % self.tracks[new_track_id])
@@ -296,7 +296,6 @@ class Tracker:
         return kalman_filter
         
     def _convert_bbox_to_meas(self, bbox):
-        # return np.float32(list(bbox.center()) + list(bbox.size)).reshape(4, 1)
         return np.float32(bbox.tf_rect()).reshape(4, 1)
 
     def _convert_state_to_bbox(self, state):
@@ -307,7 +306,6 @@ class Tracker:
         if meas_type == MeasType.FLOW:
             std_factor = self.std_factor_flow
             min_std = self.min_std_flow
-            # print(conf)
         elif meas_type == MeasType.CNN:
             std_factor = self.std_factor_cnn
             min_std = self.min_std_cnn
@@ -319,7 +317,6 @@ class Tracker:
             ],
             dtype=np.float32
         )
-        # conf = 1
         return np.diag(np.square(std / conf)) # TODO: better conf
 
     def _compute_acc_cov(self, bbox):
