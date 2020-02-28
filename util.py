@@ -125,9 +125,6 @@ class Rect:
         xmin, ymin = np.int_(np.round(self.center() - half_size))
         xmax, ymax = np.int_(np.round(self.center() + half_size))
         return Rect(tf_rect=(xmin, ymin, xmax, ymax))
-    
-    def draw(self, frame):
-        cv2.rectangle(frame, self.tl(), self.br(), 0, 2)
 
 
 def iou(rect1, rect2):
