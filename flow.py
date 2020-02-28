@@ -12,10 +12,10 @@ class Flow:
         self.optflow_scaling = (0.5, 0.5)
         self.feature_density = 0.005
         self.opt_flow_err_thresh = 100
-        self.min_bkg_inlier_count = 5
+        self.min_bkg_inlier_count = 3
         self.feature_dist_scaling = 0.06
-        self.ransac_max_iter = 50
-        self.ransac_conf = 0.98
+        self.ransac_max_iter = 500
+        self.ransac_conf = 0.99
 
         # parameters for corner detection
         self.gftt_target_feature_params = dict( 
@@ -158,7 +158,7 @@ class Flow:
             track.feature_pts = matched_pts[inlier_mask].reshape(-1, 2)
             track.prev_feature_pts = prev_pts[inlier_mask].reshape(-1, 2)
             # use inlier ratio as confidence
-            inlier_ratio = len(track.feature_pts) / (end - begin)
+            inlier_ratio = len(track.feature_pts) / len(matched_pts)
             track.conf = inlier_ratio
             # zero out current track in foreground mask
             track.bbox.crop(fg_mask)[:] = 0
