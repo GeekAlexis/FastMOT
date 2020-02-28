@@ -162,6 +162,8 @@ def main():
         acquisition_start_frame = 0
         track_id = -1
     if args['output'] is not None:
+        if os.listdir(args['output']):
+            os.system('rm -r ' + args['output'])
         Path(args['output']).mkdir(parents=True, exist_ok=True)
         # fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         # writer = cv2.VideoWriter(args["output"], fourcc, vid_fps, PROC_SIZE, True)
