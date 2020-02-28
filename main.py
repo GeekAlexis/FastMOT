@@ -6,8 +6,8 @@ import threading
 import socket
 
 import cv2
-import detector
-import tracker
+import objectdetector
+import bboxtracker
 
 
 """
@@ -63,13 +63,13 @@ def gst_pipeline(
     )
 
 
-def draw(frame, detections, tracks, acquire, track_id):
+def draw(frame, detections, tracks, acquire, track_id, target_feature=False):
     for _track_id, track in tracks.items():
         if not acquire and _track_id == track_id:
-            track.draw(frame, follow=True, draw_feature_match=False)
+            track.draw(frame, follow=True, draw_feature_match=target_feature)
         else:
-            track.draw(frame, draw_feature_match=False)
-    # [det.draw(frame) for det in detections]
+            track.draw(frame, draw_feature_match=target_feature)
+    [det.draw(frame) for det in detections]
     if acquire:
         cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
     elif track_id in tracks:
@@ -260,10 +260,10 @@ def main():
                         tracker.track(frame)
 
                 if args['gui'] or args['output'] is not None:
-                    draw(frame, detections, tracker.tracks, acquire, track_id)
-                    # tracker.flow_tracker.draw_bkg_feature_match(frame)
-                    # if frame_count % detector_frame_skip == 0:
-                    #     detector.draw_cur_tile(frame)
+                    draw(frame, detections, tracker.tracks, acquire, track_id, True)
+                    tracker.flow.draw_bkg_feature_match(frame)
+                    if frame_count % detector_frame_skip == 0:
+                        detector.draw_cur_tile(frame)
 
             if args['gui']:
                 # cv2.putText(frame, '%d FPS' % fps, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
