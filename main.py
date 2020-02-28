@@ -63,12 +63,12 @@ def gst_pipeline(
     )
 
 
-def draw(frame, detections, tracks, acquire, track_id, target_feature=False):
+def draw(frame, detections, tracks, acquire, track_id):
     for _track_id, track in tracks.items():
         if not acquire and _track_id == track_id:
-            track.draw(frame, follow=True, draw_feature_match=target_feature)
+            track.draw(frame, follow=True, draw_feature_match=True)
         else:
-            track.draw(frame, draw_feature_match=target_feature)
+            track.draw(frame, draw_feature_match=True)
     [det.draw(frame) for det in detections]
     if acquire:
         cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
@@ -138,10 +138,8 @@ def main():
     capture_delay = capture_dt if args['input'] is None else 1 / 40 # video has max performance at 40 FPS
     if args['gui']:
         capture_delay += 0.02
-    # if args['output'] is not None:
-    #     capture_delay += 0.04
-    if args['analytics'] and (args['gui'] or args['output']):
-        capture_delay += 0.025
+        if args['analytics']:
+            capture_delay += 0.025
     if args['input'] is None:
         # camera only grabs the most recent frame
         capture_dt = capture_delay
@@ -261,8 +259,8 @@ def main():
                     else:
                         tracker.track(frame)
 
-                if args['gui'] or args['output'] is not None:
-                    draw(frame, detections, tracker.tracks, acquire, track_id, True)
+                if args['gui']:
+                    draw(frame, detections, tracker.tracks, acquire, track_id)
                     tracker.flow.draw_bkg_feature_match(frame)
                     if frame_count % detector_frame_skip == 0:
                         detector.draw_cur_tile(frame)
