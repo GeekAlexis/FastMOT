@@ -16,7 +16,7 @@ class DetectorType:
     ACQUISITION = 1
 
 
-class Detector:
+class ObjectDetector:
     runtime = None
 
     @classmethod
@@ -43,7 +43,7 @@ class Detector:
             self.conf_threshold = 0.5
             self.schedule_tiles = True
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
-            self.tiles = self._generate_tiles(self.size, self.tile_size, (3, 2), self.tile_overlap)
+            self.tiles = self._generate_tiles((3, 2)) # 3 x 2 sliding windows
             self.tile_ages = np.zeros(len(self.tiles))
             self.age_to_object_ratio = 0.4
             self.cur_tile_id = -1
@@ -137,7 +137,7 @@ class Detector:
                 ymax = int(round(output[offset + 6] * self.cur_tile.size[1])) + self.cur_tile.ymin
                 bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
                 detections.append(Detection(bbox, label, conf))
-                # print('[ObjectDetector] Detected: %s' % det)
+                # print('[Detector] Detected: %s' % det)
         return detections
 
     def detect_sync(self, frame, tracks={}, track_id=None):
@@ -149,10 +149,13 @@ class Detector:
         assert self.detector_type == DetectorType.ACQUISITION and len(self.tiles) > 0
         return Rect(tf_rect=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
 
-    def _generate_tiles(self, size, tile_size, tiling_grid, overlap):
-        width, height = size
-        tile_width, tile_height = tile_size
-        step = 1 - overlap
+    def draw_cur_tile(self, frame):
+        cv2.rectangle(frame, self.cur_tile.tl(), self.cur_tile.br(), 0, 2)
+
+    def _generate_tiles(self, tiling_grid):
+        width, height = self.size
+        tile_width, tile_height = self.tile_size
+        step = 1 - self.tile_overlap
         total_width = (tiling_grid[0] - 1) * tile_width * step + tile_width
         total_height = (tiling_grid[1] - 1) * tile_height * step + tile_height
         assert total_width <= width and total_height <= height, "Frame size not large enough for %dx%d tiles" % tiling_grid
