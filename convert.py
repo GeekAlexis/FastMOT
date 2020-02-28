@@ -1,3 +1,7 @@
+"""
+Convert jpg frames to mp4 video
+"""
+
 from pathlib import Path
 import tqdm
 import argparse
