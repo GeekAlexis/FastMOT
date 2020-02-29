@@ -90,7 +90,6 @@ class BBoxTracker:
                         del self.tracks[track_id]
                 else:
                     # track using kalman filter and flow measurement
-                    self._warp_kalman_filters(track_id, H_camera)
                     next_state = self.kalman_filters[track_id].predict()
                     self._clip_vel_and_size(track_id)
                     if use_flow and track_id in flow_tracks:
@@ -352,41 +351,3 @@ class BBoxTracker:
     def _warp_bbox(self, bbox, H_camera):
         warped_corners = cv2.perspectiveTransform(np.float32(bbox.corners()).reshape(4, 1, 2), H_camera)
         return Rect(cv_rect=cv2.boundingRect(warped_corners))
-
-    def _warp_kalman_filters(self, track_id, H_camera):
-        # TODO: translation only?
-        kalman_filter = self.kalman_filters[track_id]
-        pos_tl = kalman_filter.statePost[:2]
-        pos_br = kalman_filter.statePost[2:4]
-        vel_tl = kalman_filter.statePost[4:6]
-        vel_br = kalman_filter.statePost[6:]
-        A = H_camera[:2, :2]
-        v = H_camera[2, :2].reshape(1, 2)
-        t = H_camera[:2, 2].reshape(2, 1)
-        # h33 = H_camera[-1, -1]
-        temp = (v @ pos_tl + 1)
-        grad_tl = (temp * A - (A @ pos_tl + t) @ v) / temp**2
-        temp = (v @ pos_br + 1)
-        grad_br = (temp * A - (A @ pos_br + t) @ v) / temp**2
-
-        # vel_tl += pos_tl
-        # vel_br += pos_br
-        # warped = cv2.perspectiveTransform(np.array([pos_tl.T, pos_br.T, vel_tl.T, vel_br.T]), H_camera)
-        # kalman_filter.statePost[:2] = warped[0].T
-        # kalman_filter.statePost[2:4] = warped[1].T
-        # kalman_filter.statePost[4:6] = warped[2].T - warped[0].T
-        # kalman_filter.statePost[6:] = warped[3].T - warped[1].T
-
-        # warp state
-        warped_pos = cv2.perspectiveTransform(np.array([pos_tl.T, pos_br.T]), H_camera)
-        kalman_filter.statePost[:4, 0] = warped_pos.ravel()
-        kalman_filter.statePost[4:6] = grad_tl @ vel_tl
-        kalman_filter.statePost[6:] = grad_br @ vel_br
-
-        # warp covariance too
-        for i in range(0, 8, 2):
-            for j in range(0, 8, 2):
-                grad_left = grad_tl if i // 2 % 2 == 0 else grad_br
-                grad_right = grad_tl if j // 2 % 2 == 0 else grad_br
-                kalman_filter.errorCovPost[i:i + 2, j:j + 2] = grad_left @ kalman_filter.errorCovPost[i:i + 2, j:j + 2] @ grad_right.T
-
