@@ -2,8 +2,10 @@ import argparse
 import time
 import os
 from pathlib import Path
+from collections import deque
 import threading
 import socket
+import errno
 
 import cv2
 import objectdetector
@@ -17,7 +19,12 @@ MSG_LENGTH = 16
 PASSWORD = 'jdyw123'
 CAPTURE_SIZE = (1920, 1080)
 CAM_FRAME_RATE = 30
+# CAPTURE_SIZE = (3264, 1848)
+# CAM_FRAME_RATE = 28
+# CAPTURE_SIZE = (1280, 720)
+# CAM_FRAME_RATE = 60
 PROC_SIZE = (1280, 720)
+MAX_FRAME_QUEUE_SIZE = 50
 ACQ_DETECTOR_FRAME_SKIP = 3
 TRK_DETECTOR_FRAME_SKIP = 5
 ACQUISITION_INTERVAL = 100
@@ -37,12 +44,8 @@ class Msg:
         return b''.join(int(coord).to_bytes(length, byteorder='big') for coord in bbox.tf_rect())
 
 
-def gst_pipeline(
-        capture_size=(1920, 1080),
-        display_size=(1280, 720),
-        frame_rate=30,
-        flip_method=0
-    ):
+def gst_capture_pipeline(capture_size, display_size, frame_rate, flip_method=0):
+    # TODO: duplicate frames?
     return (
         "nvarguscamerasrc ! "
         "video/x-raw(memory:NVMM), "
@@ -63,6 +66,26 @@ def gst_pipeline(
     )
 
 
+def gst_write_pipeline(path):
+    assert Path(path).suffix == '.mp4', 'Only mp4 is supported'
+    return 'appsrc ! autovideoconvert ! omxh265enc ! mp4mux ! filesink location = %s ' % path
+
+
+def capture_frames(cap, frame_queue, cond, exit_event, delay):
+    while not exit_event.is_set():
+        ret, frame = cap.read()
+        with cond:
+            if not ret:
+                exit_event.set()
+                cond.notify()
+                break
+            while len(frame_queue) >= MAX_FRAME_QUEUE_SIZE and not exit_event.is_set():
+                cond.wait()
+            frame_queue.append(frame)
+            cond.notify()
+        time.sleep(delay)
+
+
 def draw(frame, detections, tracks, acquire, track_id):
     for _track_id, track in tracks.items():
         if not acquire and _track_id == track_id:
@@ -76,28 +99,13 @@ def draw(frame, detections, tracks, acquire, track_id):
         cv2.putText(frame, 'Tracking %d' % track_id, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
 
 
-def capture_frames(cap, frame_queue, cond, exit_event, capture_delay=None):
-    while not exit_event.is_set():
-        ret, frame = cap.read()
-        with cond:
-            if not ret:
-                exit_event.set()
-                cond.notify()
-                break
-            frame_queue.append(frame)
-            cond.notify()
-        if capture_delay is not None:
-            time.sleep(capture_delay)
-
-
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-i', '--input', help='Path to optional input video file')
     parser.add_argument('-o', '--output', help='Path to optional output video file')
     parser.add_argument('-a', '--analytics', action='store_true', help='Turn on video analytics')
     parser.add_argument('-s', '--socket', action='store_true', help='Turn on socket communication')
-    parser.add_argument('--host', default='127.0.0.1', help='Host IP for communication')
-    parser.add_argument('--port', type=int, default=9000, help='Port number for communication')
+    parser.add_argument('--addr', default='/tmp/guardian_socket', help='Socket address')
     parser.add_argument('-g', '--gui', action='store_true', help='Turn on visiualization')
     parser.add_argument('-f', '--flip', type=int, default=0, choices=range(8), help=
         "0: none\n"          
@@ -115,7 +123,7 @@ def main():
     os.system('echo %s | sudo -S nvpmodel -m 0' % PASSWORD)
     os.system('sudo jetson_clocks')
 
-    cap = cv2.VideoCapture(gst_pipeline(CAPTURE_SIZE, PROC_SIZE, CAM_FRAME_RATE, args['flip']), cv2.CAP_GSTREAMER) if args['input'] is None else cv2.VideoCapture(args['input'])
+    cap = cv2.VideoCapture(gst_capture_pipeline(CAPTURE_SIZE, PROC_SIZE, CAM_FRAME_RATE, args['flip']), cv2.CAP_GSTREAMER) if args['input'] is None else cv2.VideoCapture(args['input'])
     if not cap.isOpened():
         raise Exception("Unable to open video stream")
     
@@ -123,33 +131,40 @@ def main():
     tracker = None
     writer = None
     sock = None
-    frame_count = 0
-    elapsed_time = 0
-    enable_analytics = False
-    frame_queue = []
+    frame_queue = deque()
     cond = threading.Condition()
     exit_event = threading.Event()
+    enable_analytics = False
+    frame_count = 0
+    elapsed_time = 0
+    gui_time = 0
+    draw_time = 0
+    save_time = 0
 
     vid_fps = cap.get(cv2.CAP_PROP_FPS)
     vid_size = (cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print('[INFO] Video stream: %dx%d @ %d FPS' % (vid_size[0], vid_size[1], vid_fps))
     capture_dt = 1 / vid_fps
-    # account for display overhead so that capture queue won't overflow
-    capture_delay = capture_dt if args['input'] is None else 1 / 40 # video has max performance at 40 FPS
-    if args['gui']:
-        capture_delay += 0.02
-        if args['analytics']:
-            capture_delay += 0.025
+    # Hack: account for display overhead for camera to reduce lag
+    delay = 0.01
     if args['input'] is None:
+        delay = 1 / 30 if args['analytics'] else 0
+        if args['gui']:
+            delay += 0.025
+            if not args['analytics']:
+                delay += 0.03
+        if args['analytics'] and (args['gui'] or args['output']):
+            delay += 0.005
         # camera only grabs the most recent frame
-        capture_dt = capture_delay
+        capture_dt = delay = max(delay, capture_dt)
+        vid_fps = 1 / capture_dt
 
-    capture_thread = threading.Thread(target=capture_frames, args=(cap, frame_queue, cond, exit_event, capture_delay))
+    capture_thread = threading.Thread(target=capture_frames, args=(cap, frame_queue, cond, exit_event, delay))
     if args['analytics']:
         objectdetector.ObjectDetector.init_backend()
-        print('[INFO] Loading tracking detector model...')
-        acq_detector = objectdetector.ObjectDetector(PROC_SIZE, CLASSES, objectdetector.DetectorType.ACQUISITION)
         print('[INFO] Loading acquisition detector model...')
+        acq_detector = objectdetector.ObjectDetector(PROC_SIZE, CLASSES, objectdetector.DetectorType.ACQUISITION)
+        print('[INFO] Loading tracking detector model...')
         trk_detector = objectdetector.ObjectDetector(PROC_SIZE, CLASSES, objectdetector.DetectorType.TRACKING)
         tracker = bboxtracker.BBoxTracker(PROC_SIZE, capture_dt)
         # reset flags
@@ -160,15 +175,12 @@ def main():
         acquisition_start_frame = 0
         track_id = -1
     if args['output'] is not None:
-        if os.listdir(args['output']):
-            os.system('rm -r ' + args['output'])
-        Path(args['output']).mkdir(parents=True, exist_ok=True)
-        # fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        # writer = cv2.VideoWriter(args["output"], fourcc, vid_fps, PROC_SIZE, True)
+        Path(args['output']).parent.mkdir(parents=True, exist_ok=True)
+        writer = cv2.VideoWriter(gst_write_pipeline(args['output']), int(cap.get(cv2.CAP_PROP_FOURCC)), vid_fps, PROC_SIZE, True)
     if args['socket']:
-        assert args['analytics'], 'Analytics must be turned on for communication'
-        sock = socket.socket()
-        sock.connect((args['host'], args['port']))
+        assert args['analytics'], 'Analytics must be turned on for socket'
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(args['addr'])
         sock.setblocking(False)
         enable_analytics = False
     if args['gui']:
@@ -187,7 +199,8 @@ def main():
                     cond.wait()
                 if len(frame_queue) == 0 and exit_event.is_set():
                     break
-                frame = frame_queue.pop(0)
+                frame = frame_queue.popleft()
+                cond.notify()
             
             # preprocess frame if necessary
             if vid_size != PROC_SIZE:
@@ -195,9 +208,15 @@ def main():
             # frame = cv2.medianBlur(frame, 3)
 
             if args['socket']:
-                msg = sock.recv(MSG_LENGTH)
-                if len(msg) > 0:
+                try:
+                    msg = sock.recv(MSG_LENGTH)
+                except OSError as err:
+                    if err.args[0] != errno.EAGAIN and err.args[0] != errno.EWOULDBLOCK:
+                        raise
+                else:
+                    # print('client', msg)
                     if msg == Msg.START:
+                        print('client: start')
                         if not enable_analytics:
                             # reset flags
                             frame_count = 0
@@ -209,12 +228,16 @@ def main():
                             acquisition_start_frame = 0
                             track_id = -1
                     elif msg == Msg.STOP:
+                        print('client: stop')
                         if enable_analytics:
                             enable_analytics = False
                             avg_fps = round(frame_count / elapsed_time)
                             print('[INFO] Average FPS: %d' % avg_fps)
                     elif msg == Msg.TERMINATE:
-                        exit_event.set()
+                        print('client: terminate')
+                        with cond:
+                            exit_event.set()
+                            cond.notify()
                         break
 
             if enable_analytics:
@@ -259,30 +282,34 @@ def main():
                     else:
                         tracker.track(frame)
 
-                if args['gui']:
+                if args['gui'] or args['output']:
+                    tic2 = time.perf_counter()
                     draw(frame, detections, tracker.tracks, acquire, track_id)
-                    tracker.flow.draw_bkg_feature_match(frame)
+                    # tracker.flow.draw_bkg_feature_match(frame)
                     if frame_count % detector_frame_skip == 0:
                         detector.draw_cur_tile(frame)
+                    draw_time += time.perf_counter() - tic2
 
             if args['gui']:
+                tic2 = time.perf_counter()
                 # cv2.putText(frame, '%d FPS' % fps, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
                 cv2.imshow('Video', frame)
                 if cv2.waitKey(1) & 0xFF == 27:
-                    exit_event.set()
+                    with cond:
+                        exit_event.set()
+                        cond.notify()
                     break
+                gui_time += time.perf_counter() - tic2
             if args['output'] is not None:
-                # writer.write(frame)
-                output_path = str(Path(args['output']) / ('%05d.jpg' % frame_count))
-                cv2.imwrite(output_path, frame)
+                writer.write(frame)
             
             toc = time.perf_counter()
             elapsed_time += toc - tic
             frame_count += 1
     finally:
         # clean up resources
-        # if writer is not None:
-        #     writer.release()
+        if writer is not None:
+            writer.release()
         if args['input'] is not None:
             # gstreamer cleans up automatically
             cap.release()
@@ -293,6 +320,15 @@ def main():
     if not args['socket']:
         avg_fps = round(frame_count / elapsed_time)
         print('[INFO] Average FPS: %d' % avg_fps)
+        if args['gui'] and args['analytics']:
+            avg_time = draw_time / frame_count
+            print('[INFO] Average drawing time: %f' % avg_time)
+        if args['gui']:
+            avg_time = gui_time / frame_count
+            print('[INFO] Average GUI time: %f' % avg_time)
+        # if args['output']:
+        #     avg_time = save_time / frame_count
+        #     print('[INFO] Average saving time: %f' % avg_time)
 
 
 if __name__ == '__main__':
