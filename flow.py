@@ -42,7 +42,6 @@ class Flow:
         self.fast_feature_detector = cv2.FastFeatureDetector_create(threshold=self.fast_feature_thresh)
         self.bkg_feature_pts = None
         self.prev_bkg_feature_pts = None
-        self.H_camera = None
 
     def predict(self, tracks, prev_frame_gray, prev_frame_small, frame_small):
         """
@@ -90,9 +89,10 @@ class Flow:
                 prev_bkg_pts = keypoints.reshape(-1, 2) / self.bkg_feature_scaling * self.optflow_scaling
             else:
                 tracks.clear()
-                self._reset_bkg_reg()
+                self.bkg_feature_pts = None
+                self.prev_bkg_feature_pts = None
                 print('[Flow] Background registration failed')
-                return self.H_camera
+                return None
             bkg_begin_idx = len(all_prev_pts)
             all_prev_pts = np.concatenate((all_prev_pts, prev_bkg_pts), axis=0)
 
@@ -105,6 +105,7 @@ class Flow:
             status_mask = (status == 1) & (err < self.opt_flow_err_thresh)
         # status_mask = np.bool_(status)
 
+        H_camera = None
         if self.estimate_camera_motion:
             # print(len(all_prev_pts), bkg_begin_idx)
             # print(all_prev_pts[bkg_begin_idx:])
@@ -113,22 +114,26 @@ class Flow:
             if len(matched_bkg_pts) >= 4:
                 prev_bkg_pts = prev_bkg_pts / self.optflow_scaling
                 matched_bkg_pts = matched_bkg_pts /self.optflow_scaling
-                self.H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
-                if self.H_camera is None or np.count_nonzero(inlier_mask) < self.min_bkg_inlier_count:
+                # H_camera, inlier_mask = cv2.estimateAffinePartial2D(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+                H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+                if H_camera is None or np.count_nonzero(inlier_mask) < self.min_bkg_inlier_count:
                     # clear tracks on background reg failure
                     tracks.clear()
-                    self._reset_bkg_reg()
+                    self.bkg_feature_pts = None
+                    self.prev_bkg_feature_pts = None
                     print('[Flow] Background registration failed')
-                    return self.H_camera
+                    return None
                 else:
+                    # H_camera = np.concatenate((H_camera, [[0, 0, 1]]), axis=0)
                     inlier_mask = np.bool_(inlier_mask.ravel())
                     self.prev_bkg_feature_pts = prev_bkg_pts[inlier_mask].reshape(-1, 2)
                     self.bkg_feature_pts = matched_bkg_pts[inlier_mask].reshape(-1, 2)
             else:
                 tracks.clear()
-                self._reset_bkg_reg()
+                self.bkg_feature_pts = None
+                self.prev_bkg_feature_pts = None
                 print('[Flow] Background registration failed')
-                return self.H_camera
+                return None
 
         fg_mask = np.ones(self.size[::-1], dtype=np.uint8) * 255
         for begin, end, (track_id, track) in zip(target_begin_idices, target_end_idices, list(tracks.items())):
@@ -158,11 +163,11 @@ class Flow:
             track.feature_pts = matched_pts[inlier_mask].reshape(-1, 2)
             track.prev_feature_pts = prev_pts[inlier_mask].reshape(-1, 2)
             # use inlier ratio as confidence
-            inlier_ratio = len(track.feature_pts) / len(matched_pts)
-            track.conf = inlier_ratio
+            # inlier_ratio = len(track.feature_pts) / (end - begin) #len(matched_pts)
+            # track.conf = inlier_ratio
             # zero out current track in foreground mask
             track.bbox.crop(fg_mask)[:] = 0
-        return self.H_camera
+        return H_camera
 
     def draw_bkg_feature_match(self, frame):
         if self.bkg_feature_pts is not None:
@@ -212,8 +217,3 @@ class Flow:
         # filter out points not on the foreground
         mask = fg_mask[cur_pts[:, 1], cur_pts[:, 0]] == 255
         return prev_pts[mask], cur_pts[mask]
-
-    def _reset_bkg_reg(self):
-        self.bkg_feature_pts = None
-        self.prev_bkg_feature_pts = None
-        self.H_camera = None
