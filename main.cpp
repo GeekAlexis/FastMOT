@@ -57,34 +57,34 @@ using namespace DJI::OSDK::Telemetry;
 
 //  theta stands for latitude, L stands for longitude, A for current GPS, in radian, B for target GPS, in degree
 double bearing_angle(double theta_A, double L_A, double theta_B, double L_B) {
-    // convert to radian
-    L_B = L_B * PI / 180.0;
-    theta_B = theta_B * PI / 180.0;
+  // convert to radian
+  L_B = L_B * PI / 180.0;
+  theta_B = theta_B * PI / 180.0;
 
-    double X = cos(theta_B)*sin(L_B - L_A);
-    double Y = cos(theta_A)*sin(theta_B)-sin(theta_A)*cos(theta_B)*cos(L_B-L_A);
-    double beta = atan2(X, Y);
-    beta = beta * 180 / PI;
-    return beta;
+  double X = cos(theta_B)*sin(L_B - L_A);
+  double Y = cos(theta_A)*sin(theta_B)-sin(theta_A)*cos(theta_B)*cos(L_B-L_A);
+  double beta = atan2(X, Y);
+  beta = beta * 180 / PI;
+  return beta;
 }
 
 double degreesToRadians(double degrees) {
-    return degrees * PI / 180;
+  return degrees * PI / 180;
 }
 
 double distanceInKmBetweenEarthCoordinates(double lat1, double lon1, double lat2, double lon2) {
-    double earthRadiusKm = 6371.345;
+  double earthRadiusKm = 6371.345;
 
-    // convert to degree
-    double lat1_degree = lat1 / PI * 180.0;
-    double lon1_degree = lon1 / PI * 180.0;
+  // convert to degree
+  double lat1_degree = lat1 / PI * 180.0;
+  double lon1_degree = lon1 / PI * 180.0;
 
-    double dLat = degreesToRadians(lat2 - lat1_degree);
-    double dLon = degreesToRadians(lon2 - lon1_degree);
+  double dLat = degreesToRadians(lat2 - lat1_degree);
+  double dLon = degreesToRadians(lon2 - lon1_degree);
 
-    double a = sin(dLat/2) * sin(dLat/2) + sin(dLon/2) * sin(dLon/2) * cos(lat1) * cos(lat2);
-    double c = 2 * atan2(sqrt(a), sqrt(1-a));
-    return earthRadiusKm * c;
+  double a = sin(dLat/2) * sin(dLat/2) + sin(dLon/2) * sin(dLon/2) * cos(lat1) * cos(lat2);
+  double c = 2 * atan2(sqrt(a), sqrt(1-a));
+  return earthRadiusKm * c;
 }
 
 int main(int argc, char** argv) {
@@ -196,15 +196,17 @@ int main(int argc, char** argv) {
       }
       else if(inputChar == 'g')
       {
-        angle += bearing_angle(globalPosition.latitude, globalPosition.longitude, 38.627089, -90.200203);
+        angle += bearing_angle(globalPosition.latitude, globalPosition.longitude, 34.429384355371056, -119.8416657451706);
 	      vehicle->control->attitudeAndVertPosCtrl(0,0,angle,height); // Turn to the target angle
-	      distance = 1000 * distanceInKmBetweenEarthCoordinates(globalPosition.latitude, globalPosition.longitude, 38.627089, -90.200203);
-	      while (distance >= 5) 
+	      distance = 1000 * distanceInKmBetweenEarthCoordinates(globalPosition.latitude, globalPosition.longitude, 34.429384355371056, -119.8416657451706);
+        std::cout << "Distance: " << distance << " Meters.\n";
+	      while (distance >= 5)
 	      {
           vehicle->control->attitudeAndVertPosCtrl(0,-1,angle,height); // Move forward towards the target location with the calculated angle by one meter
-          angle += bearing_angle(globalPosition.latitude, globalPosition.longitude, 38.627089, -90.200203); // Recalculate the angle
+          angle += bearing_angle(globalPosition.latitude, globalPosition.longitude, 34.429384355371056, -119.8416657451706); // Recalculate the angle
 	        // vehicle->control->attitudeAndVertPosCtrl(0,0,angle,height); // Turn to the target angle
-	        distance = 1000 * distanceInKmBetweenEarthCoordinates(globalPosition.latitude, globalPosition.longitude, 38.627089, -90.200203);
+	        distance = 1000 * distanceInKmBetweenEarthCoordinates(globalPosition.latitude, globalPosition.longitude, 34.429384355371056, -119.8416657451706);
+          std::cout << "Distance: " << distance << " Meters.\n";
           // sleep(1);
 	      }
       }
