@@ -4,7 +4,8 @@
 using namespace std;
 // GPS: latitude, longitude
 //  theta stands for latitude in degree, L stands for longitude in degree
-double bearing_angle(double L_A, double theta_A, double L_B, double theta_B) {
+// east is 0 degree; + clockwise
+double bearing_angle(double theta_A, double L_A, double theta_B, double L_B) {
     // convert to radian
     L_A = L_A * PI / 180.0;
     theta_A = theta_A * PI / 180.0;
@@ -21,10 +22,10 @@ double bearing_angle(double L_A, double theta_A, double L_B, double theta_B) {
 }
 
 int main() {
-  double theta_A = 39.099912;
-  double L_A = -94.581213;
-  double theta_B = 38.627089;
-  double L_B = -90.200203;
+  double theta_A = 34.413744; //latitude
+  double L_A = -119.841454; // longitude
+  double theta_B = 34.413376;
+  double L_B =  -119.841472;
   double output = bearing_angle(L_A, theta_A, L_B, theta_B);
   cout << "bearing angle is " << output << " degree" << endl;
   return 0;
