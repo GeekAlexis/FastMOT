@@ -1,19 +1,40 @@
 import ctypes
+import enum
 import numpy as np
 import cv2
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
-from util import *
+from utils.utils import *
 import models.ssd as ssd
 
 
-class DetectorType:
+class DetectorType(enum.Enum):
     """
     enumeration type for object detector type
     """
     TRACKING = 0
     ACQUISITION = 1
+
+
+class Detection:
+    def __init__(self, bbox, label, conf):
+        self.bbox = bbox
+        self.label = label
+        self.conf = conf
+
+    def __repr__(self):
+        return "Detection(bbox=%r, label=%r, conf=%r)" % (self.bbox, self.label, self.conf)
+
+    def __str__(self):
+        return "%.2f %s at %s" % (self.conf, ssd.COCO_LABELS[self.label], self.bbox.cv_rect())
+    
+    def draw(self, frame):
+        text = "%s: %.2f" % (ssd.COCO_LABELS[self.label], self.conf) 
+        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
+        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), (112, 25, 25), 2)
+        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), (112, 25, 25), cv2.FILLED)
+        cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, (102, 255, 255), 2, cv2.LINE_AA)
 
 
 class ObjectDetector:
@@ -27,7 +48,7 @@ class ObjectDetector:
         trt.init_libnvinfer_plugins(trt_logger, '')
         ObjectDetector.runtime = trt.Runtime(trt_logger)
 
-    def __init__(self, size, classes=set(range(len(coco_labels))), detector_type=DetectorType.ACQUISITION):
+    def __init__(self, size, classes=set(range(len(ssd.COCO_LABELS))), detector_type=DetectorType.ACQUISITION):
         # initialize parameters
         self.size = size
         self.classes = classes
