@@ -9,7 +9,7 @@ import errno
 
 import cv2
 import objectdetector
-import bboxtracker
+import kalmantracker
 
 
 """
@@ -17,10 +17,10 @@ config paramters
 """
 MSG_LENGTH = 16
 PASSWORD = 'jdyw123'
-CAPTURE_SIZE = (1920, 1080)
-CAM_FRAME_RATE = 30
-# CAPTURE_SIZE = (3264, 1848)
-# CAM_FRAME_RATE = 28
+# CAPTURE_SIZE = (1920, 1080)
+# CAM_FRAME_RATE = 30
+CAPTURE_SIZE = (3264, 1848)
+CAM_FRAME_RATE = 28
 # CAPTURE_SIZE = (1280, 720)
 # CAM_FRAME_RATE = 60
 PROC_SIZE = (1280, 720)
@@ -45,16 +45,14 @@ class Msg:
 
 
 def gst_capture_pipeline(capture_size, display_size, frame_rate, flip_method=0):
-    # TODO: duplicate frames?
     return (
         "nvarguscamerasrc ! "
         "video/x-raw(memory:NVMM), "
         "width=(int)%d, height=(int)%d, "
         "format=(string)NV12, framerate=(fraction)%d/1 ! "
         "nvvidconv flip-method=%d ! "
-        "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
-        "videoconvert !"
-        "video/x-raw, format=(string)BGR ! appsink"
+        "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx !"
+        "videoconvert ! appsink"
         % (
             capture_size[0],
             capture_size[1],
@@ -71,20 +69,26 @@ def gst_write_pipeline(path):
     return 'appsrc ! autovideoconvert ! omxh265enc ! mp4mux ! filesink location = %s ' % path
 
 
-def capture_frames(cap, frame_queue, cond, exit_event, delay):
+def capture_frames(cap, frame_queue, cond, exit_event, delay=0):
+    tic = time.time()
     while not exit_event.is_set():
-        ret, frame = cap.read()
+        # ret, frame = cap.read()
+        ret = cap.grab()
         with cond:
             if not ret:
                 exit_event.set()
                 cond.notify()
                 break
-            while len(frame_queue) >= MAX_FRAME_QUEUE_SIZE and not exit_event.is_set():
-                cond.wait()
-            frame_queue.append(frame)
-            cond.notify()
-        time.sleep(delay)
-
+            time_elapsed = time.time() - tic
+            # print(delay - time_elapsed)
+            if  delay - time_elapsed <= 0.01:
+                ret, frame = cap.retrieve()
+                tic = time.time()
+                while len(frame_queue) >= MAX_FRAME_QUEUE_SIZE and not exit_event.is_set():
+                    cond.wait()
+                frame_queue.append(frame)
+                cond.notify()
+                
 
 def draw(frame, detections, tracks, acquire, track_id):
     for _track_id, track in tracks.items():
@@ -100,6 +104,7 @@ def draw(frame, detections, tracks, acquire, track_id):
 
 
 def main():
+    # TODO: camera class and move reset parameters to a nested function
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-i', '--input', help='Path to optional input video file')
     parser.add_argument('-o', '--output', help='Path to optional output video file')
@@ -123,9 +128,13 @@ def main():
     os.system('echo %s | sudo -S nvpmodel -m 0' % PASSWORD)
     os.system('sudo jetson_clocks')
 
-    cap = cv2.VideoCapture(gst_capture_pipeline(CAPTURE_SIZE, PROC_SIZE, CAM_FRAME_RATE, args['flip']), cv2.CAP_GSTREAMER) if args['input'] is None else cv2.VideoCapture(args['input'])
+    if args['input'] is None:
+        gst_str = gst_capture_pipeline(CAPTURE_SIZE, PROC_SIZE, CAM_FRAME_RATE, args['flip'])
+        cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
+    else:
+        cap = cv2.VideoCapture(args['input'])
     if not cap.isOpened():
-        raise Exception("Unable to open video stream")
+        raise RuntimeError("Unable to open video stream")
     
     detector = None
     tracker = None
@@ -145,18 +154,19 @@ def main():
     vid_size = (cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print('[INFO] Video stream: %dx%d @ %d FPS' % (vid_size[0], vid_size[1], vid_fps))
     capture_dt = 1 / vid_fps
-    # Hack: account for display overhead for camera to reduce lag
-    delay = 0.01
+    delay = 0
+    # Hack: delay camera frame grabbing to reduce lag
     if args['input'] is None:
-        delay = 1 / 30 if args['analytics'] else 0
+        if args['analytics']:
+            delay = 1 / 30
+            # if args['gui'] or args['output']:
+            #     delay += 0.005 # drawing
         if args['gui']:
-            delay += 0.025
+            delay += 0.025 # gui
             if not args['analytics']:
                 delay += 0.03
-        if args['analytics'] and (args['gui'] or args['output']):
-            delay += 0.005
-        # camera only grabs the most recent frame
-        capture_dt = delay = max(delay, capture_dt)
+        # camera captures the most recent frame
+        delay = capture_dt = max(delay, capture_dt)
         vid_fps = 1 / capture_dt
 
     capture_thread = threading.Thread(target=capture_frames, args=(cap, frame_queue, cond, exit_event, delay))
@@ -166,7 +176,7 @@ def main():
         acq_detector = objectdetector.ObjectDetector(PROC_SIZE, CLASSES, objectdetector.DetectorType.ACQUISITION)
         print('[INFO] Loading tracking detector model...')
         trk_detector = objectdetector.ObjectDetector(PROC_SIZE, CLASSES, objectdetector.DetectorType.TRACKING)
-        tracker = bboxtracker.BBoxTracker(PROC_SIZE, capture_dt)
+        tracker = kalmantracker.KalmanTracker(PROC_SIZE, capture_dt)
         # reset flags
         enable_analytics = True
         acquire = True
@@ -176,7 +186,7 @@ def main():
         track_id = -1
     if args['output'] is not None:
         Path(args['output']).parent.mkdir(parents=True, exist_ok=True)
-        writer = cv2.VideoWriter(gst_write_pipeline(args['output']), int(cap.get(cv2.CAP_PROP_FOURCC)), vid_fps, PROC_SIZE, True)
+        writer = cv2.VideoWriter(gst_write_pipeline(args['output']), 0, vid_fps, PROC_SIZE, True)
     if args['socket']:
         assert args['analytics'], 'Analytics must be turned on for socket'
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -201,7 +211,7 @@ def main():
                     break
                 frame = frame_queue.popleft()
                 cond.notify()
-            
+
             # preprocess frame if necessary
             if vid_size != PROC_SIZE:
                 frame = cv2.resize(frame, PROC_SIZE)
@@ -305,6 +315,7 @@ def main():
             
             toc = time.perf_counter()
             elapsed_time += toc - tic
+            # print('fps', 1 / (toc - tic))
             frame_count += 1
     finally:
         # clean up resources
