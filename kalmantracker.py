@@ -1,4 +1,5 @@
 import math
+import enum
 from copy import deepcopy
 from collections import OrderedDict
 from scipy.optimize import linear_sum_assignment
@@ -6,10 +7,11 @@ from scipy.linalg import solve_triangular
 import numpy as np
 import cv2
 import flow
-from util import *
+from models.ssd import COCO_LABELS
+from utils.utils import *
 
 
-class MeasType:
+class MeasType(enum.Enum):
     """
     Enumeration type for Kalman Filter measurement types
     """
@@ -17,7 +19,40 @@ class MeasType:
     CNN = 1
 
 
-class BBoxTracker:
+class Track:
+    def __init__(self, label, bbox, track_id):
+        self.label = label
+        self.bbox = bbox
+        self.init_bbox = bbox
+        self.track_id = track_id
+        self.age = 0
+        self.conf = 1
+        self.feature_pts = None
+        self.prev_feature_pts = None
+        self.frames_since_acquired = 0
+
+    def __repr__(self):
+        return "Track(label=%r, bbox=%r, track_id=%r)" % (self.label, self.bbox, self.track_id)
+
+    def __str__(self):
+        return "%s ID%d at %s" % (COCO_LABELS[self.label], self.track_id, self.bbox.cv_rect())
+
+    def draw(self, frame, follow=False, draw_feature_match=False):
+        bbox_color = (127, 255, 0) if follow else (0, 165, 255)
+        text_color = (143, 48, 0)
+        text = "%s%d" % (COCO_LABELS[self.label], self.track_id) 
+        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
+        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), bbox_color, 2)
+        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1, self.bbox.ymin - text_height + 1), bbox_color, cv2.FILLED)
+        cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, text_color, 2, cv2.LINE_AA)
+        if draw_feature_match:
+            if self.feature_pts is not None:
+                [cv2.circle(frame, tuple(pt), 1, (0, 255, 255), -1) for pt in np.int_(np.round(self.feature_pts))]
+                if self.prev_feature_pts is not None:
+                    [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 255, 255), 1, cv2.LINE_AA) for pt1, pt2 in zip(np.int_(np.round(self.prev_feature_pts)), np.int_(np.round(self.feature_pts)))]
+
+
+class KalmanTracker:
     # 0.95 quantile of the chi-square distribution with 4 degrees of freedom
     CHI_SQ_INV_95 = 9.4877
     INF_COST = 1e5
@@ -28,7 +63,7 @@ class BBoxTracker:
         self.acquisition_max_age = 10
         self.tracking_max_age = 3
         self.acquire = True
-        self.max_association_maha = math.sqrt(BBoxTracker.CHI_SQ_INV_95)
+        self.max_association_maha = math.sqrt(KalmanTracker.CHI_SQ_INV_95)
         self.min_association_iou = 0.2
         self.min_register_conf = 0.6
         self.num_vertical_bin = 36
@@ -49,7 +84,7 @@ class BBoxTracker:
         self.init_std_vel_factor = 10
         self.vel_coupling = 0.6
         self.vel_half_life = 1
-        self.max_vel = 10000
+        self.max_vel = 8000
         self.min_size = 25
 
         self.prev_frame_gray = None
@@ -90,11 +125,12 @@ class BBoxTracker:
                         del self.tracks[track_id]
                 else:
                     # track using kalman filter and flow measurement
+                    self._warp_kalman_filters(track_id, H_camera)
                     next_state = self.kalman_filters[track_id].predict()
                     self._clip_vel_and_size(track_id)
                     if use_flow and track_id in flow_tracks:
                         flow_track = flow_tracks[track_id]
-                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, MeasType.FLOW) #, flow_track.conf)
+                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, MeasType.FLOW, flow_track.conf)
                         flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
                         next_state = self.kalman_filters[track_id].correct(flow_meas)
                         self._clip_vel_and_size(track_id)
@@ -173,15 +209,15 @@ class BBoxTracker:
             cost = maha_mat + (1 - iou_mat)
             # validation gating using Chi square test and IOU, and ensure same label
             diff_label_mask = np.array([[track.label != det.label for det in detections] for track in tracks])
-            cost[diff_label_mask | (iou_mat < self.min_association_iou) | (maha_mat > self.max_association_maha)] = BBoxTracker.INF_COST
+            cost[diff_label_mask | (iou_mat < self.min_association_iou) | (maha_mat > self.max_association_maha)] = KalmanTracker.INF_COST
             # print('cost', cost)
 
             track_indices, det_indices = linear_sum_assignment(cost)
             unmatched_det_indices = list(set(all_det_indices) - set(det_indices))
             for track_idx, det_idx in zip(track_indices, det_indices):
                 track_id = track_ids[track_idx]
-                assert(cost[track_idx, det_idx] <= BBoxTracker.INF_COST)
-                if cost[track_idx, det_idx] < BBoxTracker.INF_COST:
+                assert(cost[track_idx, det_idx] <= KalmanTracker.INF_COST)
+                if cost[track_idx, det_idx] < KalmanTracker.INF_COST:
                     if track_id in self.kalman_filters:
                         self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(detections[det_idx].bbox, MeasType.CNN)
                         det_meas = self._convert_bbox_to_meas(detections[det_idx].bbox)
@@ -354,3 +390,40 @@ class BBoxTracker:
     def _warp_bbox(self, bbox, H_camera):
         warped_corners = cv2.perspectiveTransform(np.float32(bbox.corners()).reshape(4, 1, 2), H_camera)
         return Rect(cv_rect=cv2.boundingRect(warped_corners))
+
+    def _warp_kalman_filters(self, track_id, H_camera):
+        kalman_filter = self.kalman_filters[track_id]
+        pos_tl = kalman_filter.statePost[:2]
+        pos_br = kalman_filter.statePost[2:4]
+        vel_tl = kalman_filter.statePost[4:6]
+        vel_br = kalman_filter.statePost[6:]
+        A = H_camera[:2, :2]
+        v = H_camera[2, :2].reshape(1, 2)
+        t = H_camera[:2, 2].reshape(2, 1)
+        # h33 = H_camera[-1, -1]
+        temp = (v @ pos_tl + 1)
+        grad_tl = (temp * A - (A @ pos_tl + t) @ v) / temp**2
+        temp = (v @ pos_br + 1)
+        grad_br = (temp * A - (A @ pos_br + t) @ v) / temp**2
+
+        # vel_tl += pos_tl
+        # vel_br += pos_br
+        # warped = cv2.perspectiveTransform(np.array([pos_tl.T, pos_br.T, vel_tl.T, vel_br.T]), H_camera)
+        # kalman_filter.statePost[:2] = warped[0].T
+        # kalman_filter.statePost[2:4] = warped[1].T
+        # kalman_filter.statePost[4:6] = warped[2].T - warped[0].T
+        # kalman_filter.statePost[6:] = warped[3].T - warped[1].T
+
+        # warp state
+        warped_pos = cv2.perspectiveTransform(np.array([pos_tl.T, pos_br.T]), H_camera)
+        kalman_filter.statePost[:4, 0] = warped_pos.ravel()
+        kalman_filter.statePost[4:6] = grad_tl @ vel_tl
+        kalman_filter.statePost[6:] = grad_br @ vel_br
+
+        # warp covariance too
+        for i in range(0, 8, 2):
+            for j in range(0, 8, 2):
+                grad_left = grad_tl if i // 2 % 2 == 0 else grad_br
+                grad_right = grad_tl if j // 2 % 2 == 0 else grad_br
+                kalman_filter.errorCovPost[i:i + 2, j:j + 2] = grad_left @ kalman_filter.errorCovPost[i:i + 2, j:j + 2] @ grad_right.T
+
