@@ -43,7 +43,7 @@ class VideoIO:
         if not ret:
             raise RuntimeError("Unable to read video stream")
         self.frame_queue.append(frame)
-        print('[INFO] Video stream: %dx%d @ %d FPS' % (*self.vid_size, self.fps))
+        print('[Video] Stream specs: %dx%d @ %d FPS' % (*self.vid_size, self.fps))
         
         if self.output_path is not None:
             assert Path(self.output_path).suffix == '.mp4', 'Only mp4 is supported'
@@ -52,7 +52,7 @@ class VideoIO:
 
     def start_capture(self):
         if not self.cap.isOpened():
-            self.cap.open(self._gst_cap_str, cv2.CAP_GSTREAMER)
+            self.cap.open(self._gst_cap_str(), cv2.CAP_GSTREAMER)
         if not self.capture_thread.is_alive():
             self.capture_thread.start()
 

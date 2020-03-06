@@ -1,22 +1,15 @@
 import math
-import enum
+from enum import Enum
 from copy import deepcopy
 from collections import OrderedDict
 from scipy.optimize import linear_sum_assignment
 from scipy.linalg import solve_triangular
 import numpy as np
 import cv2
-import flow
-from models.ssd import COCO_LABELS
-from utils.utils import *
 
-
-class MeasType(enum.Enum):
-    """
-    Enumeration type for Kalman Filter measurement types
-    """
-    FLOW = 0
-    CNN = 1
+from . import flow
+from .models.ssd import COCO_LABELS
+from .utils import Rect, iou
 
 
 class Track:
@@ -53,6 +46,9 @@ class Track:
 
 
 class KalmanTracker:
+    class Meas(Enum):
+        FLOW = 0
+        CNN = 1
     # 0.95 quantile of the chi-square distribution with 4 degrees of freedom
     CHI_SQ_INV_95 = 9.4877
     INF_COST = 1e5
@@ -62,7 +58,6 @@ class KalmanTracker:
         self.dt = dt
         self.acquisition_max_age = 10
         self.tracking_max_age = 3
-        self.acquire = True
         self.max_association_maha = math.sqrt(KalmanTracker.CHI_SQ_INV_95)
         self.min_association_iou = 0.2
         self.min_register_conf = 0.6
@@ -87,6 +82,7 @@ class KalmanTracker:
         self.max_vel = 8000
         self.min_size = 25
 
+        self.acquire = True
         self.prev_frame_gray = None
         self.prev_frame_small = None
         # self.prev_pyramid = None
@@ -130,7 +126,7 @@ class KalmanTracker:
                     self._clip_vel_and_size(track_id)
                     if use_flow and track_id in flow_tracks:
                         flow_track = flow_tracks[track_id]
-                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, MeasType.FLOW, flow_track.conf)
+                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, KalmanTracker.Meas.FLOW, flow_track.conf)
                         flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
                         next_state = self.kalman_filters[track_id].correct(flow_meas)
                         self._clip_vel_and_size(track_id)
@@ -219,7 +215,7 @@ class KalmanTracker:
                 assert(cost[track_idx, det_idx] <= KalmanTracker.INF_COST)
                 if cost[track_idx, det_idx] < KalmanTracker.INF_COST:
                     if track_id in self.kalman_filters:
-                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(detections[det_idx].bbox, MeasType.CNN)
+                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(detections[det_idx].bbox, KalmanTracker.Meas.CNN)
                         det_meas = self._convert_bbox_to_meas(detections[det_idx].bbox)
                         next_state = self.kalman_filters[track_id].correct(det_meas)
                         self._clip_vel_and_size(track_id)
@@ -339,12 +335,12 @@ class KalmanTracker:
     def _convert_state_to_bbox(self, state):
         return Rect(tf_rect=np.int_(np.round(state[:4, 0])))
 
-    def _compute_meas_cov(self, bbox, meas_type=MeasType.FLOW, conf=1.0):
+    def _compute_meas_cov(self, bbox, meas_type, conf=1.0):
         width, height = bbox.size
-        if meas_type == MeasType.FLOW:
+        if meas_type == KalmanTracker.Meas.FLOW:
             std_factor = self.std_factor_flow
             min_std = self.min_std_flow
-        elif meas_type == MeasType.CNN:
+        elif meas_type == KalmanTracker.Meas.CNN:
             std_factor = self.std_factor_cnn
             min_std = self.min_std_cnn
         std = np.array([
@@ -378,7 +374,7 @@ class KalmanTracker:
 
         # compute innovation and innovation covariance
         meas = self._convert_bbox_to_meas(det.bbox)
-        meas_cov = self._compute_meas_cov(det.bbox, MeasType.CNN)
+        meas_cov = self._compute_meas_cov(det.bbox, KalmanTracker.Meas.CNN)
         innovation = meas - projected_mean
         innovation_cov = projected_cov + meas_cov
 
@@ -426,4 +422,3 @@ class KalmanTracker:
                 grad_left = grad_tl if i // 2 % 2 == 0 else grad_br
                 grad_right = grad_tl if j // 2 % 2 == 0 else grad_br
                 kalman_filter.errorCovPost[i:i + 2, j:j + 2] = grad_left @ kalman_filter.errorCovPost[i:i + 2, j:j + 2] @ grad_right.T
-

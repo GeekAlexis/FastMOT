@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import cv2
-from util import *
+from .utils import Rect
 
 
 class Flow:
@@ -14,8 +14,10 @@ class Flow:
         self.opt_flow_err_thresh = 100
         self.min_bkg_inlier_count = 3
         self.feature_dist_scaling = 0.06
+        # self.ransac_max_iter = 20
+        # self.ransac_conf = 0.98
         self.ransac_max_iter = 500
-        self.ransac_conf = 0.99
+        self.ransac_conf = 0.98
 
         # parameters for corner detection
         self.gftt_target_feature_params = dict( 
@@ -107,8 +109,6 @@ class Flow:
 
         H_camera = None
         if self.estimate_camera_motion:
-            # print(len(all_prev_pts), bkg_begin_idx)
-            # print(all_prev_pts[bkg_begin_idx:])
             prev_bkg_pts = all_prev_pts[bkg_begin_idx:][status_mask[bkg_begin_idx:]]
             matched_bkg_pts = all_cur_pts[bkg_begin_idx:][status_mask[bkg_begin_idx:]]
             if len(matched_bkg_pts) >= 4:
@@ -163,8 +163,8 @@ class Flow:
             track.feature_pts = matched_pts[inlier_mask].reshape(-1, 2)
             track.prev_feature_pts = prev_pts[inlier_mask].reshape(-1, 2)
             # use inlier ratio as confidence
-            # inlier_ratio = len(track.feature_pts) / (end - begin) #len(matched_pts)
-            # track.conf = inlier_ratio
+            inlier_ratio = len(track.feature_pts) / (end - begin) #len(matched_pts)
+            track.conf = inlier_ratio
             # zero out current track in foreground mask
             track.bbox.crop(fg_mask)[:] = 0
         return H_camera

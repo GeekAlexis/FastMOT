@@ -1,20 +1,14 @@
 import ctypes
-import enum
+from enum import Enum
+from pathlib import Path
 import numpy as np
 import cv2
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
-from utils.utils import *
-import models.ssd as ssd
 
-
-class DetectorType(enum.Enum):
-    """
-    enumeration type for object detector type
-    """
-    TRACKING = 0
-    ACQUISITION = 1
+from .utils import Rect
+from .models import ssd
 
 
 class Detection:
@@ -38,17 +32,20 @@ class Detection:
 
 
 class ObjectDetector:
+    class Type(Enum):
+        TRACKING = 0
+        ACQUISITION = 1
     runtime = None
 
     @classmethod
     def init_backend(cls): 
         # initialize TensorRT
-        ctypes.CDLL("lib/libflattenconcat.so")
+        ctypes.CDLL(Path(__file__).parent / 'lib' / 'libflattenconcat.so')
         trt_logger = trt.Logger(trt.Logger.INFO)
         trt.init_libnvinfer_plugins(trt_logger, '')
         ObjectDetector.runtime = trt.Runtime(trt_logger)
 
-    def __init__(self, size, classes=set(range(len(ssd.COCO_LABELS))), detector_type=DetectorType.ACQUISITION):
+    def __init__(self, size, classes, detector_type):
         # initialize parameters
         self.size = size
         self.classes = classes
@@ -59,7 +56,7 @@ class ObjectDetector:
         self.tile_overlap = 0.25
         self.tiles = None
         self.cur_tile = None
-        if self.detector_type == DetectorType.ACQUISITION:
+        if self.detector_type == ObjectDetector.Type.ACQUISITION:
             self.model = ssd.MobileNetV1
             self.conf_threshold = 0.5
             self.schedule_tiles = True
@@ -68,7 +65,7 @@ class ObjectDetector:
             self.tile_ages = np.zeros(len(self.tiles))
             self.age_to_object_ratio = 0.4
             self.cur_tile_id = -1
-        elif self.detector_type == DetectorType.TRACKING:
+        elif self.detector_type == ObjectDetector.Type.TRACKING:
             self.model = ssd.InceptionV2
             self.conf_threshold = 0.5
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
@@ -104,7 +101,7 @@ class ObjectDetector:
         self.input_batch = np.zeros((self.batch_size, trt.volume(self.model.INPUT_SHAPE)))
     
     def preprocess(self, frame, tracks={}, track_id=None):
-        if self.detector_type == DetectorType.ACQUISITION:
+        if self.detector_type == ObjectDetector.Type.ACQUISITION:
             # tile scheduling
             if self.schedule_tiles:
                 sx = sy = 1 - self.tile_overlap
@@ -121,7 +118,7 @@ class ObjectDetector:
             else:
                 self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
             self.cur_tile = self.tiles[self.cur_tile_id]
-        elif self.detector_type == DetectorType.TRACKING:
+        elif self.detector_type == ObjectDetector.Type.TRACKING:
             assert len(tracks) > 0 and track_id is not None
             xmin, ymin = np.int_(np.round(tracks[track_id].bbox.center() - (np.array(self.tile_size) - 1) / 2))
             xmin = max(min(self.size[0] - self.tile_size[0], xmin), 0)
@@ -167,7 +164,7 @@ class ObjectDetector:
         return self.postprocess()
 
     def get_tiling_region(self):
-        assert self.detector_type == DetectorType.ACQUISITION and len(self.tiles) > 0
+        assert self.detector_type == ObjectDetector.Type.ACQUISITION and len(self.tiles) > 0
         return Rect(tf_rect=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
 
     def draw_cur_tile(self, frame):

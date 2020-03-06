@@ -73,6 +73,10 @@ class Rect:
         xmax, ymax = np.int_(np.round(self.center() + half_size))
         return Rect(tf_rect=(xmin, ymin, xmax, ymax))
 
+    def resize(self, size):
+        # TODO:
+        pass
+
 
 def iou(rect1, rect2):
     inter_xmin = max(rect1.xmin, rect2.xmin) 
@@ -80,5 +84,4 @@ def iou(rect1, rect2):
     inter_xmax = min(rect1.xmax, rect2.xmax)
     inter_ymax = min(rect1.ymax, rect2.ymax)
     inter_area = max(0, inter_xmax - inter_xmin + 1) * max(0, inter_ymax - inter_ymin + 1)
-    iou = inter_area / (rect1.area() + rect2.area() - inter_area)
-    return iou
+    return inter_area / (rect1.area() + rect2.area() - inter_area)
