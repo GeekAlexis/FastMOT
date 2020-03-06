@@ -8,7 +8,6 @@
 - Scipy
 - PyCuda
 - TensorRT
-- tqdm
 - DJI OSDK
 
 ### Example runs
