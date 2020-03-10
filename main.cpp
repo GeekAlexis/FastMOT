@@ -32,7 +32,7 @@ double bearing_angle(double theta_A, double L_A, double theta_B, double L_B) {
     double Y = cos(theta_A)*sin(theta_B)-sin(theta_A)*cos(theta_B)*cos(L_B-L_A);
     double beta = atan2(X, Y);
     beta = beta * 180 / PI;
-    return beta;
+    return beta + 90;
 }
 
 double distanceInBetweenEarthCoordinates(double theta_A, double L_A, double theta_B, double L_B) {
