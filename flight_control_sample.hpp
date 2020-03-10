@@ -95,29 +95,29 @@ DJI::OSDK::Telemetry::Vector3f toEulerAngle(void* quaternionData);
 bool startGlobalPositionBroadcast(DJI::OSDK::Vehicle* vehicle);
 
 // Added
-bool setUpSubscription(DJI::OSDK::Vehicle* vehicle, int responseTimeout);
-bool teardownSubscription(DJI::OSDK::Vehicle* vehicle, const int pkgIndex,
+bool setUpSubscription2(DJI::OSDK::Vehicle* vehicle, int responseTimeout);
+bool teardownSubscription2(DJI::OSDK::Vehicle* vehicle, const int pkgIndex,
                           int responseTimeout);
 
 // Set numWaypoints to 2 for Return To Home functionality; otherwise 1
-bool runWaypointMission(DJI::OSDK::Vehicle* vehicle, uint8_t numWaypoints,
+bool runWaypointMission2(DJI::OSDK::Vehicle* vehicle, uint8_t numWaypoints,
                         int responseTimeout, double latitude, double longitude);
 
-void setWaypointDefaults(DJI::OSDK::WayPointSettings* wp);
-void setWaypointInitDefaults(DJI::OSDK::WayPointInitSettings* fdata);
+void setWaypointDefaults2(DJI::OSDK::WayPointSettings* wp);
+void setWaypointInitDefaults2(DJI::OSDK::WayPointInitSettings* fdata);
 
-std::vector<DJI::OSDK::WayPointSettings> createWaypoints(
+std::vector<DJI::OSDK::WayPointSettings> createWaypoints2(
   DJI::OSDK::Vehicle* vehicle, int numWaypoints,
   double latitude, double longitude, DJI::OSDK::float32_t start_alt);
 
-std::vector<DJI::OSDK::WayPointSettings> generateWaypointsLine(
+std::vector<DJI::OSDK::WayPointSettings> generateWaypointsLine2(
   DJI::OSDK::WayPointSettings* start_data, double latitude, double longitude,
   int num_wp);
 
-void uploadWaypoints(DJI::OSDK::Vehicle*                       vehicle,
+void uploadWaypoints2(DJI::OSDK::Vehicle*                       vehicle,
                      std::vector<DJI::OSDK::WayPointSettings>& wp_list,
                      int                                       responseTimeout);
 
-const int DEFAULT_PACKAGE_INDEX = 0;
+const int DEFAULT_PACKAGE_INDEX_2 = 0;
 
 #endif // DJIOSDK_FLIGHTCONTROL_HPP

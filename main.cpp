@@ -1,4 +1,3 @@
-
 #include "flight_control_sample.hpp"
 #include "flight_sample.hpp"
 #include <dji_telemetry.hpp>
@@ -8,7 +7,10 @@
 
 #define STDIN_FILENO 0
 #define TSCANOW 0
-#define PI 3.14159265
+#define PI 3.1415926535
+
+using namespace DJI::OSDK;
+using namespace DJI::OSDK::Telemetry;
 
 void initTermios(int echo, struct termios &oldChars, struct termios &newChars)
 {
@@ -19,9 +21,6 @@ void initTermios(int echo, struct termios &oldChars, struct termios &newChars)
   newChars.c_lflag &= echo ? ECHO : ~ECHO; /* set echo mode */
   tcsetattr(0, TCSANOW, &newChars); /* use these new terminal i/o settings now */
 }
-
-using namespace DJI::OSDK;
-using namespace DJI::OSDK::Telemetry;
 
 //  theta stands for latitude, L stands for longitude, A for current GPS, in radian, B for target GPS, in degree
 double bearing_angle(double theta_A, double L_A, double theta_B, double L_B) {
@@ -36,23 +35,16 @@ double bearing_angle(double theta_A, double L_A, double theta_B, double L_B) {
     return beta;
 }
 
-double degreesToRadians(double degrees) {
-    return degrees * PI / 180;
-}
+double distanceInBetweenEarthCoordinates(double theta_A, double L_A, double theta_B, double L_B) {
+  L_B = L_B * PI / 180.0;
+  theta_B = theta_B * PI / 180.0;
+  double delta_theta = theta_B - theta_A;
+  double delta_L = L_B - L_A;
 
-double distanceInKmBetweenEarthCoordinates(double lat1, double lon1, double lat2, double lon2) {
-    double earthRadiusKm = 6371.345;
-
-    // convert to degree
-    double lat1_degree = lat1 / PI * 180.0;
-    double lon1_degree = lon1 / PI * 180.0;
-
-    double dLat = degreesToRadians(lat2 - lat1_degree);
-    double dLon = degreesToRadians(lon2 - lon1_degree);
-
-    double a = sin(dLat/2) * sin(dLat/2) + sin(dLon/2) * sin(dLon/2) * cos(lat1) * cos(lat2);
-    double c = 2 * atan2(sqrt(a), sqrt(1-a));
-    return earthRadiusKm * c;
+  double a = sin(delta_theta / 2) * sin(delta_theta /2 ) + cos(theta_A) * cos(theta_B) * sin(delta_L / 2) * sin(delta_L / 2);
+  double c = 2 * atan2(sqrt( a ), sqrt(1 - a));
+  double d = 6371000 * c;
+  return d;
 }
 
 int main(int argc, char** argv) {
@@ -97,8 +89,8 @@ int main(int argc, char** argv) {
     int height = 1;
     double distance = 0.0;
 
-    BufferToggle bt;
-    bt.off();
+    // BufferToggle bt;
+    // bt.off();
 
     Telemetry::Battery battery;
     Telemetry::RTK rtk;
@@ -106,12 +98,9 @@ int main(int argc, char** argv) {
 
     while (quit != 1)
     {
-      battery = vehicle->broadcast->getBatteryInfo();
-      rtk = vehicle->broadcast->getRTKInfo();
-      globalPosition = vehicle->broadcast->getGlobalPosition();
-      std::cout << "Battery Percentage: " << unsigned(battery.percentage) << "\n";
-      std::cout << "Battery Voltage: " << unsigned(battery.voltage) << "\n";
-      angle += rtk.yaw; // Get the azimuth and add it to the current angle
+      std::cout << "Battery Percentage: " << unsigned(vehicle->broadcast->getBatteryInfo().percentage) << "\n";
+      std::cout << "Battery Voltage: " << unsigned(vehicle->broadcast->getBatteryInfo().voltage) << "\n";
+      angle += vehicle->broadcast->getRTKInfo().yaw; // Get the azimuth and add it to the current angle
       inputChar = std::getchar();
       if (inputChar == 'w')
       {
@@ -156,25 +145,41 @@ int main(int argc, char** argv) {
       }
       else if (inputChar == 't')
       {
-        angle += bearing_angle(globalPosition.latitude, globalPosition.longitude, 38.627089, -90.200203);
+        double lat = 34.41508935247427;
+        double log = -119.84354498675536;
+
+        if(angle > 180) {angle -= 360;}
+        else if(angle < -180) {angle += 360;}
+        angle += bearing_angle(vehicle->broadcast->getGlobalPosition().latitude, vehicle->broadcast->getGlobalPosition().longitude, lat, log);
+        angle -= vehicle->broadcast->getRTKInfo().yaw;
+        if(angle > 180) {angle -= 360;}
+        else if(angle < -180) {angle += 360;}
 	      vehicle->control->attitudeAndVertPosCtrl(0,0,angle,height); // Turn to the target angle
-	      distance = 1000 * distanceInKmBetweenEarthCoordinates(globalPosition.latitude, globalPosition.longitude, 38.627089, -90.200203);
+	      distance = distanceInBetweenEarthCoordinates(vehicle->broadcast->getGlobalPosition().latitude, vehicle->broadcast->getGlobalPosition().longitude, lat, log);
+        std::cout << "Distance: " << distance << " Meters\n";
 	      while (distance >= 5) 
 	      {
           vehicle->control->attitudeAndVertPosCtrl(0,-1,angle,height); // Move forward towards the target location with the calculated angle by one meter
-          angle += bearing_angle(globalPosition.latitude, globalPosition.longitude, 38.627089, -90.200203); // Recalculate the angle
-	        // vehicle->control->attitudeAndVertPosCtrl(0,0,angle,height); // Turn to the target angle
-	        distance = 1000 * distanceInKmBetweenEarthCoordinates(globalPosition.latitude, globalPosition.longitude, 38.627089, -90.200203);
+          std::cout << "Bearing Angle: " << bearing_angle(vehicle->broadcast->getGlobalPosition().latitude, vehicle->broadcast->getGlobalPosition().longitude, lat, log) << "\n";
+          angle += bearing_angle(vehicle->broadcast->getGlobalPosition().latitude, vehicle->broadcast->getGlobalPosition().longitude, lat, log); // Recalculate the angle
+          std::cout << "RTK Angle: " << vehicle->broadcast->getRTKInfo().yaw << "\n";
+          angle -= vehicle->broadcast->getQuaternion().q3 * 90;
+          std::cout << "Quaternion Angle: " << vehicle->broadcast->getQuaternion().q3 << "\n";
+          std::cout << "Angle After: " << angle << "\n";
+          if(angle > 180) {angle -= 360;}
+          else if(angle < -180) {angle += 360;}
+	        distance = distanceInBetweenEarthCoordinates(vehicle->broadcast->getGlobalPosition().latitude, vehicle->broadcast->getGlobalPosition().longitude, lat, log);
+          std::cout << "Distance: " << distance << " Meters\n";
 	      }
       }
       else if (inputChar == 'g')
       {
-        runWaypointMission(vehicle, 1, functionTimeout, 34.0, -119.0); // Waypoint mission
+        runWaypointMission2(vehicle, 1, functionTimeout, 34.41508935247427  * PI / 180, -119.84354498675536  * PI / 180); // Waypoint mission
       }
       else if (inputChar == 'q') 
       {
         quit = 1;
-        bt.off();
+        // bt.off();
       }
     }
     monitoredLanding(vehicle);
@@ -182,16 +187,16 @@ int main(int argc, char** argv) {
 
   else if (inputChar == 'b') 
   {
-    monitoredTakeoff(vehicle);
-    runWaypointMission(vehicle, 1, functionTimeout, 34.0, -119.0); // Waypoint mission
-    monitoredLanding(vehicle);
+    // monitoredTakeoff(vehicle);
+    runWaypointMission2(vehicle, 1, functionTimeout, 34.41508935247427  * PI / 180, -119.84354498675536  * PI / 180); // Waypoint mission
+    // monitoredLanding(vehicle);
   }
 
   else if (inputChar == 'c') 
   {
-    monitoredTakeoff(vehicle);
-    runWaypointMission(vehicle, 2, functionTimeout, 34.0, -119.0); // Waypoint mission
-    monitoredLanding(vehicle);
+    // monitoredTakeoff(vehicle);
+    runWaypointMission2(vehicle, 2, functionTimeout, 34.41508935247427  * PI / 180, -119.84354498675536  * PI / 180); // Waypoint mission
+    // monitoredLanding(vehicle);
   }
 
   return 0;

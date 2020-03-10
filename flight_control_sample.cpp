@@ -897,7 +897,7 @@ bool startGlobalPositionBroadcast(Vehicle* vehicle)
 
 // Added
 bool
-setUpSubscription(DJI::OSDK::Vehicle* vehicle, int responseTimeout)
+setUpSubscription2(DJI::OSDK::Vehicle* vehicle, int responseTimeout)
 {
   // Telemetry: Verify the subscription
   ACK::ErrorCode subscribeStatus;
@@ -916,7 +916,7 @@ setUpSubscription(DJI::OSDK::Vehicle* vehicle, int responseTimeout)
   bool      enableTimestamp = false;
 
   bool pkgStatus = vehicle->subscribe->initPackageFromTopicList(
-    DEFAULT_PACKAGE_INDEX, numTopic, topicList10Hz, enableTimestamp, freq);
+    DEFAULT_PACKAGE_INDEX_2, numTopic, topicList10Hz, enableTimestamp, freq);
   if (!(pkgStatus))
   {
     return pkgStatus;
@@ -924,13 +924,13 @@ setUpSubscription(DJI::OSDK::Vehicle* vehicle, int responseTimeout)
 
   // Start listening to the telemetry data
   subscribeStatus =
-    vehicle->subscribe->startPackage(DEFAULT_PACKAGE_INDEX, responseTimeout);
+    vehicle->subscribe->startPackage(DEFAULT_PACKAGE_INDEX_2, responseTimeout);
   if (ACK::getError(subscribeStatus) != ACK::SUCCESS)
   {
     ACK::getErrorCodeMessage(subscribeStatus, __func__);
     // Cleanup
     ACK::ErrorCode ack =
-      vehicle->subscribe->removePackage(DEFAULT_PACKAGE_INDEX, responseTimeout);
+      vehicle->subscribe->removePackage(DEFAULT_PACKAGE_INDEX_2, responseTimeout);
     if (ACK::getError(ack))
     {
       std::cout << "Error unsubscribing; please restart the drone/FC to get "
@@ -942,7 +942,7 @@ setUpSubscription(DJI::OSDK::Vehicle* vehicle, int responseTimeout)
 }
 
 bool
-teardownSubscription(DJI::OSDK::Vehicle* vehicle, const int pkgIndex,
+teardownSubscription2(DJI::OSDK::Vehicle* vehicle, const int pkgIndex,
                      int responseTimeout)
 {
   ACK::ErrorCode ack =
@@ -957,11 +957,11 @@ teardownSubscription(DJI::OSDK::Vehicle* vehicle, const int pkgIndex,
 }
 
 bool
-runWaypointMission(Vehicle* vehicle, uint8_t numWaypoints, int responseTimeout, double latitude, double longitude)
+runWaypointMission2(Vehicle* vehicle, uint8_t numWaypoints, int responseTimeout, double latitude, double longitude)
 {
   if (!vehicle->isM100() && !vehicle->isLegacyM600())
   {
-    if (!setUpSubscription(vehicle, responseTimeout))
+    if (!setUpSubscription2(vehicle, responseTimeout))
     {
       std::cout << "Failed to set up Subscription!" << std::endl;
       return false;
@@ -971,7 +971,7 @@ runWaypointMission(Vehicle* vehicle, uint8_t numWaypoints, int responseTimeout, 
 
   // Waypoint Mission : Initialization
   WayPointInitSettings fdata;
-  setWaypointInitDefaults(&fdata);
+  setWaypointInitDefaults2(&fdata);
 
   fdata.indexNumber = numWaypoints;
 
@@ -989,11 +989,11 @@ runWaypointMission(Vehicle* vehicle, uint8_t numWaypoints, int responseTimeout, 
 
   // Waypoint Mission: Create Waypoints
   std::vector<WayPointSettings> generatedWaypts =
-    createWaypoints(vehicle, numWaypoints, latitude, longitude, start_alt);
+    createWaypoints2(vehicle, numWaypoints, latitude, longitude, start_alt);
   std::cout << "Creating Waypoints..\n";
 
   // Waypoint Mission: Upload the waypoints
-  uploadWaypoints(vehicle, generatedWaypts, responseTimeout);
+  uploadWaypoints2(vehicle, generatedWaypts, responseTimeout);
   std::cout << "Uploading Waypoints..\n";
 
   // Waypoint Mission: Start
@@ -1012,7 +1012,7 @@ runWaypointMission(Vehicle* vehicle, uint8_t numWaypoints, int responseTimeout, 
   // more input from our side.
   if (!vehicle->isM100() && !vehicle->isLegacyM600())
   {
-    return teardownSubscription(vehicle, DEFAULT_PACKAGE_INDEX,
+    return teardownSubscription2(vehicle, DEFAULT_PACKAGE_INDEX_2,
                                 responseTimeout);
   }
 
@@ -1020,7 +1020,7 @@ runWaypointMission(Vehicle* vehicle, uint8_t numWaypoints, int responseTimeout, 
 }
 
 void
-setWaypointDefaults(WayPointSettings* wp)
+setWaypointDefaults2(WayPointSettings* wp)
 {
   wp->damping         = 0;
   wp->yaw             = 0;
@@ -1038,7 +1038,7 @@ setWaypointDefaults(WayPointSettings* wp)
 }
 
 void
-setWaypointInitDefaults(WayPointInitSettings* fdata)
+setWaypointInitDefaults2(WayPointInitSettings* fdata)
 {
   fdata->maxVelocity    = 10;
   fdata->idleVelocity   = 5;
@@ -1054,12 +1054,12 @@ setWaypointInitDefaults(WayPointInitSettings* fdata)
 }
 
 std::vector<DJI::OSDK::WayPointSettings>
-createWaypoints(DJI::OSDK::Vehicle* vehicle, int numWaypoints,
+createWaypoints2(DJI::OSDK::Vehicle* vehicle, int numWaypoints,
                 double latitude, double longitude, float32_t start_alt)
 {
   // Create Start Waypoint
   WayPointSettings start_wp;
-  setWaypointDefaults(&start_wp);
+  setWaypointDefaults2(&start_wp);
 
   // Global position retrieved via subscription
   Telemetry::TypeMap<TOPIC_GPS_FUSED>::type subscribeGPosition;
@@ -1088,12 +1088,12 @@ createWaypoints(DJI::OSDK::Vehicle* vehicle, int numWaypoints,
   }
 
   std::vector<DJI::OSDK::WayPointSettings> wpVector =
-    generateWaypointsLine(&start_wp, latitude, longitude, numWaypoints);
+    generateWaypointsLine2(&start_wp, latitude, longitude, numWaypoints);
   return wpVector;
 }
 
 std::vector<DJI::OSDK::WayPointSettings>
-generateWaypointsLine(WayPointSettings* start_data, double latitude, double longitude, int num_wp)
+generateWaypointsLine2(WayPointSettings* start_data, double latitude, double longitude, int num_wp)
 {
 
   // Let's create a vector to store our waypoints in.
@@ -1104,7 +1104,7 @@ generateWaypointsLine(WayPointSettings* start_data, double latitude, double long
   wp_list.push_back(*start_data);
 
   WayPointSettings  wp;
-  setWaypointDefaults(&wp);
+  setWaypointDefaults2(&wp);
   wp.index     = 1;
   wp.latitude  = latitude;
   wp.longitude = longitude;
@@ -1123,7 +1123,7 @@ generateWaypointsLine(WayPointSettings* start_data, double latitude, double long
 }
 
 void
-uploadWaypoints(Vehicle*                                  vehicle,
+uploadWaypoints2(Vehicle*                                  vehicle,
                 std::vector<DJI::OSDK::WayPointSettings>& wp_list,
                 int                                       responseTimeout)
 {
