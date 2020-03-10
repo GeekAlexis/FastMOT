@@ -7,7 +7,7 @@ using namespace std;
 // GPS: latitude, longitude
 // theta stands for latitude in degree, L stands for longitude in degree
 
-double bearing_angle(double theta_A, double L_A, double theta_B, double L_B) {
+double distance(double theta_A, double L_A, double theta_B, double L_B) {
   L_A = L_A * PI / 180.0;
   theta_A = theta_A * PI / 180.0;
   L_B = L_B * PI / 180.0;
@@ -23,11 +23,11 @@ double bearing_angle(double theta_A, double L_A, double theta_B, double L_B) {
 }
 
 int main() {
-  double theta_A = 34.413744; //latitude
-  double L_A = -119.841454; // longitude
-  double theta_B = 34.413611;
-  double L_B =  -119.841483;
-  double output = bearing_angle(L_A, theta_A, L_B, theta_B);
+  double theta_A = 34.413738; //latitude
+  double L_A = -119.841449; // longitude
+  double theta_B = 34.413739;
+  double L_B =   -119.841477;
+  double output = distance(L_A, theta_A, L_B, theta_B);
   cout << "distance is " << output << " meters" << endl;
   return 0;
 }
