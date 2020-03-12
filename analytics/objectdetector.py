@@ -1,15 +1,16 @@
 import ctypes
 from enum import Enum
 from pathlib import Path
-import numpy as np
-import cv2
+import json
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
+import numpy as np
+import cv2
 
 from .utils import Rect
 from .models import ssd
-
+from .configs import decoder
 
 class Detection:
     def __init__(self, bbox, label, conf):
@@ -35,6 +36,9 @@ class ObjectDetector:
     class Type(Enum):
         TRACKING = 0
         ACQUISITION = 1
+
+    with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
+        config = json.load(config_file, cls=decoder.decoder)['ObjectDetector']
     runtime = None
 
     @classmethod
@@ -48,31 +52,32 @@ class ObjectDetector:
     def __init__(self, size, classes, detector_type):
         # initialize parameters
         self.size = size
-        self.classes = classes
+        self.classes = set(classes)
         self.detector_type = detector_type
-        self.max_det = 20
-        self.batch_size = 1
+        self.max_det = ObjectDetector.config['max_det']
+        self.batch_size = ObjectDetector.config['batch_size']
+        self.tile_overlap = ObjectDetector.config['tile_overlap']
 
-        self.tile_overlap = 0.25
         self.tiles = None
         self.cur_tile = None
         if self.detector_type == ObjectDetector.Type.ACQUISITION:
+            self.conf_threshold = ObjectDetector.config['acquisition']['conf_threshold']
+            self.tiling_grid = ObjectDetector.config['acquisition']['tiling_grid']
+            self.schedule_tiles = ObjectDetector.config['acquisition']['schedule_tiles']
+            self.age_to_object_ratio = ObjectDetector.config['acquisition']['age_to_object_ratio']
             self.model = ssd.MobileNetV1
-            self.conf_threshold = 0.5
-            self.schedule_tiles = True
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
-            self.tiles = self._generate_tiles((3, 2)) # 3 x 2 sliding windows
+            self.tiles = self._generate_tiles()
             self.tile_ages = np.zeros(len(self.tiles))
-            self.age_to_object_ratio = 0.4
             self.cur_tile_id = -1
         elif self.detector_type == ObjectDetector.Type.TRACKING:
+            self.conf_threshold = ObjectDetector.config['tracking']['conf_threshold']
             self.model = ssd.InceptionV2
-            self.conf_threshold = 0.5
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
 
         # load model and create engine
-        with open(self.model.PATH, 'rb') as f:
-            buf = f.read()
+        with open(self.model.PATH, 'rb') as model_file:
+            buf = model_file.read()
             engine = ObjectDetector.runtime.deserialize_cuda_engine(buf)
         assert self.max_det <= self.model.TOPK
         assert self.batch_size <= engine.max_batch_size
@@ -119,7 +124,7 @@ class ObjectDetector:
                 self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
             self.cur_tile = self.tiles[self.cur_tile_id]
         elif self.detector_type == ObjectDetector.Type.TRACKING:
-            assert len(tracks) > 0 and track_id is not None
+            assert track_id in tracks
             xmin, ymin = np.int_(np.round(tracks[track_id].bbox.center() - (np.array(self.tile_size) - 1) / 2))
             xmin = max(min(self.size[0] - self.tile_size[0], xmin), 0)
             ymin = max(min(self.size[1] - self.tile_size[1], ymin), 0)
@@ -170,14 +175,15 @@ class ObjectDetector:
     def draw_cur_tile(self, frame):
         cv2.rectangle(frame, self.cur_tile.tl(), self.cur_tile.br(), 0, 2)
 
-    def _generate_tiles(self, tiling_grid):
+    def _generate_tiles(self):
         width, height = self.size
         tile_width, tile_height = self.tile_size
-        step = 1 - self.tile_overlap
-        total_width = (tiling_grid[0] - 1) * tile_width * step + tile_width
-        total_height = (tiling_grid[1] - 1) * tile_height * step + tile_height
-        assert total_width <= width and total_height <= height, "Frame size not large enough for %dx%d tiles" % tiling_grid
+        step_width = (1 - self.tile_overlap) * tile_width
+        step_height = (1 - self.tile_overlap) * tile_height
+        total_width = (self.tiling_grid[0] - 1) * step_width + tile_width
+        total_height = (self.tiling_grid[1] - 1) * step_height + tile_height
+        assert total_width <= width and total_height <= height, "Frame size not large enough for %dx%d tiles" % self.tiling_grid
         x_offset = width // 2 - total_width // 2
         y_offset = height // 2 - total_height // 2
-        tiles = [Rect(cv_rect=(int(col * tile_width * step + x_offset), int(row * tile_height * step + y_offset), tile_width, tile_height)) for row in range(tiling_grid[1]) for col in range(tiling_grid[0])]
+        tiles = [Rect(cv_rect=(int(c * step_width + x_offset), int(r * step_height + y_offset), tile_width, tile_height)) for r in range(self.tiling_grid[1]) for c in range(self.tiling_grid[0])]
         return tiles

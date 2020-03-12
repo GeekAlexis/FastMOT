@@ -2,23 +2,24 @@ from pathlib import Path
 from collections import deque
 import threading
 import time
+import json
 import cv2
 
+from .configs import decoder
 
 class VideoIO:
+    with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
+        config = json.load(config_file, cls=decoder.decoder)['VideoIO']
+
     def __init__(self, size, input_path=None, output_path=None, delay=0):
         self.size = size
         self.input_path = input_path
         self.output_path = output_path
         self.delay = delay
-        self.capture_size = (3264, 1848)
-        self.camera_fps = 28
-        # self.capture_size = (1920, 1080)
-        # self.camera_fps = 30
-        # self.capture_size = (1280, 720)
-        # self.camera_fps = 60
-        self.flip_method = 0
-        self.max_queue_size = 50
+        self.capture_size = VideoIO.config['capture_size']
+        self.camera_fps = VideoIO.config['camera_fps']
+        self.flip_method = VideoIO.config['flip_method']
+        self.max_queue_size = VideoIO.config['max_queue_size']
 
         if self.input_path is None:
             # use camera when no input path is provided
@@ -110,15 +111,16 @@ class VideoIO:
     def _capture_frames(self):
         tic = time.time()
         while not self.exit_event.is_set():
-            ret = self.cap.grab()
+            ret, frame = self.cap.read()
+            # ret = self.cap.grab()
             with self.cond:
                 if not ret:
                     self.exit_event.set()
                     self.cond.notify()
                     break
                 time_elapsed = time.time() - tic
-                if  self.delay - time_elapsed <= 0.01:
-                    ret, frame = self.cap.retrieve()
+                if self.delay - time_elapsed <= 0.01:
+                    # ret, frame = self.cap.retrieve()
                     tic = time.time()
                     while len(self.frame_queue) >= self.max_queue_size and not self.exit_event.is_set():
                         self.cond.wait()

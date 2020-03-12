@@ -74,8 +74,10 @@ class Rect:
         return Rect(tf_rect=(xmin, ymin, xmax, ymax))
 
     def resize(self, size):
-        # TODO:
-        pass
+        dx, dy = (np.asarray(size) - self.size) / 2
+        xmin = int(round(self.xmin - dx))
+        ymin = int(round(self.ymin - dy))
+        return Rect(cv_rect=(xmin, ymin, *size))
 
 
 def iou(rect1, rect2):

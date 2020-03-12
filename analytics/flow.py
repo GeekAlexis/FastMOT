@@ -1,47 +1,41 @@
+from pathlib import Path
 import math
+import json
 import numpy as np
 import cv2
+
 from .utils import Rect
+from .configs import decoder
 
 
 class Flow:
+    with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
+        config = json.load(config_file, cls=decoder.decoder)['Flow']
+
     def __init__(self, size, estimate_camera_motion=False):
         self.size = size
         self.estimate_camera_motion = estimate_camera_motion
-        self.bkg_feature_scaling = (0.1, 0.1)
-        self.optflow_scaling = (0.5, 0.5)
-        self.feature_density = 0.005
-        self.opt_flow_err_thresh = 100
-        self.min_bkg_inlier_count = 3
-        self.feature_dist_scaling = 0.06
-        # self.ransac_max_iter = 20
-        # self.ransac_conf = 0.98
-        self.ransac_max_iter = 500
-        self.ransac_conf = 0.98
+        self.bkg_feature_scaling = Flow.config['bkg_feature_scaling']
+        self.optflow_scaling = Flow.config['optflow_scaling']
+        self.feature_density = Flow.config['feature_density']
+        self.optflow_err_thresh = Flow.config['optflow_err_thresh']
+        self.min_bkg_inlier_count = Flow.config['min_bkg_inlier_count']
+        self.feature_dist_factor = Flow.config['feature_dist_factor']
+        self.ransac_max_iter = Flow.config['ransac_max_iter']
+        self.ransac_conf = Flow.config['ransac_conf']
 
-        # parameters for corner detection
-        self.gftt_target_feature_params = dict( 
-            maxCorners=1000,
-            qualityLevel=0.06,
-            minDistance=5,
-            blockSize=3
-        )
-        self.gftt_bkg_feature_params = dict( 
-            maxCorners=1000,
-            qualityLevel=0.01,
-            minDistance=5,
-            blockSize=3
-        )
-        self.fast_feature_thresh = 15
-
-        # parameters for lucas kanade optical flow
-        self.optflow_params = dict(
-            winSize=(5, 5),
-            maxLevel=5,
-            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
-        )
+        self.gftt_target_feature_params = Flow.config['gftt_target_feature_params']
+        self.fast_bkg_feature_thresh = Flow.config['fast_bkg_feature_thresh']
+        self.optflow_params = Flow.config['optflow_params']
+        # self.gftt_bkg_feature_params = dict( 
+        #     maxCorners=1000,
+        #     qualityLevel=0.01,
+        #     minDistance=5,
+        #     blockSize=3
+        # )
+        # self.optflow_params['criteria'] = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
         
-        self.fast_feature_detector = cv2.FastFeatureDetector_create(threshold=self.fast_feature_thresh)
+        self.fast_feature_detector = cv2.FastFeatureDetector_create(threshold=self.fast_bkg_feature_thresh)
         self.bkg_feature_pts = None
         self.prev_bkg_feature_pts = None
 
@@ -62,8 +56,8 @@ class Flow:
                 roi = inside_bbox.crop(prev_frame_gray)
                 target_mask = inside_bbox.crop(bkg_mask)
                 target_area = np.count_nonzero(target_mask)
-                self.gftt_target_feature_params['minDistance'] = self._estimate_feature_dist(target_area)
-                keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, **self.gftt_target_feature_params)
+                est_min_dist = self._estimate_feature_dist(target_area)
+                keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, minDistance=est_min_dist, **self.gftt_target_feature_params)
                 if keypoints is None or len(keypoints) == 0:
                     del tracks[track_id]
                     # print('[Flow] Target lost (no corners detected): %s' % track)
@@ -104,7 +98,7 @@ class Flow:
         all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, all_prev_pts, None, **self.optflow_params)
         # print(np.max(err[status==1]))
         with np.errstate(invalid='ignore'):
-            status_mask = (status == 1) & (err < self.opt_flow_err_thresh)
+            status_mask = (status == 1) & (err < self.optflow_err_thresh)
         # status_mask = np.bool_(status)
 
         H_camera = None
@@ -117,7 +111,6 @@ class Flow:
                 # H_camera, inlier_mask = cv2.estimateAffinePartial2D(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
                 H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
                 if H_camera is None or np.count_nonzero(inlier_mask) < self.min_bkg_inlier_count:
-                    # clear tracks on background reg failure
                     tracks.clear()
                     self.bkg_feature_pts = None
                     self.prev_bkg_feature_pts = None
@@ -176,7 +169,7 @@ class Flow:
             [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in zip(np.int_(np.round(self.prev_bkg_feature_pts)), np.int_(np.round(self.bkg_feature_pts)))]
     
     def _estimate_feature_dist(self, target_area):
-        est_ft_dist = round(math.sqrt(target_area) * self.feature_dist_scaling)
+        est_ft_dist = round(math.sqrt(target_area) * self.feature_dist_factor)
         return max(est_ft_dist, 1)
 
     def _estimate_bbox(self, bbox, H_affine):

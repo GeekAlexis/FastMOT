@@ -1,22 +1,27 @@
 from enum import Enum
+from pathlib import Path
+import json
 import cv2
 
 from .objectdetector import ObjectDetector
 from .kalmantracker import KalmanTracker
-
+from .configs import decoder
 
 class Analytics:
     class Status(Enum):
         SEARCHING, TARGET_NOT_FOUND, TARGET_ACQUIRED, TARGET_LOST = (i for i in range(4))
+    
+    with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
+        config = json.load(config_file, cls=decoder.decoder)['Analytics']
 
     def __init__(self, size, capture_dt, enable_drawing=False):
         self.size = size
         self.enable_drawing = enable_drawing
-        self.acq_detector_frame_skip = 3
-        self.trk_detector_frame_skip = 5
-        self.acquisition_interval = 100
-        # self.classes = set([1]) # person only
-        self.classes = set([1, 2, 3, 22, 24]) # person, bicycle, car, elephant, zebra
+        self.acq_detector_frame_skip = Analytics.config['acq_detector_frame_skip']
+        self.trk_detector_frame_skip = Analytics.config['trk_detector_frame_skip']
+        self.acquisition_interval = Analytics.config['acquisition_interval']
+        self.classes = Analytics.config['classes'] # person, bicycle, car, elephant, zebra
+        self.target_classes = Analytics.config['target_classes'] # person, elephant
 
         ObjectDetector.init_backend()
         print('[Analytics] Loading acquisition detector model...')
@@ -31,15 +36,15 @@ class Analytics:
         self.detector = self.acq_detector
         self.detector_frame_skip = self.acq_detector_frame_skip
         self.acquisition_start_frame = 0
-        self.track_id = -1
+        self.track_id = None
         self.frame_count = 0
     
     def run(self, frame):
         detections = []
         if self.frame_count == 0:
+            print('\n[Analytics] Acquiring new targets...')
             detections = self.detector.detect_sync(frame)
             self.tracker.init(frame, detections)
-            print('\n[Analytics] Acquiring new targets...')
         else:
             if self.frame_count % self.detector_frame_skip == 0:
                 self.detector.preprocess(frame, self.tracker.tracks, track_id=self.track_id)
@@ -50,15 +55,21 @@ class Analytics:
             else:
                 self.tracker.track(frame)
 
+        if self.enable_drawing:
+            self._draw(frame, detections)
+            # self.tracker.flow.draw_bkg_feature_match(frame)
+            if self.frame_count % self.detector_frame_skip == 0:
+                self.detector.draw_cur_tile(frame)
+
         if self.acquire:
-            if self.frame_count - self.acquisition_start_frame == self.acquisition_interval:
-                if len(self.tracker.tracks) > 0:
-                    self.track_id = self.tracker.get_nearest_track()
+            if self.frame_count - self.acquisition_start_frame + 1 == self.acquisition_interval:
+                self.track_id = self.tracker.get_nearest_track(self.target_classes)
+                if self.track_id is not None:
                     self.acquire = False
                     self.detector = self.trk_detector
                     self.detector_frame_skip = self.trk_detector_frame_skip
-                    print('[Analytics] Following: %s' % self.tracker.tracks[self.track_id])
                     self.status = Analytics.Status.TARGET_ACQUIRED
+                    print('[Analytics] Following: %s' % self.tracker.tracks[self.track_id])
                 else:
                     self.acquisition_start_frame = self.frame_count
                     self.status = Analytics.Status.TARGET_NOT_FOUND
@@ -69,15 +80,8 @@ class Analytics:
             self.detector = self.acq_detector
             self.detector_frame_skip = self.acq_detector_frame_skip
             self.acquisition_start_frame = self.frame_count
-            print('[Analytics] Acquiring new targets...')
             self.status = Analytics.Status.TARGET_LOST
-
-        if self.enable_drawing:
-            self._draw(frame, detections)
-            # self.tracker.flow.draw_bkg_feature_match(frame)
-            if self.frame_count % self.detector_frame_skip == 0:
-                self.detector.draw_cur_tile(frame)
-
+            print('[Analytics] Acquiring new targets...')
         self.frame_count += 1
 
     def reset(self):

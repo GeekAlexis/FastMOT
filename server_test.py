@@ -33,7 +33,7 @@ conn, client_addr = sock.accept()
 print('server: connection from ', client_addr)
 
 conn.sendall(Msg.START)
-for i in range(50):
+for i in range(10):
     msg = conn.recv(MSG_LENGTH)
     if msg:
         #print('server', msg)
@@ -49,4 +49,5 @@ time.sleep(5)
 conn.sendall(Msg.START)
 time.sleep(5)
 conn.sendall(Msg.TERMINATE)
+time.sleep(1)
 conn.close()

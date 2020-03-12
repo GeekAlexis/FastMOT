@@ -1,7 +1,9 @@
-import math
 from enum import Enum
+from pathlib import Path
 from copy import deepcopy
 from collections import OrderedDict
+import math
+import json
 from scipy.optimize import linear_sum_assignment
 from scipy.linalg import solve_triangular
 import numpy as np
@@ -10,6 +12,7 @@ import cv2
 from . import flow
 from .models.ssd import COCO_LABELS
 from .utils import Rect, iou
+from .configs import decoder
 
 
 class Track:
@@ -53,35 +56,38 @@ class KalmanTracker:
     CHI_SQ_INV_95 = 9.4877
     INF_COST = 1e5
 
+    with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
+        config = json.load(config_file, cls=decoder.decoder)['KalmanTracker']
+
     def __init__(self, size, dt):
         self.size = size
         self.dt = dt
-        self.acquisition_max_age = 10
-        self.tracking_max_age = 3
-        self.max_association_maha = math.sqrt(KalmanTracker.CHI_SQ_INV_95)
-        self.min_association_iou = 0.2
-        self.min_register_conf = 0.6
-        self.num_vertical_bin = 36
-        self.n_init = 3
-        
-        self.small_size_std_acc = (32, 500)
-        self.large_size_std_acc = (256, 3000) # max(w, h)
+        self.acquisition_max_age = KalmanTracker.config['acquisition_max_age']
+        self.tracking_max_age = KalmanTracker.config['tracking_max_age']
+        self.max_association_maha = KalmanTracker.config['max_association_maha']
+        # self.max_association_maha = math.sqrt(KalmanTracker.CHI_SQ_INV_95)
+        self.min_association_iou = KalmanTracker.config['min_association_iou']
+        self.min_register_conf = KalmanTracker.config['min_register_conf']
+        self.num_vertical_bin = KalmanTracker.config['num_vertical_bin']
+        self.n_init = KalmanTracker.config['n_init']
+        self.small_size_std_acc = KalmanTracker.config['small_size_std_acc'] # max(w, h)
+        self.large_size_std_acc = KalmanTracker.config['large_size_std_acc']
+        self.min_std_cnn = KalmanTracker.config['min_std_cnn']
+        self.min_std_flow = KalmanTracker.config['min_std_flow']
+        self.std_factor_cnn = KalmanTracker.config['std_factor_cnn']
+        self.std_factor_flow = KalmanTracker.config['std_factor_flow']
+        self.init_std_pos_factor = KalmanTracker.config['init_std_pos_factor']
+        self.init_std_vel_factor = KalmanTracker.config['init_std_vel_factor']
+        self.vel_coupling = KalmanTracker.config['vel_coupling']
+        self.vel_half_life = KalmanTracker.config['vel_half_life']
+        self.max_vel = KalmanTracker.config['max_vel']
+        self.min_size = KalmanTracker.config['min_size']
+
         self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4, dtype=np.float32))
         self.acc_cov[4:, :4] = np.eye(4, dtype=np.float32) * (0.5 * self.dt**3)
         self.acc_cov[:4, 4:] = np.eye(4, dtype=np.float32) * (0.5 * self.dt**3)
         self.meas_mat = np.eye(4, 8, dtype=np.float32)
-
-        self.min_std_cnn = (5, 5)
-        self.min_std_flow = (5, 5)
-        self.std_factor_cnn = (0.16, 0.16)
-        self.std_factor_flow = (0.16, 0.16)
-        self.init_std_pos_factor = 20
-        self.init_std_vel_factor = 10
-        self.vel_coupling = 0.6
-        self.vel_half_life = 1
-        self.max_vel = 8000
-        self.min_size = 25
-
+        
         self.acquire = True
         self.prev_frame_gray = None
         self.prev_frame_small = None
@@ -121,15 +127,15 @@ class KalmanTracker:
                         del self.tracks[track_id]
                 else:
                     # track using kalman filter and flow measurement
-                    self._warp_kalman_filters(track_id, H_camera)
+                    self._warp_kalman_filter(track_id, H_camera)
                     next_state = self.kalman_filters[track_id].predict()
-                    self._clip_vel_and_size(track_id)
+                    self._clip_state(track_id)
                     if use_flow and track_id in flow_tracks:
                         flow_track = flow_tracks[track_id]
                         self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, KalmanTracker.Meas.FLOW, flow_track.conf)
                         flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
                         next_state = self.kalman_filters[track_id].correct(flow_meas)
-                        self._clip_vel_and_size(track_id)
+                        self._clip_state(track_id)
                         track.feature_pts = flow_track.feature_pts
                         track.prev_feature_pts = flow_track.prev_feature_pts
                     else:
@@ -146,7 +152,7 @@ class KalmanTracker:
                         del self.tracks[track_id]
                         del self.kalman_filters[track_id]
         else:
-            # clear tracks when background registration failed
+            # clear tracks when camera motion estimation failed
             self.tracks.clear()
             self.kalman_filters.clear()
         self.prev_frame_gray = frame_gray
@@ -199,11 +205,10 @@ class KalmanTracker:
                 # max_maha_dist = np.max(maha_mat)
             else:
                 maha_mat = np.zeros((len(tracks), len(detections)), dtype=np.float32)
-            # print(maha_mat)
                 # max_maha_dist = 1
             # print('maha', maha_mat)
             cost = maha_mat + (1 - iou_mat)
-            # validation gating using Chi square test and IOU, and ensure same label
+            # validation gating using Chi square test (alpha = 0.05) and IOU, and ensure same label
             diff_label_mask = np.array([[track.label != det.label for det in detections] for track in tracks])
             cost[diff_label_mask | (iou_mat < self.min_association_iou) | (maha_mat > self.max_association_maha)] = KalmanTracker.INF_COST
             # print('cost', cost)
@@ -218,7 +223,7 @@ class KalmanTracker:
                         self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(detections[det_idx].bbox, KalmanTracker.Meas.CNN)
                         det_meas = self._convert_bbox_to_meas(detections[det_idx].bbox)
                         next_state = self.kalman_filters[track_id].correct(det_meas)
-                        self._clip_vel_and_size(track_id)
+                        self._clip_state(track_id)
                         next_bbox = self._convert_state_to_bbox(next_state)
                         inside_bbox = next_bbox & Rect(cv_rect=(0, 0, self.size[0], self.size[1]))
                         if inside_bbox is not None:
@@ -258,13 +263,18 @@ class KalmanTracker:
                 if track_id in self.kalman_filters:
                     del self.kalman_filters[track_id]
     
-    def get_nearest_track(self):
+    def get_nearest_track(self, classes=None):
         """
-        Compute the nearest track by estimating the relative distance
+        Compute the nearest track from certain classes by estimating the relative distance
         """
-        if not self.tracks:
-            return -1
-        nearest_track_id = max(self.tracks.items(), key=self._compare_dist)[0]
+        if classes is None:
+            tracks = self.tracks
+        else:
+            classes = set(classes)
+            tracks = {track_id: track for track_id, track in self.tracks.items() if track.label in classes}
+        if not tracks:
+            return None
+        nearest_track_id = max(tracks.items(), key=self._compare_dist)[0]
         return nearest_track_id
 
     def _compare_dist(self, id_track_pair):
@@ -358,13 +368,13 @@ class KalmanTracker:
         std_acc = self.small_size_std_acc[1] + (max(bbox.size) - self.small_size_std_acc[0]) * std_acc_growth_rate
         return self.acc_cov * std_acc**2
 
-    def _clip_vel_and_size(self, track_id):
+    def _clip_state(self, track_id):
         kalman_filter = self.kalman_filters[track_id]
         kalman_filter.statePost[4:, 0] = np.clip(kalman_filter.statePost[4:, 0], -self.max_vel, self.max_vel)
         bbox = self._convert_state_to_bbox(kalman_filter.statePost)
-        sx = self.min_size / bbox.size[0] if bbox.size[0] < self.min_size else 1
-        sy = self.min_size / bbox.size[1] if bbox.size[1] < self.min_size else 1
-        kalman_filter.statePost[:4, 0] = bbox.scale(sx, sy).tf_rect()
+        width = max(self.min_size, bbox.size[0])
+        height = max(self.min_size, bbox.size[1])
+        kalman_filter.statePost[:4, 0] = bbox.resize((width, height)).tf_rect()
 
     def _maha_dist(self, track_id, det):
         kalman_filter = self.kalman_filters[track_id]
@@ -387,7 +397,7 @@ class KalmanTracker:
         warped_corners = cv2.perspectiveTransform(np.float32(bbox.corners()).reshape(4, 1, 2), H_camera)
         return Rect(cv_rect=cv2.boundingRect(warped_corners))
 
-    def _warp_kalman_filters(self, track_id, H_camera):
+    def _warp_kalman_filter(self, track_id, H_camera):
         kalman_filter = self.kalman_filters[track_id]
         pos_tl = kalman_filter.statePost[:2]
         pos_br = kalman_filter.statePost[2:4]
