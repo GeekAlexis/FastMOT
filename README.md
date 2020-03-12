@@ -1,6 +1,7 @@
 # Guardian
 - Real-time object detection and tracking for highly constrained systems on drone (e.g. Jetson Nano)
-- Guardian is an autonomous drone solution for human-elephant conflict common in Africa and Asia
+- Flight control for drone that tracks targets using GPS signal and computer vision
+- Guardian is an appliation to alleviate elephant-human conflict common in Africa and Asia
 
 ### Dependencies
 - OpenCV (Built with Gstreamer)
