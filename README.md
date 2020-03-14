@@ -11,7 +11,7 @@
 - TensorRT
 - DJI OSDK
 
-### Visual tracking example runs
+### Visual tracking run commands
 - With camera: `python3 vision.py -a`
 - Input video: `python3 vision.py -a -i video.mp4`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
