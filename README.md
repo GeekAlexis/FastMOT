@@ -1,6 +1,6 @@
 # Guardian
 - Real-time object detection and tracking for highly constrained systems (Jetson Nano)
-- Flight control for drone that tracks targets using GPS signal and vision (Work in Progress)
+- Flight control for drone that follows targets using both GPS signal and vision (Work in Progress)
 - Guardian is an appliation to "herd" elephants away in elephant-human conflicts common in Africa and Asia
 
 ### Dependencies
