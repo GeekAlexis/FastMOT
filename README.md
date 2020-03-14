@@ -9,7 +9,7 @@
 - Scipy
 - PyCuda
 - TensorRT
-- DJI OSDK
+- DJI OSDK (for flight control)
 
 ### Run visual tracking without flight control
 - With camera: `python3 vision.py -a`
