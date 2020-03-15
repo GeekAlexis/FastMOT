@@ -1,7 +1,9 @@
 # Guardian
+- Guardian is an appliation to "herd" elephants away in elephant-human conflicts common in Africa and Asia
+#### Two packages included:
 - Real-time object detection and tracking for highly constrained systems (Jetson Nano)
 - Drone flight control for following targets using both GPS and vision (Work in Progress)
-- Guardian is an appliation to "herd" elephants away in elephant-human conflicts common in Africa and Asia
+
 
 ### Dependencies
 #### Visual tracking
