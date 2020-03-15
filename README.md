@@ -8,11 +8,11 @@ Guardian is an appliation for drones to autonomously "herd" elephants away in el
 > #### Visual tracking
 > - OpenCV (Built with Gstreamer)
 > - Numpy
-- Scipy
-- PyCuda
-- TensorRT
-#### Flight control
-- DJI OSDK
+> - Scipy
+> - PyCuda
+> - TensorRT
+> #### Flight control
+> - DJI OSDK
 
 ### Run visual tracking only
 - With camera: `python3 vision.py -a`
