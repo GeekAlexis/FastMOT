@@ -4,12 +4,14 @@
 - Guardian is an appliation to "herd" elephants away in elephant-human conflicts common in Africa and Asia
 
 ### Dependencies
+#### Visual tracking
 - OpenCV (Built with Gstreamer)
 - Numpy
 - Scipy
 - PyCuda
 - TensorRT
-- DJI OSDK (for flight control)
+#### Flight control
+- DJI OSDK
 
 ### Run visual tracking without flight control
 - With camera: `python3 vision.py -a`
