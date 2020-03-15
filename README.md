@@ -18,4 +18,4 @@
 - Input video: `python3 vision.py -a -i video.mp4`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
 ### Run the whole systems
-Coming out soon
+- Coming out soon
