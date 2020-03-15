@@ -1,5 +1,5 @@
 # Guardian
-Guardian is an appliation for drones to autonomously "herd" elephants away in elephant-human conflicts common in Africa
+Guardian is an appliation for drones to autonomously "herd" elephants away in elephant-human conflicts common in Africa and Asia
 ### Two packages included
 - Real-time object detection and tracking for highly constrained systems (Jetson Nano)
 - Drone flight control for following targets using both GPS and vision (Work in Progress)
