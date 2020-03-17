@@ -1,7 +1,7 @@
 # Guardian
 An appliation for drones to autonomously "herd" elephants away in elephant-human conflicts common in Africa and Asia
 <p align="center">
-<img src="https://drive.google.com/uc?export=view&id=1dER_83L4msWddD8ZS_Vx1uyFTJlT_zaa" width="500">
+<img src="https://drive.google.com/uc?export=view&id=1dER_83L4msWddD8ZS_Vx1uyFTJlT_zaa" width="300">
 </p>
 
 - [x] Real-time object detection and tracking for highly constrained embedded systems (Jetson Nano)
