@@ -27,3 +27,9 @@ An appliation for drones to autonomously "herd" elephants away in elephant-human
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
 ### Run the whole systems
 - Coming out soon
+
+### References
+SORT: https://arxiv.org/abs/1602.00763
+Deep SORT: https://arxiv.org/pdf/1703.07402.pdf
+Tiling: https://arxiv.org/pdf/1911.06073.pdf
+Kalman Filter with Homography: https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub
