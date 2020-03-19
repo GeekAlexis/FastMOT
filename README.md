@@ -8,6 +8,7 @@ An appliation for drones to autonomously "herd" elephants away in elephant-human
   - Support all classes in the COCO dataset
   - Multiple objects can be acquired but only the closest target will be selected to track
   - Robust against moderate camera movement
+  - Speed: 32 FPS
 - [ ] Drone flight control for following targets using both GPS and vision
 
 
