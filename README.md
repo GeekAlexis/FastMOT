@@ -21,8 +21,8 @@ An appliation for drones to autonomously "herd" elephants away in elephant-human
 - DJI OSDK
 
 ### Run visual tracking only
-- With camera: `python3 vision.py -a`
-- Input video: `python3 vision.py -a -i video.mp4`
+- With camera: `python3 vision.py --analytics`
+- Input video: `python3 vision.py --input video.mp4 --analytics`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
 ### Run the whole systems
 - Coming out soon
