@@ -22,7 +22,7 @@ An appliation for drones to autonomously "herd" elephants away in elephant-human
 - DJI OSDK  
 
 Note OpenCV, PyCuda, and TensorRT can be installed from NVIDIA JetPack using the SDK Manager:    
-`https://developer.nvidia.com/embedded/jetpack`
+https://developer.nvidia.com/embedded/jetpack
 
 ### Run visual tracking only
 - With camera: `python3 vision.py --analytics`
