@@ -1,7 +1,7 @@
 # Guardian
 An appliation for drones to autonomously "herd" elephants away in elephant-human conflicts common in Africa and Asia
 
-  <img align="center" src="https://drive.google.com/uc?export=view&id=1J38g6nJbPlK3L8rlmR9Mt-0wpPOeYxrX" width="720" height="405" />
+<img align="center" src="https://drive.google.com/uc?export=view&id=1J38g6nJbPlK3L8rlmR9Mt-0wpPOeYxrX" width="720" height="405" />
 
 - [x] Real-time object detection and tracking for highly constrained embedded systems
   - Support all classes in the COCO dataset
