@@ -17,7 +17,7 @@ An appliation for drones to autonomously "herd" elephants away in elephant-human
 - Numpy
 - Scipy
 - PyCuda
-- TensorRT
+- TensorRT  
 Note OpenCV, PyCuda, and TensorRT can be installed from NVIDIA JetPack using the SDK Manager
 #### Flight control
 - DJI OSDK
