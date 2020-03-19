@@ -29,7 +29,7 @@ An appliation for drones to autonomously "herd" elephants away in elephant-human
 - Coming out soon
 
 ### References
-SORT: https://arxiv.org/abs/1602.00763
-Deep SORT: https://arxiv.org/pdf/1703.07402.pdf
-Tiling: https://arxiv.org/pdf/1911.06073.pdf
-Kalman Filter with Homography: https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub
+SORT: https://arxiv.org/abs/1602.00763  
+Deep SORT: https://arxiv.org/pdf/1703.07402.pdf  
+Tiling: https://arxiv.org/pdf/1911.06073.pdf  
+Kalman Filter with Homography: https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub. 
