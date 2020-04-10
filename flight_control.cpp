@@ -143,6 +143,19 @@ int main(int argc, char** argv) {
       {
         vehicle->control->attitudeAndVertPosCtrl(0,0,angle,height);
       }
+      // Pseudo Science
+      else if (inputChar == 'x')
+      {
+        angle = 20;
+	      vehicle->control->attitudeAndVertPosCtrl(0,0,angle,height); // Turn to the target angle
+        vehicle->control->attitudeAndVertPosCtrl(0,-50,angle,height); // Move forward by 50 meters
+        vehicle->control->attitudeAndVertPosCtrl(0,0,angle-5,height); // Turn left by 5 degrees
+        vehicle->control->attitudeAndVertPosCtrl(0,0,angle-1,height); // Turn left by 1 degree
+        vehicle->control->attitudeAndVertPosCtrl(0,0,angle-3,height); // Turn left by 3 degrees
+        vehicle->control->attitudeAndVertPosCtrl(0,0,angle+3,height); // Turn right by 3 degrees
+        vehicle->control->attitudeAndVertPosCtrl(0,0,angle+5,height); // Turn right by 5 degrees
+        vehicle->control->attitudeAndVertPosCtrl(0,5,angle,height); // Move backward by 5 meters because object is too close
+      }
       else if (inputChar == 't')
       {
         double lat = 34.41508935247427;
