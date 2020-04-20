@@ -1,10 +1,10 @@
 # Guardian
 An appliation for drones to autonomously "herd" elephants away in elephant-human conflicts common in Africa and Asia
 
-![image](master/3DTest.png)
+![image](master/demo.png)
 
 <p align="center">
-  <img src="master/demo.png" width="720" height="405" />
+  <img src="demo.png" width="720" height="405" />
 </p>
 
 - [x] Real-time object detection and tracking for highly constrained embedded systems
