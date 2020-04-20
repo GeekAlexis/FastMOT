@@ -33,7 +33,7 @@ conn, client_addr = sock.accept()
 print('server: connection from ', client_addr)
 
 conn.sendall(Msg.START)
-for i in range(10):
+for i in range(200):
     msg = conn.recv(MSG_LENGTH)
     if msg:
         #print('server', msg)

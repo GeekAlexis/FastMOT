@@ -1,6 +1,8 @@
+#!/usr/bin/env python3
 import argparse
 import time
 import os
+
 import socket
 import errno
 import cv2
@@ -145,7 +147,7 @@ def main():
             sock.close()
         cv2.destroyAllWindows()
     
-    if not args['socket']:
+    if not args['socket'] and args['analytics']:
         avg_fps = round(analytics.frame_count / elapsed_time)
         print('[INFO] Average FPS: %d' % avg_fps)
         if args['gui']:
