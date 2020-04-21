@@ -59,7 +59,6 @@ int main(int argc, char *argv[]) {
     int sock_fd, conn_fd;
     struct sockaddr_un server_addr, client_addr;
     int client_addr_len = sizeof(client_addr);
-    // memset(&server_addr, 0, sizeof(addr));
     server_addr.sun_family = AF_UNIX;
     strncpy(server_addr.sun_path, SOCKET_PATH, sizeof(server_addr.sun_path));
 
@@ -75,13 +74,16 @@ int main(int argc, char *argv[]) {
         cerr << "Socket listen error" << endl;
         exit(1);
     }
+
+    // run visual tracking
+    system("python3 vision.py -i test_data/speed_test_person.mp4 -a -s");
+
+    cout << "server: waiting for connection..." << endl;
     if((conn_fd = accept(sock_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len)) < 0) {
         cerr << "Socket accept error" << endl;
         exit(1);
     }
 
-    // run visual tracking
-    system("./vision.py -i test_data/speed_test_person.mp4 -a -s");
     // start visual tracking
     signal = START; 
     if(send_all(conn_fd, &signal, sizeof(signal)) < 0) {
