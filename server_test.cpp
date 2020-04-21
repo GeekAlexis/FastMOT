@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
     server_addr.sun_family = AF_UNIX;
     strncpy(server_addr.sun_path, SOCKET_PATH, sizeof(server_addr.sun_path));
 
-    if(sock_fd = socket(AF_UNIX, SOCK_STREAM, 0) < 0) {
+    if((sock_fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
         cerr << "Socket creation error" << endl;
         exit(1);
     }
@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
         cerr << "Socket listen error" << endl;
         exit(1);
     }
-    if(conn_fd = accept(sock_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len) < 0) {
+    if((conn_fd = accept(sock_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len)) < 0) {
         cerr << "Socket accept error" << endl;
         exit(1);
     }
