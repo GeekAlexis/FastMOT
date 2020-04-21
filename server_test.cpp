@@ -94,38 +94,42 @@ int main(int argc, char *argv[]) {
             cerr << "Socket recv error" << endl;
             exit(1);
         };
-        cout << msg.type << endl;
-        cout << msg.bbox.xmin << " " << msg.bbox.ymin << " " << msg.bbox.xmax << " " << msg.bbox.ymax << endl;
+        // cout << msg.type << endl;
+        // cout << msg.bbox.xmin << " " << msg.bbox.ymin << " " << msg.bbox.xmax << " " << msg.bbox.ymax << endl;
 
         if(msg.type == BBOX) {
-            cout << msg.bbox.xmin << " " << msg.bbox.ymin << " " << msg.bbox.xmax << " " << msg.bbox.ymax << endl;
+            cout << "server: " << msg.bbox.xmin << " " << msg.bbox.ymin << " " << msg.bbox.xmax << " " << msg.bbox.ymax << endl;
             // if target is acquired, this will be sent every frame 
             // TODO: process bbox coordinates and generate control signals to track target.
         }   
         else if(msg.type == TARGET_NOT_FOUND) {
+            cout << "server: target not found" << endl;
             // sent if no target is found for 100 frames
             // TODO: turn a little bit to search for a new target.
         }
         else if(msg.type == TARGET_LOST) {
+            cout << "server: target lost" << endl;
             // only sent immediately after losing track
             // TODO: stop following, turn a little to search for a new target. If still no target found, return to GPS waypoint.
         }
-
-        // pause visual tracking
-        signal = STOP; 
-        if(send_all(conn_fd, &signal, sizeof(signal)) < 0) {
-            cerr << "Socket send error" << endl;
-            exit(1);
-        }
-
-        // start visual tracking
-        signal = START; 
-        if(send_all(conn_fd, &signal, sizeof(signal)) < 0) {
-            cerr << "Socket send error" << endl;
-            exit(1);
-        }
     }
 
+    // pause visual tracking
+    signal = STOP; 
+    if(send_all(conn_fd, &signal, sizeof(signal)) < 0) {
+        cerr << "Socket send error" << endl;
+        exit(1);
+    }
+
+    sleep(5);
+    // start visual tracking
+    signal = START; 
+    if(send_all(conn_fd, &signal, sizeof(signal)) < 0) {
+        cerr << "Socket send error" << endl;
+        exit(1);
+    }
+
+    sleep(5);
     // terminate visual tracking
     signal = TERMINATE; 
     if(send_all(conn_fd, &signal, sizeof(signal)) < 0) {
@@ -133,6 +137,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    sleep(1);
     close(conn_fd);
     close(sock_fd);
 
