@@ -3,7 +3,7 @@ from pathlib import Path
 import time
 
 
-MSG_LENGTH = 16
+MSG_LENGTH = 8
 
 
 class Msg:

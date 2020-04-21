@@ -2,8 +2,8 @@
 import argparse
 import time
 import os
-
 import socket
+import struct
 import errno
 import cv2
 
@@ -14,21 +14,31 @@ from analytics import Analytics
 """
 constants
 """
-MSG_LENGTH = 16
+MSG_LENGTH = 10
 PASSWORD = 'jdyw123'
 PROC_SIZE = (1280, 720)
 
 
-class Msg:
+class MsgType:
     """
     enumeration type and function for socket messages
     """
-    TARGET_NOT_FOUND, TARGET_LOST, START, STOP, TERMINATE = ((i).to_bytes(MSG_LENGTH, byteorder='big') for i in range(5))
+    BBOX, TARGET_NOT_FOUND, TARGET_LOST, START, STOP, TERMINATE = (i for i in range(6))
 
 
-def convert_bbox_to_bytes(bbox):
-    length = MSG_LENGTH // 4
-    return b''.join(int(coord).to_bytes(length, byteorder='big', signed=True) for coord in bbox.tf_rect())
+# def convert_bbox_to_bytes(bbox):
+    # length = MSG_LENGTH // 4
+    # return b''.join(int(coord).to_bytes(length, byteorder='big', signed=True) for coord in bbox.tf_rect())
+
+
+def serialize_to_msg(msg_type, bbox=None):
+    if bbox is None:
+        return struct.pack('!H', msg_type)
+    return struct.pack('!Hhhhh', msg_type, *bbox.tf_rect())
+
+
+def parse_from_msg(msg):
+    return struct.unpack('!H', msg)
 
 
 def main():
@@ -78,6 +88,7 @@ def main():
         sock.connect(args['addr'])
         sock.setblocking(False)
         enable_analytics = False
+        buffer = b''
     if args['gui']:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
         
@@ -93,38 +104,45 @@ def main():
 
             if args['socket']:
                 try:
-                    msg = sock.recv(MSG_LENGTH)
+                    buffer += sock.recv(MSG_LENGTH - len(buffer))
+                    # msg = sock.recv(MSG_LENGTH)
                 except OSError as err:
                     if err.args[0] != errno.EAGAIN and err.args[0] != errno.EWOULDBLOCK:
                         raise
                 else:
-                    # print('client', msg)
-                    if msg == Msg.START:
-                        print('client: start')
-                        if not enable_analytics:
-                            analytics.reset()
-                            elapsed_time = 0
-                            enable_analytics = True
-                    elif msg == Msg.STOP:
-                        print('client: stop')
-                        if enable_analytics:
-                            enable_analytics = False
-                            avg_fps = round(analytics.frame_count / elapsed_time)
-                            print('[INFO] Average FPS: %d' % avg_fps)
-                    elif msg == Msg.TERMINATE:
-                        print('client: terminate')
-                        stream.stop_capture()
-                        break
+                    if len(buffer) == MSG_LENGTH:
+                        signal = parse_from_msg(buffer)
+                        buffer = b''
+                        # print('client', msg_type)
+                        if signal == MsgType.START:
+                            print('client: start')
+                            if not enable_analytics:
+                                analytics.reset()
+                                elapsed_time = 0
+                                enable_analytics = True
+                        elif signal == MsgType.STOP:
+                            print('client: stop')
+                            if enable_analytics:
+                                enable_analytics = False
+                                avg_fps = round(analytics.frame_count / elapsed_time)
+                                print('[INFO] Average FPS: %d' % avg_fps)
+                        elif signal == MsgType.TERMINATE:
+                            print('client: terminate')
+                            stream.stop_capture()
+                            break
 
             if enable_analytics:
                 analytics.run(frame)
                 if args['socket']:
                     if analytics.status == Analytics.Status.TARGET_ACQUIRED:
-                        sock.sendall(convert_bbox_to_bytes(analytics.get_target_bbox()))
+                        msg = serialize_to_msg(MsgType.BBOX, analytics.get_target_bbox())
+                        sock.sendall(msg)
                     elif analytics.status == Analytics.Status.TARGET_NOT_FOUND:
-                        sock.sendall(Msg.TARGET_NOT_FOUND)
+                        msg = serialize_to_msg(MsgType.TARGET_NOT_FOUND)
+                        sock.sendall(msg)
                     elif analytics.status == Analytics.Status.TARGET_LOST:
-                        sock.sendall(Msg.TARGET_LOST)
+                        msg = serialize_to_msg(MsgType.TARGET_LOST)
+                        sock.sendall(msg)
 
             if args['gui']:
                 tic2 = time.perf_counter()
