@@ -14,7 +14,7 @@ from analytics import Analytics
 """
 constants
 """
-MSG_LENGTH = 10
+MSG_LENGTH = 2
 PASSWORD = 'jdyw123'
 PROC_SIZE = (1280, 720)
 
@@ -26,19 +26,14 @@ class MsgType:
     BBOX, TARGET_NOT_FOUND, TARGET_LOST, START, STOP, TERMINATE = (i for i in range(6))
 
 
-# def convert_bbox_to_bytes(bbox):
-    # length = MSG_LENGTH // 4
-    # return b''.join(int(coord).to_bytes(length, byteorder='big', signed=True) for coord in bbox.tf_rect())
-
-
 def serialize_to_msg(msg_type, bbox=None):
     if bbox is None:
-        return struct.pack('!H', msg_type)
+        return struct.pack('!H8x', msg_type)
     return struct.pack('!Hhhhh', msg_type, *bbox.tf_rect())
 
 
 def parse_from_msg(msg):
-    return struct.unpack('!H', msg)
+    return struct.unpack('!H', msg)[0]
 
 
 def main():
@@ -105,7 +100,6 @@ def main():
             if args['socket']:
                 try:
                     buffer += sock.recv(MSG_LENGTH - len(buffer))
-                    # msg = sock.recv(MSG_LENGTH)
                 except OSError as err:
                     if err.args[0] != errno.EAGAIN and err.args[0] != errno.EWOULDBLOCK:
                         raise
@@ -113,7 +107,6 @@ def main():
                     if len(buffer) == MSG_LENGTH:
                         signal = parse_from_msg(buffer)
                         buffer = b''
-                        # print('client', msg_type)
                         if signal == MsgType.START:
                             print('client: start')
                             if not enable_analytics:
