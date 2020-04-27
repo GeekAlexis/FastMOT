@@ -216,6 +216,45 @@ int main(int argc, char **argv)
         moveByPositionOffset(vehicle, -1, 0, 0, 5); // Move forward by one meter and turn slightly right by five degrees
         moveByPositionOffset(vehicle, -1, 0, 0, 5); // Move forward by one meter and turn slightly right by five degrees
       }
+      // Pseudo Science Bicycle
+      else if (inputChar == 'v')
+      {
+        angle = 20;
+        vehicle->control->attitudeAndVertPosCtrl(0, 0, angle, height); // Turn to the target angle
+        moveByPositionOffset(vehicle, -10, 0, 0, 0); // Move to the GPS coordinate
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 1, 0, 0);
+        moveByPositionOffset(vehicle, -1, 2, 0, 0);
+        moveByPositionOffset(vehicle, -1, 2, 0, 0);
+        moveByPositionOffset(vehicle, -1, 2, 0, 0);
+        moveByPositionOffset(vehicle, -1, 2, 0, 0);
+        moveByPositionOffset(vehicle, -1, 2, 0, 0);
+        moveByPositionOffset(vehicle, -1, 2, 0, 0);
+        moveByPositionOffset(vehicle, -1, 2, 0, 0);
+        moveByPositionOffset(vehicle, -1, 0, 0, -2);
+        moveByPositionOffset(vehicle, -1, 0, 0, -4);
+        moveByPositionOffset(vehicle, -1, 0, 0, -5);
+        moveByPositionOffset(vehicle, -1, 0, 0, -7);
+        moveByPositionOffset(vehicle, -1, -1, 0, -8);
+        moveByPositionOffset(vehicle, -1, -1, 0, -9);
+        moveByPositionOffset(vehicle, -1, -1, 0, -10);
+        moveByPositionOffset(vehicle, -1, -1, 0, -10);
+        moveByPositionOffset(vehicle, -1, 0, 0, -6);
+        moveByPositionOffset(vehicle, -1, 0, 0, -1);
+        moveByPositionOffset(vehicle, -1, 0, 0, 3);
+        moveByPositionOffset(vehicle, -1, 3, 0, 5);
+        moveByPositionOffset(vehicle, -1, 3, 0, 8);
+        moveByPositionOffset(vehicle, -0.5, 4, 0, 10);
+        moveByPositionOffset(vehicle, -0.5, 4, 0, 10);
+        moveByPositionOffset(vehicle, 0, 3, 0, 10);
+      }
       else if (inputChar == 't')
       {
         double lat = 34.41508935247427;
