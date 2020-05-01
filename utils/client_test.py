@@ -34,7 +34,7 @@ sock.setblocking(False)
 buffer = b''
 
 
-for i in range(100):
+for i in range(300):
     try:
         buffer += sock.recv(MSG_LENGTH - len(buffer))
         # msg = sock.recv(MSG_LENGTH)

@@ -1,5 +1,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <netinet/in.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <cstdlib>
@@ -84,8 +85,8 @@ int main(int argc, char *argv[]) {
     }
 
     // run Python visual tracking in the background
+    // change the file name after "-i" to a diffent video if needed
     system("python3 vision.py -i test_data/speed_test_person.mp4 -a -s &");
-    // system("python3 client_test.py &");
 
     cout << "server: waiting for connection..." << endl;
     if((conn_fd = accept(sock_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len)) < 0) {
@@ -102,13 +103,12 @@ int main(int argc, char *argv[]) {
     } 
     
     // example receive loop
-    for(int i = 0; i < 200; ++i) {
+    for(int i = 0; i < 300; ++i) {
+        // receive 300 times, maybe change this to an infinite while loop, the code in this loop is needed in the flight control loop
         if(recv_msg(conn_fd, &msg) < 0) {
             cerr << "Socket recv error" << endl;
             exit(1);
         };
-        // cout << msg.type << endl;
-        // cout << msg.bbox.xmin << " " << msg.bbox.ymin << " " << msg.bbox.xmax << " " << msg.bbox.ymax << endl;
 
         if(msg.type == BBOX) {
             cout << "server: " << msg.bbox.xmin << " " << msg.bbox.ymin << " " << msg.bbox.xmax << " " << msg.bbox.ymax << endl;
@@ -127,15 +127,14 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // pause visual tracking
+    // pause visual tracking when not used to save power
     signal = STOP; 
     if(send_signal(conn_fd, &signal) < 0) {
         cerr << "Socket send error" << endl;
         exit(1);
     }
 
-    sleep(5);
-    // start visual tracking
+    // start visual tracking again
     signal = START; 
     if(send_signal(conn_fd, &signal) < 0) {
         cerr << "Socket send error" << endl;
@@ -143,7 +142,14 @@ int main(int argc, char *argv[]) {
     }
 
     sleep(5);
-    // terminate visual tracking
+    // pause visual tracking
+    signal = STOP; 
+    if(send_signal(conn_fd, &signal) < 0) {
+        cerr << "Socket send error" << endl;
+        exit(1);
+    }
+
+    // terminate visual tracking program at the end
     signal = TERMINATE; 
     if(send_signal(conn_fd, &signal) < 0) {
         cerr << "Socket send error" << endl;
