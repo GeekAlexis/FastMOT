@@ -8,6 +8,9 @@
 
 using namespace std;
 
+/* 
+constants for different message types
+*/
 #define BBOX 0
 #define TARGET_NOT_FOUND 1
 #define TARGET_LOST 2
@@ -84,7 +87,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // run Python visual tracking in the background
+    // Run Python visual tracking in the background
     // change the file name after "-i" to a diffent video if needed
     system("python3 vision.py -i test_data/speed_test_person.mp4 -a -s &");
 
@@ -95,6 +98,10 @@ int main(int argc, char *argv[]) {
     }
     cout << "server: connected" << endl;
 
+    /*
+    Examples for sending and receiving messages are shown below, feel free to change these
+    */
+
     // start visual tracking
     signal = START; 
     if(send_signal(conn_fd, &signal) < 0) {
@@ -104,7 +111,7 @@ int main(int argc, char *argv[]) {
     
     // example receive loop
     for(int i = 0; i < 300; ++i) {
-        // receive 300 times, maybe change this to an infinite while loop, the code in this loop is needed in the flight control loop
+        // receive 300 times for example
         if(recv_msg(conn_fd, &msg) < 0) {
             cerr << "Socket recv error" << endl;
             exit(1);
@@ -142,7 +149,7 @@ int main(int argc, char *argv[]) {
     }
 
     sleep(5);
-    // pause visual tracking
+    // pause visual tracking after 5 seconds
     signal = STOP; 
     if(send_signal(conn_fd, &signal) < 0) {
         cerr << "Socket send error" << endl;
