@@ -255,6 +255,52 @@ int main(int argc, char **argv)
         moveByPositionOffset(vehicle, -0.5, 4, 0, 10);
         moveByPositionOffset(vehicle, 0, 3, 0, 10);
       }
+      // Pseudo Science Bicycle Smooth
+      else if (inputChar == 'n')
+      {
+        angle = 20;
+        vehicle->control->attitudeAndVertPosCtrl(0, 0, angle, height); // Turn to the target angle
+        vehicle->control->attitudeAndVertPosCtrl(0, 2, angle, height); // Move to the GPS coordinate
+        sleep(5);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(1, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(2, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(2, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(2, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(2, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(2, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(2, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(2, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(2, 1, angle, height);
+        vehicle->control->attitudeAndVertPosCtrl(0, 1, angle-2, height);
+        vehicle->control->attitudeAndVertPosCtrl(0, 1, angle-4, height);
+        vehicle->control->attitudeAndVertPosCtrl(0, 1, angle-5, height);
+        vehicle->control->attitudeAndVertPosCtrl(0, 1, angle-7, height);
+        vehicle->control->attitudeAndVertPosCtrl(-1, 1, angle-8, height);
+        vehicle->control->attitudeAndVertPosCtrl(-1, 1, angle-9, height);
+        vehicle->control->attitudeAndVertPosCtrl(-1, 1, angle-10, height);
+        vehicle->control->attitudeAndVertPosCtrl(-1, 1, angle-10, height);
+        vehicle->control->attitudeAndVertPosCtrl(0, 1, angle-6, height);
+        vehicle->control->attitudeAndVertPosCtrl(0, 1, angle-1, height);
+        vehicle->control->attitudeAndVertPosCtrl(0, 1, angle+3, height);
+        vehicle->control->attitudeAndVertPosCtrl(0, 1, angle+3, height);
+        vehicle->control->attitudeAndVertPosCtrl(3, 1, angle+5, height);
+        vehicle->control->attitudeAndVertPosCtrl(3, 1, angle+8, height);
+        vehicle->control->attitudeAndVertPosCtrl(3, 1, angle+8, height);
+        vehicle->control->attitudeAndVertPosCtrl(4, 0.5, angle+10, height);
+        vehicle->control->attitudeAndVertPosCtrl(4, 0.5, angle+10, height);
+        vehicle->control->attitudeAndVertPosCtrl(3, 0, angle+10, height);
+        vehicle->control->attitudeAndVertPosCtrl(3, 0, angle+10, height);
+        vehicle->control->attitudeAndVertPosCtrl(3, 0, angle+10, height);
+      }
       else if (inputChar == 't')
       {
         double lat = 34.41508935247427;
