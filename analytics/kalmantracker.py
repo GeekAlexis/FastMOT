@@ -427,8 +427,8 @@ class KalmanTracker:
         kalman_filter.statePost[6:] = grad_br @ vel_br
 
         # warp covariance too
-        for i in range(0, 8, 2):
-            for j in range(0, 8, 2):
-                grad_left = grad_tl if i // 2 % 2 == 0 else grad_br
-                grad_right = grad_tl if j // 2 % 2 == 0 else grad_br
-                kalman_filter.errorCovPost[i:i + 2, j:j + 2] = grad_left @ kalman_filter.errorCovPost[i:i + 2, j:j + 2] @ grad_right.T
+        # for i in range(0, 8, 2):
+        #     for j in range(0, 8, 2):
+        #         grad_left = grad_tl if i // 2 % 2 == 0 else grad_br
+        #         grad_right = grad_tl if j // 2 % 2 == 0 else grad_br
+        #         kalman_filter.errorCovPost[i:i + 2, j:j + 2] = grad_left @ kalman_filter.errorCovPost[i:i + 2, j:j + 2] @ grad_right.T
