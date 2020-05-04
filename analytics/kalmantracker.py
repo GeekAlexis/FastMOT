@@ -132,7 +132,7 @@ class KalmanTracker:
                     self._clip_state(track_id)
                     if use_flow and track_id in flow_tracks:
                         flow_track = flow_tracks[track_id]
-                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, KalmanTracker.Meas.FLOW, flow_track.conf)
+                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, KalmanTracker.Meas.FLOW) #, flow_track.conf)
                         flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
                         next_state = self.kalman_filters[track_id].correct(flow_meas)
                         self._clip_state(track_id)
