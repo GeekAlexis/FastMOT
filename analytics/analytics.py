@@ -56,10 +56,7 @@ class Analytics:
                 self.tracker.track(frame)
 
         if self.enable_drawing:
-            self._draw(frame, detections)
-            # self.tracker.flow.draw_bkg_feature_match(frame)
-            if self.frame_count % self.detector_frame_skip == 0:
-                self.detector.draw_cur_tile(frame)
+            self._draw(frame, detections, debug=False)
 
         if self.acquire:
             if self.frame_count - self.acquisition_start_frame + 1 == self.acquisition_interval:
@@ -96,13 +93,17 @@ class Analytics:
         assert self.status == Analytics.Status.TARGET_ACQUIRED
         return self.tracker.tracks[self.track_id].bbox
 
-    def _draw(self, frame, detections):
+    def _draw(self, frame, detections, debug=False):
         for track_id, track in self.tracker.tracks.items():
             if self.status == Analytics.Status.TARGET_ACQUIRED and track_id == self.track_id:
-                track.draw(frame, follow=True, draw_feature_match=True)
+                track.draw(frame, follow=True, draw_feature_match=debug)
             else:
-                track.draw(frame, draw_feature_match=True)
-        [det.draw(frame) for det in detections]
+                track.draw(frame, draw_feature_match=debug)
+        if debug:
+            [det.draw(frame) for det in detections]
+            self.tracker.flow.draw_bkg_feature_match(frame)
+            if self.frame_count % self.detector_frame_skip == 0:
+                self.detector.draw_cur_tile(frame)
         if self.acquire:
             cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
         elif self.status == Analytics.Status.TARGET_ACQUIRED:
