@@ -43,6 +43,7 @@ def main():
     parser.add_argument('-a', '--analytics', action='store_true', help='Turn on video analytics')
     parser.add_argument('-s', '--socket', action='store_true', help='Turn on socket communication')
     parser.add_argument('--addr', default='/tmp/guardian_socket', help='Socket address')
+    parser.add_argument('-m', '--mot', action='store_true', help='Output a MOT format tracking log')
     parser.add_argument('-g', '--gui', action='store_true', help='Turn on visiualization')
     # parser.add_argument('-f', '--flip', type=int, default=0, choices=range(8), help=
     #     "0: none\n"          
@@ -70,6 +71,7 @@ def main():
     stream = VideoIO(PROC_SIZE, args['input'], args['output'], delay)
 
     sock = None
+    mot_dump = None
     enable_analytics = False
     elapsed_time = 0    
     gui_time = 0
@@ -84,6 +86,9 @@ def main():
         sock.setblocking(False)
         enable_analytics = False
         buffer = b''
+    if args['mot']:
+        assert args['analytics'], 'Analytics must be turned on for MOT output'
+        mot_dump = open('log.txt', 'a')
     if args['gui']:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
         
@@ -126,6 +131,9 @@ def main():
 
             if enable_analytics:
                 analytics.run(frame)
+                if args['mot']:
+                    for track_id, track in analytics.tracker.tracks.items():
+                        mot_dump.write(f'{analytics.frame_count + 1}, {track_id + 1}, {track.bbox.xmin}, {track.bbox.ymin}, {track.bbox.size[0]}, {track.bbox.size[1]}, -1, -1, -1, -1\n')
                 if args['socket']:
                     if analytics.status == Analytics.Status.TARGET_ACQUIRED:
                         msg = serialize_to_msg(MsgType.BBOX, analytics.get_target_bbox())
@@ -156,6 +164,8 @@ def main():
         stream.release()
         if sock is not None:
             sock.close()
+        if mot_dump is not None:
+            mot_dump.close()
         cv2.destroyAllWindows()
     
     if not args['socket'] and args['analytics']:
