@@ -93,6 +93,7 @@ class KalmanTracker:
         self.prev_frame_small = None
         # self.prev_pyramid = None
         self.tracks = OrderedDict()
+        self.new_track_id = 0
         self.kalman_filters = {}
         self.flow = flow.Flow(self.size, estimate_camera_motion=True)
 
@@ -168,9 +169,13 @@ class KalmanTracker:
             self.kalman_filters.clear()
         self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
-        for new_track_id, det in enumerate(detections):
-            self.tracks[new_track_id] = Track(det.label, det.bbox, new_track_id)
-            print('[Tracker] Track registered: %s' % self.tracks[new_track_id])
+        # for new_track_id, det in enumerate(detections):
+        #     self.tracks[new_track_id] = Track(det.label, det.bbox, new_track_id)
+        #     print('[Tracker] Track registered: %s' % self.tracks[new_track_id])
+        for det in detections:
+            self.tracks[self.new_track_id] = Track(det.label, det.bbox, self.new_track_id)
+            print('[Tracker] Track registered: %s' % self.tracks[self.new_track_id])
+            self.new_track_id += 1
 
     def update(self, detections, tile, overlap, acquire=True):
         """
@@ -248,11 +253,13 @@ class KalmanTracker:
                     if detections[det_idx].label == track.label and iou(detections[det_idx].bbox, track.bbox) > 0.1:
                         register = False
                 if register:
-                    new_track_id = 0
-                    while new_track_id in self.tracks:
-                        new_track_id += 1
-                    self.tracks[new_track_id] = Track(detections[det_idx].label, detections[det_idx].bbox, new_track_id)
-                    print('[Tracker] Track registered: %s' % self.tracks[new_track_id])
+                    # new_track_id = 0
+                    # while new_track_id in self.tracks:
+                    #     new_track_id += 1
+                    # self.tracks[new_track_id] = Track(detections[det_idx].label, detections[det_idx].bbox, new_track_id)
+                    self.tracks[self.new_track_id] = Track(detections[det_idx].label, detections[det_idx].bbox, self.new_track_id)
+                    print('[Tracker] Track registered: %s' % self.tracks[self.new_track_id])
+                    self.new_track_id += 1
 
         # clean up lost tracks
         max_age = self.acquisition_max_age if acquire else self.tracking_max_age
