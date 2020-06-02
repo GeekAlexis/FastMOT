@@ -133,7 +133,11 @@ def main():
                 analytics.run(frame)
                 if args['mot']:
                     for track_id, track in analytics.tracker.tracks.items():
-                        mot_dump.write(f'{analytics.frame_count + 1}, {track_id + 1}, {track.bbox.xmin}, {track.bbox.ymin}, {track.bbox.size[0]}, {track.bbox.size[1]}, -1, -1, -1, -1\n')
+                        scaled_xmin = track.bbox.xmin / 1280 * 1920
+                        scaled_ymin = track.bbox.ymin / 720 * 1080
+                        scaled_xmax = track.bbox.xmax / 1280 * 1920
+                        scaled_ymax = track.bbox.ymax / 720 * 1080
+                        mot_dump.write(f'{analytics.frame_count + 1}, {track_id + 1}, {scaled_xmin}, {scaled_ymin}, {scaled_xmax - scaled_xmin + 1}, {scaled_ymax - scaled_ymin + 1}, -1, -1, -1, -1\n')
                 if args['socket']:
                     if analytics.status == Analytics.Status.TARGET_ACQUIRED:
                         msg = serialize_to_msg(MsgType.BBOX, analytics.get_target_bbox())
