@@ -65,7 +65,7 @@ class ObjectDetector:
             self.tiling_grid = ObjectDetector.config['acquisition']['tiling_grid']
             self.schedule_tiles = ObjectDetector.config['acquisition']['schedule_tiles']
             self.age_to_object_ratio = ObjectDetector.config['acquisition']['age_to_object_ratio']
-            self.model = ssd.MobileNetV1
+            self.model = ssd.InceptionV2 #ssd.MobileNetV1
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
             self.tiles = self._generate_tiles()
             self.tile_ages = np.zeros(len(self.tiles))
