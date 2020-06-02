@@ -88,7 +88,7 @@ def main():
         buffer = b''
     if args['mot']:
         assert args['analytics'], 'Analytics must be turned on for MOT output'
-        mot_dump = open('log.txt', 'a')
+        mot_dump = open('log.txt', 'w')
     if args['gui']:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
         
