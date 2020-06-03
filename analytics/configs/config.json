@@ -16,7 +16,7 @@
         "target_classes": [1, 22]
     },
     "KalmanTracker": {
-        "acquisition_max_age": 10,
+        "acquisition_max_age": 12,
         "tracking_max_age": 3,
         "max_association_maha": 4,
         "#max_association_maha": 3.08021,
@@ -44,7 +44,7 @@
         "acquisition": {
             "conf_threshold": 0.5,
             "tiling_grid": [3, 2],
-            "schedule_tiles": true,
+            "schedule_tiles": false,
             "age_to_object_ratio": 0.4
         },
         "tracking": {
