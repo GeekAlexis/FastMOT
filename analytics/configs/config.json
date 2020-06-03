@@ -12,7 +12,7 @@
         "acq_detector_frame_skip": 1,
         "trk_detector_frame_skip": 5,
         "acquisition_interval": 100,
-        "classes": [1, 2, 3, 22, 24],
+        "classes": [1, 2, 3, 4, 22, 24],
         "target_classes": [1, 22]
     },
     "KalmanTracker": {

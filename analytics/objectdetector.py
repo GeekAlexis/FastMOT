@@ -130,6 +130,7 @@ class ObjectDetector:
             ymin = max(min(self.size[1] - self.tile_size[1], ymin), 0)
             self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
 
+        # TODO: batching
         tile = self.cur_tile.crop(frame)
         tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
         tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
