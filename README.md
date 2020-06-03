@@ -25,12 +25,10 @@ An appliation for drones to autonomously "herd" elephants away in elephant-human
 Note OpenCV, PyCuda, and TensorRT can be installed from NVIDIA JetPack using the SDK Manager:    
 https://developer.nvidia.com/embedded/jetpack
 
-### Run visual tracking only
+### Run visual tracking
 - With camera: `python3 vision.py --analytics`
 - Input video: `python3 vision.py --input video.mp4 --analytics`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
-### Run the whole systems
-- Coming out soon
 
 ### References
 - SORT: https://arxiv.org/abs/1602.00763  
