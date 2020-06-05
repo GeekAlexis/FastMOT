@@ -1,6 +1,3 @@
-# Guardian
-An appliation for drones to autonomously "herd" elephants away in elephant-human conflicts common in Africa and Asia
-
 <p align="center">
   <img src="demo.png" width="720" height="405" />
 </p>
