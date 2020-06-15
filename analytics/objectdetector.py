@@ -44,7 +44,7 @@ class ObjectDetector:
     @classmethod
     def init_backend(cls): 
         # initialize TensorRT
-        ctypes.CDLL(Path(__file__).parent / 'lib' / 'libflattenconcat.so')
+        # ctypes.CDLL(Path(__file__).parent / 'lib' / 'libflattenconcat.so')
         trt_logger = trt.Logger(trt.Logger.INFO)
         trt.init_libnvinfer_plugins(trt_logger, '')
         ObjectDetector.runtime = trt.Runtime(trt_logger)
@@ -78,9 +78,9 @@ class ObjectDetector:
         # load model and create engine
         with open(self.model.PATH, 'rb') as model_file:
             buf = model_file.read()
-            engine = ObjectDetector.runtime.deserialize_cuda_engine(buf)
+            self.engine = ObjectDetector.runtime.deserialize_cuda_engine(buf)
         assert self.max_det <= self.model.TOPK
-        assert self.batch_size <= engine.max_batch_size
+        assert self.batch_size <= self.engine.max_batch_size
 
         # create buffers
         self.host_inputs  = []
@@ -90,19 +90,19 @@ class ObjectDetector:
         self.bindings = []
         self.stream = cuda.Stream()
 
-        for binding in engine:
-            size = trt.volume(engine.get_binding_shape(binding)) * self.batch_size
+        for binding in self.engine:
+            size = trt.volume(self.engine.get_binding_shape(binding)) * self.batch_size
             host_mem = cuda.pagelocked_empty(size, np.float32)
             cuda_mem = cuda.mem_alloc(host_mem.nbytes)
             self.bindings.append(int(cuda_mem))
-            if engine.binding_is_input(binding):
+            if self.engine.binding_is_input(binding):
                 self.host_inputs.append(host_mem)
                 self.cuda_inputs.append(cuda_mem)
             else:
                 self.host_outputs.append(host_mem)
                 self.cuda_outputs.append(cuda_mem)
 
-        self.context = engine.create_execution_context()
+        self.context = self.engine.create_execution_context()
         self.input_batch = np.zeros((self.batch_size, trt.volume(self.model.INPUT_SHAPE)))
     
     def preprocess(self, frame, tracks={}, track_id=None):
@@ -130,12 +130,20 @@ class ObjectDetector:
             ymin = max(min(self.size[1] - self.tile_size[1], ymin), 0)
             self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
 
-        # TODO: batching
+        # batching tiles
+        # for i, tile in enumerate(self.tiles):
+        #     tile = tile.crop(frame)
+        #     tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
+        #     tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
+        #     tile = np.transpose(tile, (2, 0, 1)) # HWC -> CHW
+        #     self.input_batch[i] = tile.ravel()
+
         tile = self.cur_tile.crop(frame)
         tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
         tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
         tile = np.transpose(tile, (2, 0, 1)) # HWC -> CHW
         self.input_batch[-1] = tile.ravel()
+
         np.copyto(self.host_inputs[0], self.input_batch.ravel())
 
     def infer_async(self):
@@ -146,6 +154,24 @@ class ObjectDetector:
         cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
 
     def postprocess(self):
+        # # filter out tracks and detections not in tile
+        # sx = sy = 1 - overlap
+        # scaled_tile = tile.scale(sx, sy)
+        # tracks, track_ids, boundary_tracks = ([] for i in range(3))
+        # use_maha_cost = True
+        # for track_id, track in self.tracks.items():
+        #     if self.acquire != acquire:
+        #         # reset age when mode toggles
+        #         track.age = 0
+        #     track.age += 1
+        #     if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox): 
+        #         if track_id not in self.kalman_filters:
+        #             use_maha_cost = False
+        #         track_ids.append(track_id)
+        #         tracks.append(track)
+        #     elif iou(track.bbox, tile) > 0:
+        #         boundary_tracks.append(track)
+
         self.stream.synchronize()
         output = self.host_outputs[0]
         detections = []

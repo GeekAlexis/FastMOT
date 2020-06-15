@@ -1,0 +1,5 @@
+numpy
+scipy >= 0.17
+opencv >= 4.0
+pycuda
+tensorflow < 2.0
