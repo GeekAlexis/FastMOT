@@ -125,4 +125,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Mac temporary files
 .DS_Store
+
+# TensorRT models
+.bin
