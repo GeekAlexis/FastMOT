@@ -5,6 +5,7 @@
 - [x] Real-time object detection and tracking for highly constrained embedded systems
   - Support all classes in the COCO dataset
   - Robust against moderate camera movement
+  - Works best on 1280 x 720 videos
   - Speed on Jetson Nano: 32 FPS
 
 ### Dependencies
