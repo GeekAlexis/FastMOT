@@ -6,20 +6,17 @@
   - Support all classes in the COCO dataset
   - Robust against moderate camera movement
   - Speed on Jetson Nano: 32 FPS
-- [ ] Drone flight control for following targets using both GPS and vision
-
 
 ### Dependencies
 #### Visual tracking
+- CUDA
 - OpenCV (Built with Gstreamer)
 - Numpy
 - Scipy
 - PyCuda
 - TensorRT  
-#### Flight control
-- DJI OSDK  
 
-Note OpenCV, PyCuda, and TensorRT can be installed from NVIDIA JetPack using the SDK Manager:    
+Note OpenCV, CUDA, and TensorRT can be installed from NVIDIA JetPack:    
 https://developer.nvidia.com/embedded/jetpack
 
 ### Install dependencies for Jetson platforms
