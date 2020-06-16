@@ -177,28 +177,44 @@ class KalmanTracker:
             print('[Tracker] Track registered: %s' % self.tracks[self.new_track_id])
             self.new_track_id += 1
 
-    def update(self, detections, tile, overlap, acquire=True):
+    def update(self, detections, tiles, overlap, tiling_region, acquire=True):
         """
         Update tracks using detections
         """
         # filter out tracks and detections not in tile
         sx = sy = 1 - overlap
-        scaled_tile = tile.scale(sx, sy)
-        tracks, track_ids, boundary_tracks = ([] for i in range(3))
+        tracks, track_ids, excluded_tracks = ([] for i in range(3))
         use_maha_cost = True
         for track_id, track in self.tracks.items():
             if self.acquire != acquire:
                 # reset age when mode toggles
                 track.age = 0
-            track.age += 1
-            if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox): 
-                if track_id not in self.kalman_filters:
-                    use_maha_cost = False
-                track_ids.append(track_id)
-                tracks.append(track)
-            elif iou(track.bbox, tile) > 0:
-                boundary_tracks.append(track)
+            # track.age += 1
+
+            exclude = True
+            for tile in tiles:
+                scaled_tile = tile.scale(sx, sy)
+                if tile.contains_rect(track.bbox):
+                    if track_id not in self.kalman_filters:
+                        use_maha_cost = False
+                    track_ids.append(track_id)
+                    tracks.append(track)
+                    exclude = False
+                    break
+            if not (exclude and tiling_region.contains_rect(track.bbox)):
+                track.age += 1
+                # excluded_tracks.append(track)
+            # if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox): 
+            #     if track_id not in self.kalman_filters:
+            #         use_maha_cost = False
+            #     track_ids.append(track_id)
+            #     tracks.append(track)
+            # elif iou(track.bbox, tile) > 0:
+            #     exclude_tracks.append(track)
         self.acquire = acquire
+
+        # TODO: filter out tracks not contained by one of the tiles, rule out tracks on a tile basis
+        # TODO: figure out how not to register fragmented detections, max size for excluded tracks?
 
         # compute optimal assignment
         all_det_indices = list(range(len(detections)))
@@ -249,7 +265,7 @@ class KalmanTracker:
         for det_idx in unmatched_det_indices:
             if detections[det_idx].conf > self.min_register_conf:
                 register = True
-                for track in boundary_tracks:
+                for track in self.tracks.values():
                     if detections[det_idx].label == track.label and iou(detections[det_idx].bbox, track.bbox) > 0.1:
                         register = False
                 if register:
@@ -434,8 +450,8 @@ class KalmanTracker:
         kalman_filter.statePost[6:] = grad_br @ vel_br
 
         # warp covariance too
-        # for i in range(0, 8, 2):
-        #     for j in range(0, 8, 2):
-        #         grad_left = grad_tl if i // 2 % 2 == 0 else grad_br
-        #         grad_right = grad_tl if j // 2 % 2 == 0 else grad_br
-        #         kalman_filter.errorCovPost[i:i + 2, j:j + 2] = grad_left @ kalman_filter.errorCovPost[i:i + 2, j:j + 2] @ grad_right.T
+        for i in range(0, 8, 2):
+            for j in range(0, 8, 2):
+                grad_left = grad_tl if i // 2 % 2 == 0 else grad_br
+                grad_right = grad_tl if j // 2 % 2 == 0 else grad_br
+                kalman_filter.errorCovPost[i:i + 2, j:j + 2] = grad_left @ kalman_filter.errorCovPost[i:i + 2, j:j + 2] @ grad_right.T

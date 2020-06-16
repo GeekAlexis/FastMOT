@@ -57,9 +57,9 @@ def main():
     #     )
     args = vars(parser.parse_args())
 
-    print('[INFO] Maximizing Nano Performance...')
-    os.system('echo %s | sudo -S nvpmodel -m 0' % PASSWORD)
-    os.system('sudo jetson_clocks')
+    # print('[INFO] Maximizing Nano Performance...')
+    # os.system('echo %s | sudo -S nvpmodel -m 0' % PASSWORD)
+    # os.system('sudo jetson_clocks')
 
     delay = 0
     # Hack: delay camera frame grabbing to reduce lag

@@ -51,12 +51,13 @@ class Analytics:
                 self.detector.infer_async()
                 self.tracker.track(frame)
                 detections = self.detector.postprocess()
-                self.tracker.update(detections, self.detector.cur_tile, self.detector.tile_overlap, acquire=self.acquire)
+                # self.tracker.update(detections, [self.detector.cur_tile], self.detector.tile_overlap, acquire=self.acquire)
+                self.tracker.update(detections, self.detector.tiles, self.detector.tile_overlap, self.detector.get_tiling_region(), acquire=self.acquire)
             else:
                 self.tracker.track(frame)
 
         if self.enable_drawing:
-            self._draw(frame, detections, debug=False)
+            self._draw(frame, detections, debug=True)
 
         if self.acquire:
             if self.frame_count - self.acquisition_start_frame + 1 == self.acquisition_interval:
@@ -103,12 +104,9 @@ class Analytics:
                 track.draw(frame, draw_feature_match=True)
         if debug:
             [det.draw(frame) for det in detections]
-            self.tracker.flow.draw_bkg_feature_match(frame)
             # self.tracker.flow.draw_bkg_feature_match(frame)
-            # if self.frame_count % self.detector_frame_skip == 0:
-            #     self.detector.draw_cur_tile(frame)
-        if self.frame_count % self.detector_frame_skip == 0:
-            self.detector.draw_cur_tile(frame)
+            if self.frame_count % self.detector_frame_skip == 0:
+                self.detector.draw_tile(frame)
         if self.acquire:
             cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
         elif self.status == Analytics.Status.TARGET_ACQUIRED:

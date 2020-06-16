@@ -1,4 +1,3 @@
-import ctypes
 from enum import Enum
 from pathlib import Path
 import json
@@ -44,7 +43,6 @@ class ObjectDetector:
     @classmethod
     def init_backend(cls): 
         # initialize TensorRT
-        # ctypes.CDLL(Path(__file__).parent / 'lib' / 'libflattenconcat.so')
         trt_logger = trt.Logger(trt.Logger.INFO)
         trt.init_libnvinfer_plugins(trt_logger, '')
         ObjectDetector.runtime = trt.Runtime(trt_logger)
@@ -74,6 +72,7 @@ class ObjectDetector:
             self.conf_threshold = ObjectDetector.config['tracking']['conf_threshold']
             self.model = ssd.InceptionV2
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
+        ssd.prepare_model(self.model, trt.DataType.HALF, self.batch_size)
 
         # load model and create engine
         with open(self.model.PATH, 'rb') as model_file:
@@ -106,43 +105,44 @@ class ObjectDetector:
         self.input_batch = np.zeros((self.batch_size, trt.volume(self.model.INPUT_SHAPE)))
     
     def preprocess(self, frame, tracks={}, track_id=None):
-        if self.detector_type == ObjectDetector.Type.ACQUISITION:
-            # tile scheduling
-            if self.schedule_tiles:
-                sx = sy = 1 - self.tile_overlap
-                tile_num_tracks = np.zeros(len(self.tiles))
-                for tile_id, tile in enumerate(self.tiles):
-                    scaled_tile = tile.scale(sx, sy)
-                    for track in tracks.values():
-                        if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox):
-                            tile_num_tracks[tile_id] += 1
-                tile_scores = self.tile_ages * self.age_to_object_ratio + tile_num_tracks
-                self.cur_tile_id = np.argmax(tile_scores)
-                self.tile_ages += 1
-                self.tile_ages[self.cur_tile_id] = 0
-            else:
-                self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
-            self.cur_tile = self.tiles[self.cur_tile_id]
-        elif self.detector_type == ObjectDetector.Type.TRACKING:
-            assert track_id in tracks
-            xmin, ymin = np.int_(np.round(tracks[track_id].bbox.center() - (np.array(self.tile_size) - 1) / 2))
-            xmin = max(min(self.size[0] - self.tile_size[0], xmin), 0)
-            ymin = max(min(self.size[1] - self.tile_size[1], ymin), 0)
-            self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
-
-        # batching tiles
-        # for i, tile in enumerate(self.tiles):
-        #     tile = tile.crop(frame)
-        #     tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
-        #     tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
-        #     tile = np.transpose(tile, (2, 0, 1)) # HWC -> CHW
-        #     self.input_batch[i] = tile.ravel()
-
-        tile = self.cur_tile.crop(frame)
-        tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
-        tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
-        tile = np.transpose(tile, (2, 0, 1)) # HWC -> CHW
-        self.input_batch[-1] = tile.ravel()
+        if self.batch_size == 1:
+            if self.detector_type == ObjectDetector.Type.ACQUISITION:
+                # tile scheduling
+                if self.schedule_tiles:
+                    sx = sy = 1 - self.tile_overlap
+                    tile_num_tracks = np.zeros(len(self.tiles))
+                    for tile_id, tile in enumerate(self.tiles):
+                        scaled_tile = tile.scale(sx, sy)
+                        for track in tracks.values():
+                            if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox):
+                                tile_num_tracks[tile_id] += 1
+                    tile_scores = self.tile_ages * self.age_to_object_ratio + tile_num_tracks
+                    self.cur_tile_id = np.argmax(tile_scores)
+                    self.tile_ages += 1
+                    self.tile_ages[self.cur_tile_id] = 0
+                else:
+                    self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
+                self.cur_tile = self.tiles[self.cur_tile_id]
+            elif self.detector_type == ObjectDetector.Type.TRACKING:
+                assert track_id in tracks
+                xmin, ymin = np.int_(np.round(tracks[track_id].bbox.center() - (np.array(self.tile_size) - 1) / 2))
+                xmin = max(min(self.size[0] - self.tile_size[0], xmin), 0)
+                ymin = max(min(self.size[1] - self.tile_size[1], ymin), 0)
+                self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
+            
+            tile = self.cur_tile.crop(frame)
+            tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
+            tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
+            tile = np.transpose(tile, (2, 0, 1)) # HWC -> CHW
+            self.input_batch[-1] = tile.ravel()
+        else:
+            # tile batching
+            for i, tile in enumerate(self.tiles):
+                frame_tile = tile.crop(frame)
+                frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
+                frame_tile = frame_tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
+                frame_tile = np.transpose(frame_tile, (2, 0, 1)) # HWC -> CHW
+                self.input_batch[i] = frame_tile.ravel()
 
         np.copyto(self.host_inputs[0], self.input_batch.ravel())
 
@@ -175,19 +175,28 @@ class ObjectDetector:
         self.stream.synchronize()
         output = self.host_outputs[0]
         detections = []
-        for det_idx in range(self.max_det):
-            offset = det_idx * self.model.OUTPUT_LAYOUT
-            # index = int(output[offset])
-            label = int(output[offset + 1])
-            conf = output[offset + 2]
-            if conf > self.conf_threshold and label in self.classes:
-                xmin = int(round(output[offset + 3] * self.cur_tile.size[0])) + self.cur_tile.xmin
-                ymin = int(round(output[offset + 4] * self.cur_tile.size[1])) + self.cur_tile.ymin
-                xmax = int(round(output[offset + 5] * self.cur_tile.size[0])) + self.cur_tile.xmin
-                ymax = int(round(output[offset + 6] * self.cur_tile.size[1])) + self.cur_tile.ymin
-                bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
-                detections.append(Detection(bbox, label, conf))
-                # print('[Detector] Detected: %s' % det)
+        for tile_idx in range(len(self.tiles)):
+            tile = self.tiles[tile_idx]
+            for det_idx in range(self.max_det):
+                offset = (tile_idx * self.model.TOPK + det_idx) * self.model.OUTPUT_LAYOUT
+                # index = int(output[offset])
+                label = int(output[offset + 1])
+                conf = output[offset + 2]
+                if conf > self.conf_threshold and label in self.classes:
+                    xmin = int(round(output[offset + 3] * tile.size[0])) + tile.xmin
+                    ymin = int(round(output[offset + 4] * tile.size[1])) + tile.ymin
+                    xmax = int(round(output[offset + 5] * tile.size[0])) + tile.xmin
+                    ymax = int(round(output[offset + 6] * tile.size[1])) + tile.ymin
+
+                    # xmin = int(round(output[offset + 3] * self.cur_tile.size[0])) + self.cur_tile.xmin
+                    # ymin = int(round(output[offset + 4] * self.cur_tile.size[1])) + self.cur_tile.ymin
+                    # xmax = int(round(output[offset + 5] * self.cur_tile.size[0])) + self.cur_tile.xmin
+                    # ymax = int(round(output[offset + 6] * self.cur_tile.size[1])) + self.cur_tile.ymin
+                    bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
+                    # sx = sy = 1 - self.tile_overlap
+                    # if bbox.center() in tile.scale(sx, sy):
+                    detections.append(Detection(bbox, label, conf))
+                    # print('[Detector] Detected: %s' % det)
         return detections
 
     def detect_sync(self, frame, tracks={}, track_id=None):
@@ -199,8 +208,11 @@ class ObjectDetector:
         assert self.detector_type == ObjectDetector.Type.ACQUISITION and len(self.tiles) > 0
         return Rect(tf_rect=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
 
-    def draw_cur_tile(self, frame):
-        cv2.rectangle(frame, self.cur_tile.tl(), self.cur_tile.br(), 0, 2)
+    def draw_tile(self, frame):
+        if self.cur_tile is not None:
+            cv2.rectangle(frame, self.cur_tile.tl(), self.cur_tile.br(), 0, 2)
+        else:
+            [cv2.rectangle(frame, tile.tl(), tile.br(), 0, 2) for tile in self.tiles]
 
     def _generate_tiles(self):
         width, height = self.size
