@@ -8,7 +8,6 @@
   - Speed on Jetson Nano: 32 FPS
 
 ### Dependencies
-#### Visual tracking
 - CUDA
 - OpenCV (Built with Gstreamer)
 - Numpy
@@ -22,7 +21,7 @@ https://developer.nvidia.com/embedded/jetpack
 ### Install dependencies for Jetson platforms
 `bash install_jetson.sh`
 
-### Run visual tracking
+### Run tracking
 - With camera: `python3 vision.py --analytics`
 - Input video: `python3 vision.py --input video.mp4 --analytics`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
