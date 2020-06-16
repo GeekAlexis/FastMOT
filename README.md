@@ -22,6 +22,9 @@
 Note OpenCV, PyCuda, and TensorRT can be installed from NVIDIA JetPack using the SDK Manager:    
 https://developer.nvidia.com/embedded/jetpack
 
+### Install dependencies for Jetson platforms
+`bash install_jetson.sh`
+
 ### Run visual tracking
 - With camera: `python3 vision.py --analytics`
 - Input video: `python3 vision.py --input video.mp4 --analytics`
@@ -29,5 +32,4 @@ https://developer.nvidia.com/embedded/jetpack
 
 ### References
 - SORT: https://arxiv.org/abs/1602.00763  
-- Deep SORT: https://arxiv.org/pdf/1703.07402.pdf  
-- Tiling: https://arxiv.org/pdf/1911.06073.pdf  
+- Deep SORT: https://arxiv.org/pdf/1703.07402.pdf 
