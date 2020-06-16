@@ -15,11 +15,10 @@
 - PyCuda
 - TensorRT  
 
-Note OpenCV, CUDA, and TensorRT can be installed from NVIDIA JetPack:    
+#### Install dependencies for Jetson platforms
+- OpenCV, CUDA, and TensorRT can be installed from NVIDIA JetPack:    
 https://developer.nvidia.com/embedded/jetpack
-
-### Install dependencies for Jetson platforms
-`bash install_jetson.sh`
+- `bash install_jetson.sh`
 
 ### Run tracking
 - With camera: `python3 vision.py --analytics`
