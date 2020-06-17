@@ -49,10 +49,9 @@ class Analytics:
             if self.frame_count % self.detector_frame_skip == 0:
                 self.detector.preprocess(frame, self.tracker.tracks, track_id=self.track_id)
                 self.detector.infer_async()
-                self.tracker.track(frame)
+                # self.tracker.track(frame)
                 detections = self.detector.postprocess()
-                # self.tracker.update(detections, [self.detector.cur_tile], self.detector.tile_overlap, acquire=self.acquire)
-                self.tracker.update(detections, self.detector.tiles, self.detector.tile_overlap, self.detector.get_tiling_region(), acquire=self.acquire)
+                self.tracker.update(detections, self.detector.cur_tile, self.detector.tile_overlap, acquire=self.acquire)
             else:
                 self.tracker.track(frame)
 

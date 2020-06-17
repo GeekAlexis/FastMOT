@@ -70,7 +70,7 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
             # img = np.ascontiguousarray(img)
 
             # add this image to the batch array
-            batch_imgs[i,:] = img.ravel
+            batch_imgs[i,:] = img.ravel()
 
         # increase the counter for this batch
         self.counter += self.batch_size

@@ -259,7 +259,7 @@ class InceptionV2:
         return graph
 
 
-def prepare_model(model=InceptionV2, trt_engine_datatype=trt.DataType.FLOAT, batch_size=1, calib_dataset=None):
+def prepare_model(model=InceptionV2, trt_engine_datatype=trt.DataType.FLOAT, batch_size=1, calib_dataset=Path(__file__).parent / 'VOCdevkit' / 'VOC2007' / 'JPEGImages'):
     import uff
     from . import calibrator
 
@@ -279,9 +279,11 @@ def prepare_model(model=InceptionV2, trt_engine_datatype=trt.DataType.FLOAT, bat
             if trt_engine_datatype == trt.DataType.HALF:
                 builder.fp16_mode = True
             elif trt_engine_datatype == trt.DataType.INT8:
+                # TODO: download data if it doesn't exist
+                # TODO: use DLA
                 builder.fp16_mode = True
                 builder.int8_mode = True
-                builder.int8_calibrator = calibrator.SSDEntropyCalibrator(data_dir=calib_dataset, cache_file='INT8CacheFile')
+                builder.int8_calibrator = calibrator.SSDEntropyCalibrator(data_dir=calib_dataset, cache_file=Path(__file__).parent / 'INT8CacheFile')
 
             parser.register_input('Input', model.INPUT_SHAPE)
             parser.register_output('MarkOutput_0')

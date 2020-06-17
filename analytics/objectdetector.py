@@ -6,6 +6,7 @@ import pycuda.driver as cuda
 import tensorrt as trt
 import numpy as np
 import cv2
+import time
 
 from .utils import Rect, iou
 from .models import ssd
@@ -74,7 +75,8 @@ class ObjectDetector:
             self.conf_threshold = ObjectDetector.config['tracking']['conf_threshold']
             self.model = ssd.InceptionV2
             self.tile_size = self.model.INPUT_SHAPE[1:][::-1]
-        ssd.prepare_model(self.model, trt.DataType.HALF, self.batch_size)
+        # ssd.prepare_model(self.model, trt.DataType.HALF, self.batch_size)
+        ssd.prepare_model(self.model, trt.DataType.INT8, self.batch_size)
 
         # load model and create engine
         with open(self.model.PATH, 'rb') as model_file:
@@ -107,7 +109,15 @@ class ObjectDetector:
         self.input_batch = np.zeros((self.batch_size, trt.volume(self.model.INPUT_SHAPE)))
     
     def preprocess(self, frame, tracks={}, track_id=None):
-        if self.batch_size == 1:
+        if self.batch_size > 1:
+            # tile batching
+            for i, tile in enumerate(self.tiles):
+                frame_tile = tile.crop(frame)
+                frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
+                frame_tile = frame_tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
+                frame_tile = np.transpose(frame_tile, (2, 0, 1)) # HWC -> CHW
+                self.input_batch[i] = frame_tile.ravel()
+        else:
             if self.detector_type == ObjectDetector.Type.ACQUISITION:
                 # tile scheduling
                 if self.schedule_tiles:
@@ -132,23 +142,16 @@ class ObjectDetector:
                 ymin = max(min(self.size[1] - self.tile_size[1], ymin), 0)
                 self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
             
-            tile = self.cur_tile.crop(frame)
-            tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
-            tile = tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
-            tile = np.transpose(tile, (2, 0, 1)) # HWC -> CHW
-            self.input_batch[-1] = tile.ravel()
-        else:
-            # tile batching
-            for i, tile in enumerate(self.tiles):
-                frame_tile = tile.crop(frame)
-                frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
-                frame_tile = frame_tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
-                frame_tile = np.transpose(frame_tile, (2, 0, 1)) # HWC -> CHW
-                self.input_batch[i] = frame_tile.ravel()
+            frame_tile = self.cur_tile.crop(frame)
+            frame_tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
+            frame_tile = frame_tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
+            frame_tile = np.transpose(frame_tile, (2, 0, 1)) # HWC -> CHW
+            self.input_batch[-1] = frame_tile.ravel()
 
         np.copyto(self.host_inputs[0], self.input_batch.ravel())
 
     def infer_async(self):
+        self.tic = time.perf_counter() 
         # inference
         cuda.memcpy_htod_async(self.cuda_inputs[0], self.host_inputs[0], self.stream)
         self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
@@ -156,29 +159,12 @@ class ObjectDetector:
         cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
 
     def postprocess(self):
-        # # filter out tracks and detections not in tile
-        # sx = sy = 1 - overlap
-        # scaled_tile = tile.scale(sx, sy)
-        # tracks, track_ids, boundary_tracks = ([] for i in range(3))
-        # use_maha_cost = True
-        # for track_id, track in self.tracks.items():
-        #     if self.acquire != acquire:
-        #         # reset age when mode toggles
-        #         track.age = 0
-        #     track.age += 1
-        #     if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox): 
-        #         if track_id not in self.kalman_filters:
-        #             use_maha_cost = False
-        #         track_ids.append(track_id)
-        #         tracks.append(track)
-        #     elif iou(track.bbox, tile) > 0:
-        #         boundary_tracks.append(track)
-
         self.stream.synchronize()
+        print(time.perf_counter() - self.tic)
         output = self.host_outputs[0]
-        detections = np.array([])
-        for tile_idx in range(len(self.tiles)):
-            tile = self.tiles[tile_idx]
+        detections = []
+        for tile_idx in range(self.batch_size):
+            tile = self.tiles[tile_idx] if self.batch_size > 1 else self.cur_tile
             tile_offset = tile_idx * self.model.TOPK
             for det_idx in range(self.max_det):
                 offset = (tile_offset + det_idx) * self.model.OUTPUT_LAYOUT
@@ -190,16 +176,11 @@ class ObjectDetector:
                     ymin = int(round(output[offset + 4] * tile.size[1])) + tile.ymin
                     xmax = int(round(output[offset + 5] * tile.size[0])) + tile.xmin
                     ymax = int(round(output[offset + 6] * tile.size[1])) + tile.ymin
-                    # xmin = int(round(output[offset + 3] * self.cur_tile.size[0])) + self.cur_tile.xmin
-                    # ymin = int(round(output[offset + 4] * self.cur_tile.size[1])) + self.cur_tile.ymin
-                    # xmax = int(round(output[offset + 5] * self.cur_tile.size[0])) + self.cur_tile.xmin
-                    # ymax = int(round(output[offset + 6] * self.cur_tile.size[1])) + self.cur_tile.ymin
                     bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
-                    # sx = sy = 1 - self.tile_overlap
-                    # if bbox.center() in tile.scale(sx, sy):
                     detections = np.append(detections, Detection(bbox, label, conf, set([tile_idx])))
                     # print('[Detector] Detected: %s' % det)
 
+        # merge detections across different tiles
         merged_detections = []
         merged_det_indices = set()
         for i, det1 in enumerate(detections):

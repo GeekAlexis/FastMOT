@@ -2,7 +2,6 @@ from enum import Enum
 from pathlib import Path
 from copy import deepcopy
 from collections import OrderedDict
-import math
 import json
 from scipy.optimize import linear_sum_assignment
 from scipy.linalg import solve_triangular
@@ -65,7 +64,7 @@ class KalmanTracker:
         self.acquisition_max_age = KalmanTracker.config['acquisition_max_age']
         self.tracking_max_age = KalmanTracker.config['tracking_max_age']
         self.max_association_maha = KalmanTracker.config['max_association_maha']
-        # self.max_association_maha = math.sqrt(KalmanTracker.CHI_SQ_INV_95)
+        # self.max_association_maha = np.sqrt(KalmanTracker.CHI_SQ_INV_95)
         self.min_association_iou = KalmanTracker.config['min_association_iou']
         self.min_register_conf = KalmanTracker.config['min_register_conf']
         self.num_vertical_bin = KalmanTracker.config['num_vertical_bin']
@@ -169,32 +168,41 @@ class KalmanTracker:
             self.kalman_filters.clear()
         self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
-        # for new_track_id, det in enumerate(detections):
-        #     self.tracks[new_track_id] = Track(det.label, det.bbox, new_track_id)
-        #     print('[Tracker] Track registered: %s' % self.tracks[new_track_id])
         for det in detections:
             self.tracks[self.new_track_id] = Track(det.label, det.bbox, self.new_track_id)
             print('[Tracker] Track registered: %s' % self.tracks[self.new_track_id])
             self.new_track_id += 1
 
-    def update(self, detections, tiles, overlap, tiling_region, acquire=True):
+    def update(self, detections, tile=None, overlap=None, acquire=True):
         """
         Update tracks using detections
         """
-        # filter out tracks and detections not in tile
-        # sx = sy = 1 - overlap
-        tracks, track_ids, excluded_tracks = ([] for i in range(3))
-        use_maha_cost = True
+        if tile is not None:
+            assert overlap is not None
+            # handle single batch size differently
+            sx = sy = 1 - overlap
+            scaled_tile = tile.scale(sx, sy)
+            excluded_tracks = []
 
-        # track_ids = list(self.tracks.keys())
-        # tracks = list(self.tracks.values())
+        use_maha_cost = True
+        tracks, track_ids = [], []
         for track_id, track in self.tracks.items():
             if self.acquire != acquire:
                 # reset age when mode toggles
                 track.age = 0
             track.age += 1
-            track_ids.append(track_id)
-            tracks.append(track)
+            if tile is None:
+                track_ids.append(track_id)
+                tracks.append(track)
+            else:
+                # filter out tracks and detections not in tile
+                if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox): 
+                    if track_id not in self.kalman_filters:
+                        use_maha_cost = False
+                    track_ids.append(track_id)
+                    tracks.append(track)
+                elif iou(track.bbox, tile) > 0:
+                    excluded_tracks.append(track)
 
             # exclude = True
             # for tile in tiles:
@@ -209,17 +217,7 @@ class KalmanTracker:
             # if not (exclude and tiling_region.contains_rect(track.bbox)):
             #     track.age += 1
                 # excluded_tracks.append(track)
-            # if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox): 
-            #     if track_id not in self.kalman_filters:
-            #         use_maha_cost = False
-            #     track_ids.append(track_id)
-            #     tracks.append(track)
-            # elif iou(track.bbox, tile) > 0:
-            #     exclude_tracks.append(track)
         self.acquire = acquire
-
-        # TODO: filter out tracks not contained by one of the tiles, rule out tracks on a tile basis
-        # TODO: figure out how not to register fragmented detections, max size for excluded tracks?
 
         # compute optimal assignment
         all_det_indices = list(range(len(detections)))
@@ -270,14 +268,11 @@ class KalmanTracker:
         for det_idx in unmatched_det_indices:
             if detections[det_idx].conf > self.min_register_conf:
                 register = True
-                # for track in self.tracks.values():
-                #     if detections[det_idx].label == track.label and iou(detections[det_idx].bbox, track.bbox) > 0.1:
-                #         register = False
+                if tile is not None:
+                    for track in self.tracks.values():
+                        if detections[det_idx].label == track.label and iou(detections[det_idx].bbox, track.bbox) > 0.1:
+                            register = False
                 if register:
-                    # new_track_id = 0
-                    # while new_track_id in self.tracks:
-                    #     new_track_id += 1
-                    # self.tracks[new_track_id] = Track(detections[det_idx].label, detections[det_idx].bbox, new_track_id)
                     self.tracks[self.new_track_id] = Track(detections[det_idx].label, detections[det_idx].bbox, self.new_track_id)
                     print('[Tracker] Track registered: %s' % self.tracks[self.new_track_id])
                     self.new_track_id += 1
@@ -308,7 +303,7 @@ class KalmanTracker:
     def _compare_dist(self, id_track_pair):
         # estimate distance using bottow right y coord and area
         bin_height = self.size[1] // self.num_vertical_bin
-        return (math.ceil(id_track_pair[1].bbox.ymax / bin_height), id_track_pair[1].bbox.area())
+        return (np.ceil(id_track_pair[1].bbox.ymax / bin_height), id_track_pair[1].bbox.area())
 
     def _create_kalman_filter(self, init_bbox, cur_bbox):
         kalman_filter = cv2.KalmanFilter(8, 4)
@@ -419,7 +414,7 @@ class KalmanTracker:
         # mahalanobis distance
         L = np.linalg.cholesky(innovation_cov)
         x = solve_triangular(L, innovation, lower=True, overwrite_b=True, check_finite=False)
-        return math.sqrt(np.sum(x**2))
+        return np.sqrt(np.sum(x**2))
 
     def _warp_bbox(self, bbox, H_camera):
         warped_corners = cv2.perspectiveTransform(np.float32(bbox.corners()).reshape(4, 1, 2), H_camera)

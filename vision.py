@@ -39,10 +39,10 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-i', '--input', help='Path to optional input video file')
     parser.add_argument('-o', '--output', help='Path to optional output video file')
-    parser.add_argument('-a', '--analytics', action='store_true', help='Turn on video analytics')
+    parser.add_argument('-m', '--mot', action='store_true', help='Turn on multi-object tracking')
     parser.add_argument('-s', '--socket', action='store_true', help='Turn on socket communication')
     parser.add_argument('--addr', default='/tmp/guardian_socket', help='Socket address')
-    parser.add_argument('-m', '--mot', action='store_true', help='Output a MOT format tracking log')
+    parser.add_argument('-l', '--log', action='store_true', help='Output a MOT format tracking log')
     parser.add_argument('-g', '--gui', action='store_true', help='Turn on visiualization')
     # parser.add_argument('-f', '--flip', type=int, default=0, choices=range(8), help=
     #     "0: none\n"          
@@ -56,38 +56,34 @@ def main():
     #     )
     args = vars(parser.parse_args())
 
-    # print('[INFO] Maximizing Nano Performance...')
-    # os.system('echo %s | sudo -S nvpmodel -m 0' % PASSWORD)
-    # os.system('sudo jetson_clocks')
-
     delay = 0
     # Hack: delay camera frame grabbing to reduce lag
     if args['input'] is None:
-        if args['analytics']:
+        if args['mot']:
             delay = 1 / 30 # main processing loop time
         if args['gui']:
-            delay += 0.025 if args['analytics'] else 0.055 # gui time
+            delay += 0.025 if args['mot'] else 0.055 # gui time
     stream = VideoIO(PROC_SIZE, args['input'], args['output'], delay)
 
     sock = None
-    mot_dump = None
+    mot_log = None
     enable_analytics = False
     elapsed_time = 0    
     gui_time = 0
 
-    if args['analytics']:
+    if args['mot']:
         analytics = Analytics(PROC_SIZE, stream.capture_dt, args['gui'] or args['output'])
         enable_analytics = True
     if args['socket']:
-        assert args['analytics'], 'Analytics must be turned on for socket transfer'
+        assert args['mot'], 'Tracking must be turned on for socket transfer'
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(args['addr'])
         sock.setblocking(False)
         enable_analytics = False
         buffer = b''
-    if args['mot']:
-        assert args['analytics'], 'Analytics must be turned on for MOT output'
-        mot_dump = open('log.txt', 'w')
+    if args['log']:
+        assert args['mot'], 'Tracking must be turned on for logging'
+        mot_log = open('mot_log.txt', 'w')
     if args['gui']:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
         
@@ -130,13 +126,13 @@ def main():
 
             if enable_analytics:
                 analytics.run(frame)
-                if args['mot']:
+                if args['log']:
                     for track_id, track in analytics.tracker.tracks.items():
-                        scaled_xmin = track.bbox.xmin / 1280 * 1920
-                        scaled_ymin = track.bbox.ymin / 720 * 1080
-                        scaled_xmax = track.bbox.xmax / 1280 * 1920
-                        scaled_ymax = track.bbox.ymax / 720 * 1080
-                        mot_dump.write(f'{analytics.frame_count + 1}, {track_id + 1}, {scaled_xmin}, {scaled_ymin}, {scaled_xmax - scaled_xmin + 1}, {scaled_ymax - scaled_ymin + 1}, -1, -1, -1, -1\n')
+                        scaled_xmin = track.bbox.xmin / PROC_SIZE[0] * stream.vid_size[0]
+                        scaled_ymin = track.bbox.ymin / PROC_SIZE[1] * stream.vid_size[1]
+                        scaled_xmax = track.bbox.xmax / PROC_SIZE[0] * stream.vid_size[0]
+                        scaled_ymax = track.bbox.ymax / PROC_SIZE[1] * stream.vid_size[1]
+                        mot_log.write(f'{analytics.frame_count + 1}, {track_id + 1}, {scaled_xmin}, {scaled_ymin}, {scaled_xmax - scaled_xmin + 1}, {scaled_ymax - scaled_ymin + 1}, -1, -1, -1, -1\n')
                 if args['socket']:
                     if analytics.status == Analytics.Status.TARGET_ACQUIRED:
                         msg = serialize_to_msg(MsgType.BBOX, analytics.get_target_bbox())
@@ -167,11 +163,11 @@ def main():
         stream.release()
         if sock is not None:
             sock.close()
-        if mot_dump is not None:
-            mot_dump.close()
+        if mot_log is not None:
+            mot_log.close()
         cv2.destroyAllWindows()
     
-    if not args['socket'] and args['analytics']:
+    if not args['socket'] and args['mot']:
         avg_fps = round(analytics.frame_count / elapsed_time)
         print('[INFO] Average FPS: %d' % avg_fps)
         if args['gui']:

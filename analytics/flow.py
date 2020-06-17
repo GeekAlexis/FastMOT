@@ -1,5 +1,4 @@
 from pathlib import Path
-import math
 import json
 import numpy as np
 import cv2
@@ -169,20 +168,20 @@ class Flow:
             [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in zip(np.int_(np.round(self.prev_bkg_feature_pts)), np.int_(np.round(self.bkg_feature_pts)))]
     
     def _estimate_feature_dist(self, target_area):
-        est_ft_dist = round(math.sqrt(target_area) * self.feature_dist_factor)
+        est_ft_dist = round(np.sqrt(target_area) * self.feature_dist_factor)
         return max(est_ft_dist, 1)
 
     def _estimate_bbox(self, bbox, H_affine):
         warped_tl = cv2.transform(np.float32(bbox.tl()).reshape(1, 1, 2), H_affine)
         warped_tl = np.int_(np.round(warped_tl.ravel()))
-        s = math.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
+        s = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
         s = 1.0 if s < 0.9 or s > 1.1 else s
         # s = max(min(s, 1.1), 0.9)
         new_bbox = Rect(cv_rect=(warped_tl[0], warped_tl[1], int(round(s * bbox.size[0])), int(round(s * bbox.size[1]))))
 
         # warped_center = cv2.transform(np.float32(bbox.center()).reshape(1, 1, 2), H_affine)
         # warped_center = warped_center.ravel()
-        # s = math.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
+        # s = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
         # # s = 1.0 if s < 0.9 or s > 1.1 else s
         # s = max(min(s, 1.1), 0.9)
         # new_size = s * np.asarray(bbox.size)
