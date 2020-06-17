@@ -7,18 +7,19 @@ import tensorrt as trt
 import numpy as np
 import cv2
 
-from .utils import Rect
+from .utils import Rect, iou
 from .models import ssd
 from .configs import decoder
 
 class Detection:
-    def __init__(self, bbox, label, conf):
+    def __init__(self, bbox, label, conf, tile_id):
         self.bbox = bbox
         self.label = label
         self.conf = conf
+        self.tile_id = tile_id
 
     def __repr__(self):
-        return "Detection(bbox=%r, label=%r, conf=%r)" % (self.bbox, self.label, self.conf)
+        return "Detection(bbox=%r, label=%r, conf=%r, tile_id=%r)" % (self.bbox, self.label, self.conf, self.tile_id)
 
     def __str__(self):
         return "%.2f %s at %s" % (self.conf, ssd.COCO_LABELS[self.label], self.bbox.cv_rect())
@@ -55,6 +56,7 @@ class ObjectDetector:
         self.max_det = ObjectDetector.config['max_det']
         self.batch_size = ObjectDetector.config['batch_size']
         self.tile_overlap = ObjectDetector.config['tile_overlap']
+        self.merge_iou_thresh = ObjectDetector.config['merge_iou_thresh']
 
         self.tiles = None
         self.cur_tile = None
@@ -174,11 +176,12 @@ class ObjectDetector:
 
         self.stream.synchronize()
         output = self.host_outputs[0]
-        detections = []
+        detections = np.array([])
         for tile_idx in range(len(self.tiles)):
             tile = self.tiles[tile_idx]
+            tile_offset = tile_idx * self.model.TOPK
             for det_idx in range(self.max_det):
-                offset = (tile_idx * self.model.TOPK + det_idx) * self.model.OUTPUT_LAYOUT
+                offset = (tile_offset + det_idx) * self.model.OUTPUT_LAYOUT
                 # index = int(output[offset])
                 label = int(output[offset + 1])
                 conf = output[offset + 2]
@@ -187,7 +190,6 @@ class ObjectDetector:
                     ymin = int(round(output[offset + 4] * tile.size[1])) + tile.ymin
                     xmax = int(round(output[offset + 5] * tile.size[0])) + tile.xmin
                     ymax = int(round(output[offset + 6] * tile.size[1])) + tile.ymin
-
                     # xmin = int(round(output[offset + 3] * self.cur_tile.size[0])) + self.cur_tile.xmin
                     # ymin = int(round(output[offset + 4] * self.cur_tile.size[1])) + self.cur_tile.ymin
                     # xmax = int(round(output[offset + 5] * self.cur_tile.size[0])) + self.cur_tile.xmin
@@ -195,8 +197,26 @@ class ObjectDetector:
                     bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
                     # sx = sy = 1 - self.tile_overlap
                     # if bbox.center() in tile.scale(sx, sy):
-                    detections.append(Detection(bbox, label, conf))
+                    detections = np.append(detections, Detection(bbox, label, conf, set([tile_idx])))
                     # print('[Detector] Detected: %s' % det)
+
+        merged_detections = []
+        merged_det_indices = set()
+        for i, det1 in enumerate(detections):
+            if i not in merged_det_indices:
+                merged_det = Detection(det1.bbox, det1.label, det1.conf, det1.tile_id)
+                for j, det2 in enumerate(detections):
+                    if j not in merged_det_indices:
+                        if merged_det.tile_id.isdisjoint(det2.tile_id) and merged_det.label == det2.label and iou(merged_det.bbox, det2.bbox) > self.merge_iou_thresh:
+                            merged_det.bbox |= det2.bbox
+                            merged_det.conf = max(merged_det.conf, det2.conf) 
+                            merged_det.tile_id |= det2.tile_id
+                            merged_det_indices.add(i)
+                            merged_det_indices.add(j)
+                if i in merged_det_indices:
+                    merged_detections.append(merged_det)
+        detections = np.delete(detections, list(merged_det_indices))
+        detections = np.append(detections, merged_detections)
         return detections
 
     def detect_sync(self, frame, tracks={}, track_id=None):

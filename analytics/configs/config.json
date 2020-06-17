@@ -41,6 +41,7 @@
         "max_det": 20,
         "batch_size": 8,
         "tile_overlap": 0.25,
+        "merge_iou_thresh": 0.2,
         "acquisition": {
             "conf_threshold": 0.5,
             "tiling_grid": [4, 2],

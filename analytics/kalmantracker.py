@@ -182,27 +182,32 @@ class KalmanTracker:
         Update tracks using detections
         """
         # filter out tracks and detections not in tile
-        sx = sy = 1 - overlap
+        # sx = sy = 1 - overlap
         tracks, track_ids, excluded_tracks = ([] for i in range(3))
         use_maha_cost = True
+
+        # track_ids = list(self.tracks.keys())
+        # tracks = list(self.tracks.values())
         for track_id, track in self.tracks.items():
             if self.acquire != acquire:
                 # reset age when mode toggles
                 track.age = 0
-            # track.age += 1
+            track.age += 1
+            track_ids.append(track_id)
+            tracks.append(track)
 
-            exclude = True
-            for tile in tiles:
-                scaled_tile = tile.scale(sx, sy)
-                if tile.contains_rect(track.bbox):
-                    if track_id not in self.kalman_filters:
-                        use_maha_cost = False
-                    track_ids.append(track_id)
-                    tracks.append(track)
-                    exclude = False
-                    break
-            if not (exclude and tiling_region.contains_rect(track.bbox)):
-                track.age += 1
+            # exclude = True
+            # for tile in tiles:
+            #     scaled_tile = tile.scale(sx, sy)
+            #     if tile.contains_rect(track.bbox):
+            #         if track_id not in self.kalman_filters:
+            #             use_maha_cost = False
+            #         track_ids.append(track_id)
+            #         tracks.append(track)
+            #         exclude = False
+            #         break
+            # if not (exclude and tiling_region.contains_rect(track.bbox)):
+            #     track.age += 1
                 # excluded_tracks.append(track)
             # if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox): 
             #     if track_id not in self.kalman_filters:
@@ -265,9 +270,9 @@ class KalmanTracker:
         for det_idx in unmatched_det_indices:
             if detections[det_idx].conf > self.min_register_conf:
                 register = True
-                for track in self.tracks.values():
-                    if detections[det_idx].label == track.label and iou(detections[det_idx].bbox, track.bbox) > 0.1:
-                        register = False
+                # for track in self.tracks.values():
+                #     if detections[det_idx].label == track.label and iou(detections[det_idx].bbox, track.bbox) > 0.1:
+                #         register = False
                 if register:
                     # new_track_id = 0
                     # while new_track_id in self.tracks:

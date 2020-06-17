@@ -26,8 +26,8 @@ class Analytics:
         ObjectDetector.init_backend()
         print('[Analytics] Loading acquisition detector model...')
         self.acq_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.ACQUISITION)
-        print('[Analytics] Loading tracking detector model...')
-        self.trk_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.TRACKING)
+        # print('[Analytics] Loading tracking detector model...')
+        # self.trk_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.TRACKING)
         self.tracker = KalmanTracker(self.size, capture_dt)
         
         # reset flags

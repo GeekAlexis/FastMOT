@@ -15,7 +15,6 @@ from analytics import Analytics
 constants
 """
 MSG_LENGTH = 2
-PASSWORD = 'jdyw123'
 PROC_SIZE = (1280, 720)
 
 
