@@ -2,7 +2,7 @@
   <img src="demo.png" width="720" height="405" />
 </p>
 
-- [x] Real-time object detection and tracking for highly constrained embedded systems
+- [x] Real-time detection and tracking for resource-constrained embedded systems
   - Support all classes in the COCO dataset
   - Robust against moderate camera movement
   - Work best on 1280 x 720 input resolution and medium/small objects
