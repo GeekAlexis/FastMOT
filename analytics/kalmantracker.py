@@ -278,6 +278,8 @@ class KalmanTracker:
                 track.age = 0
             track.age += 1
             if tile is None:
+                if track_id not in self.kalman_filters:
+                    use_maha_cost = False
                 track_ids.append(track_id)
                 tracks.append(track)
             else:
