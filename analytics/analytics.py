@@ -7,6 +7,7 @@ from .objectdetector import ObjectDetector
 from .kalmantracker import KalmanTracker
 from .configs import decoder
 
+
 class Analytics:
     class Status(Enum):
         SEARCHING, TARGET_NOT_FOUND, TARGET_ACQUIRED, TARGET_LOST = (i for i in range(4))
@@ -26,8 +27,8 @@ class Analytics:
         ObjectDetector.init_backend()
         print('[Analytics] Loading acquisition detector model...')
         self.acq_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.ACQUISITION)
-        # print('[Analytics] Loading tracking detector model...')
-        # self.trk_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.TRACKING)
+        print('[Analytics] Loading tracking detector model...')
+        self.trk_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.TRACKING)
         self.tracker = KalmanTracker(self.size, capture_dt)
         
         # reset flags
@@ -49,14 +50,14 @@ class Analytics:
             if self.frame_count % self.detector_frame_skip == 0:
                 self.detector.preprocess(frame, self.tracker.tracks, track_id=self.track_id)
                 self.detector.infer_async()
-                # self.tracker.track(frame)
+                self.tracker.track(frame)
                 detections = self.detector.postprocess()
                 self.tracker.update(detections, self.detector.cur_tile, self.detector.tile_overlap, acquire=self.acquire)
             else:
                 self.tracker.track(frame)
 
         if self.enable_drawing:
-            self._draw(frame, detections, debug=True)
+            self._draw(frame, detections, debug=False)
 
         if self.acquire:
             if self.frame_count - self.acquisition_start_frame + 1 == self.acquisition_interval:
@@ -96,11 +97,11 @@ class Analytics:
     def _draw(self, frame, detections, debug=False):
         for track_id, track in self.tracker.tracks.items():
             if self.status == Analytics.Status.TARGET_ACQUIRED and track_id == self.track_id:
-                # track.draw(frame, follow=True, draw_feature_match=debug)
-                track.draw(frame, follow=True, draw_feature_match=True)
+                track.draw(frame, follow=True, draw_feature_match=debug)
+                # track.draw(frame, follow=True, draw_feature_match=True)
             else:
-                # track.draw(frame, draw_feature_match=debug)
-                track.draw(frame, draw_feature_match=True)
+                track.draw(frame, draw_feature_match=debug)
+                # track.draw(frame, draw_feature_match=True)
         if debug:
             [det.draw(frame) for det in detections]
             # self.tracker.flow.draw_bkg_feature_match(frame)

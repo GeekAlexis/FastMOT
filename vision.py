@@ -67,6 +67,7 @@ def main():
 
     sock = None
     mot_log = None
+    analytics = None
     enable_analytics = False
     elapsed_time = 0    
     gui_time = 0

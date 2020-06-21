@@ -270,7 +270,8 @@ def prepare_model(model=InceptionV2, trt_engine_datatype=trt.DataType.FLOAT, bat
         runtime = trt.Runtime(TRT_LOGGER)
 
         # compile model into TensorRT
-        dynamic_graph = model.add_plugin(gs.DynamicGraph(str(model.TF_PATH)))
+        dynamic_graph = gs.DynamicGraph(str(model.TF_PATH))
+        dynamic_graph = model.add_plugin(dynamic_graph)
         uff_model = uff.from_tensorflow(dynamic_graph.as_graph_def(), model.OUTPUT_NAME, output_filename='tmp.uff')
 
         with trt.Builder(TRT_LOGGER) as builder, builder.create_network() as network, trt.UffParser() as parser:

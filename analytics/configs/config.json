@@ -9,13 +9,14 @@
     },
     "Analytics": {
         "acq_detector_frame_skip": 5,
-        "#acq_detector_frame_skip": 1,
+        "#acq_detector_frame_skip": 3,
         "trk_detector_frame_skip": 5,
         "acquisition_interval": 9999,
         "classes": [1, 2, 3, 4, 22, 24],
         "target_classes": [1, 22]
     },
     "KalmanTracker": {
+        "#acquisition_max_age": 16,
         "acquisition_max_age": 3,
         "tracking_max_age": 3,
         "max_association_maha": 4,
@@ -23,7 +24,7 @@
         "min_association_iou": 0.2,
         "min_register_conf": 0.6,
         "num_vertical_bin": 36,
-        "n_init": 3,
+        "n_init": 2,
         "small_size_std_acc": [32, 500],
         "large_size_std_acc": [256, 3000],
         "min_std_cnn": [5, 5],
@@ -40,8 +41,9 @@
     "ObjectDetector": {
         "max_det": 20,
         "batch_size": 8,
+        "#batch_size": 1,
         "tile_overlap": 0.25,
-        "merge_iou_thresh": 0.2,
+        "merge_iou_thresh": 0.15,
         "acquisition": {
             "conf_threshold": 0.5,
             "tiling_grid": [4, 2],

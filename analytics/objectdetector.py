@@ -143,7 +143,7 @@ class ObjectDetector:
                 self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
             
             frame_tile = self.cur_tile.crop(frame)
-            frame_tile = cv2.cvtColor(tile, cv2.COLOR_BGR2RGB)
+            frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
             frame_tile = frame_tile * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
             frame_tile = np.transpose(frame_tile, (2, 0, 1)) # HWC -> CHW
             self.input_batch[-1] = frame_tile.ravel()
@@ -151,7 +151,7 @@ class ObjectDetector:
         np.copyto(self.host_inputs[0], self.input_batch.ravel())
 
     def infer_async(self):
-        self.tic = time.perf_counter() 
+        # self.tic = time.perf_counter() 
         # inference
         cuda.memcpy_htod_async(self.cuda_inputs[0], self.host_inputs[0], self.stream)
         self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
@@ -160,7 +160,7 @@ class ObjectDetector:
 
     def postprocess(self):
         self.stream.synchronize()
-        print(time.perf_counter() - self.tic)
+        # print(time.perf_counter() - self.tic)
         output = self.host_outputs[0]
         detections = []
         for tile_idx in range(self.batch_size):
@@ -188,12 +188,13 @@ class ObjectDetector:
                 merged_det = Detection(det1.bbox, det1.label, det1.conf, det1.tile_id)
                 for j, det2 in enumerate(detections):
                     if j not in merged_det_indices:
-                        if merged_det.tile_id.isdisjoint(det2.tile_id) and merged_det.label == det2.label and iou(merged_det.bbox, det2.bbox) > self.merge_iou_thresh:
-                            merged_det.bbox |= det2.bbox
-                            merged_det.conf = max(merged_det.conf, det2.conf) 
-                            merged_det.tile_id |= det2.tile_id
-                            merged_det_indices.add(i)
-                            merged_det_indices.add(j)
+                        if merged_det.tile_id.isdisjoint(det2.tile_id) and merged_det.label == det2.label:
+                            if merged_det.bbox.contains_rect(det2.bbox) or iou(merged_det.bbox, det2.bbox) > self.merge_iou_thresh:
+                                merged_det.bbox |= det2.bbox
+                                merged_det.conf = max(merged_det.conf, det2.conf) 
+                                merged_det.tile_id |= det2.tile_id
+                                merged_det_indices.add(i)
+                                merged_det_indices.add(j)
                 if i in merged_det_indices:
                     merged_detections.append(merged_det)
         detections = np.delete(detections, list(merged_det_indices))

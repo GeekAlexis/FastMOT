@@ -2,14 +2,21 @@ from pathlib import Path
 import json
 import numpy as np
 import cv2
+import time
+import copyreg
 
 from .utils import Rect
 from .configs import decoder
 
 
+def _pickle_fast_feature_detector(fast):
+    return cv2.FastFeatureDetector_create, (fast.getThreshold(), fast.getNonmaxSuppression(), fast.getType())
+
+
 class Flow:
     with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
         config = json.load(config_file, cls=decoder.decoder)['Flow']
+    # copyreg.pickle(cv2.FastFeatureDetector, _pickle_fast_feature_detector)
 
     def __init__(self, size, estimate_camera_motion=False):
         self.size = size
@@ -42,6 +49,7 @@ class Flow:
         """
         Predict next tracks using optical flow. The function modifies tracks in place.
         """
+        # tic = time.perf_counter()
         all_prev_pts = np.empty((0, 2), np.float32)
         target_begin_idices = []
         target_end_idices = []
@@ -69,7 +77,7 @@ class Flow:
             # scale and batch all target keypoints
             prev_pts = keypoints * self.optflow_scaling
             target_begin_idices.append(len(all_prev_pts))
-            all_prev_pts = np.concatenate((all_prev_pts, prev_pts), axis=0)
+            all_prev_pts = np.vstack((all_prev_pts, prev_pts))
             target_end_idices.append(len(all_prev_pts))
             # zero out track in background mask
             track.bbox.crop(bkg_mask)[:] = 0
@@ -89,17 +97,21 @@ class Flow:
                 print('[Flow] Background registration failed')
                 return None
             bkg_begin_idx = len(all_prev_pts)
-            all_prev_pts = np.concatenate((all_prev_pts, prev_bkg_pts), axis=0)
+            all_prev_pts = np.vstack((all_prev_pts, prev_bkg_pts))
+        # print('feature:', time.perf_counter() - tic)
 
         # level, pyramid = cv2.buildOpticalFlowPyramid(frame_small, self.optflow_params['winSize'], self.optflow_params['maxLevel'])
 
+        # tic = time.perf_counter()
         all_prev_pts = np.float32(all_prev_pts).reshape(-1, 1, 2)
         all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, all_prev_pts, None, **self.optflow_params)
         # print(np.max(err[status==1]))
         with np.errstate(invalid='ignore'):
             status_mask = (status == 1) & (err < self.optflow_err_thresh)
         # status_mask = np.bool_(status)
+        # print('opt flow:', time.perf_counter() - tic)
 
+        # tic = time.perf_counter()
         H_camera = None
         if self.estimate_camera_motion:
             prev_bkg_pts = all_prev_pts[bkg_begin_idx:][status_mask[bkg_begin_idx:]]
@@ -116,7 +128,7 @@ class Flow:
                     print('[Flow] Background registration failed')
                     return None
                 else:
-                    # H_camera = np.concatenate((H_camera, [[0, 0, 1]]), axis=0)
+                    # H_camera = np.vstack((H_camera, [0, 0, 1]))
                     inlier_mask = np.bool_(inlier_mask.ravel())
                     self.prev_bkg_feature_pts = prev_bkg_pts[inlier_mask].reshape(-1, 2)
                     self.bkg_feature_pts = matched_bkg_pts[inlier_mask].reshape(-1, 2)
@@ -159,6 +171,7 @@ class Flow:
             track.conf = inlier_ratio
             # zero out current track in foreground mask
             track.bbox.crop(fg_mask)[:] = 0
+        # print('Postprocess:', time.perf_counter() - tic)
         return H_camera
 
     def draw_bkg_feature_match(self, frame):

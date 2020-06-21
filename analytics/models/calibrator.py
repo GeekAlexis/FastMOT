@@ -47,28 +47,13 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
 
         batch_imgs = np.zeros((self.batch_size, IMG_H*IMG_W*IMG_CH))
         for i in range(self.batch_size):
-
-            # image = Image.open(self.calib_imgs[self.counter + i])
             img = cv2.imread(self.calib_imgs[self.counter + i])
-
-            # Note: Bilinear interpolation used by Pillow is a little bit
-            # different than the one used by Tensorflow, so if network receives
-            # an image that is not 300x300, the network output may differ
-            # from the one output by Tensorflow
             img = cv2.resize(img, (IMG_W, IMG_H))
-            # image_resized = image.resize(
-            #     size=(IMG_H, IMG_W),
-            #     resample=Image.BILINEAR
-            # )
-            # img_np = self._load_image_into_numpy_array(image_resized)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             # HWC -> CHW
             img = img.transpose((2, 0, 1))
             # Normalize to [-1.0, 1.0] interval (expected by model)
             img = (2.0 / 255.0) * img - 1.0
-            # img = img.ravel()
-            # img = np.ascontiguousarray(img)
-
             # add this image to the batch array
             batch_imgs[i,:] = img.ravel()
 
@@ -89,9 +74,3 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         print('writing calibration file')
         with open(self.cache_file, "wb") as f:
             f.write(cache)
-
-    # def _load_image_into_numpy_array(self, image):
-    #     (im_width, im_height) = image.size
-    #     return np.array(image).reshape(
-    #         (im_height, im_width, 3)
-    #     ).astype(np.uint8)
