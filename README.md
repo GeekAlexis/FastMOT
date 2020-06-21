@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="demo.png" width="720" height="405" />
+  <img src="demo.gif" width="720" height="405" />
 </p>
 
 - [x] Real-time detection and tracking for resource-constrained embedded systems
