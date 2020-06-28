@@ -2,18 +2,20 @@ from enum import Enum
 from pathlib import Path
 import json
 import cv2
+import time
 
-from .objectdetector import ObjectDetector
-from .kalmantracker import KalmanTracker
-from .configs import decoder
+from .detector import ObjectDetector
+from .encoder import ObjectEncoder
+from .tracker import KalmanTracker
+from .utils import ConfigDecoder
 
 
 class Analytics:
     class Status(Enum):
         SEARCHING, TARGET_NOT_FOUND, TARGET_ACQUIRED, TARGET_LOST = (i for i in range(4))
     
-    with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
-        config = json.load(config_file, cls=decoder.decoder)['Analytics']
+    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
+        config = json.load(config_file, cls=ConfigDecoder)['Analytics']
 
     def __init__(self, size, capture_dt, enable_drawing=False):
         self.size = size
@@ -21,14 +23,15 @@ class Analytics:
         self.acq_detector_frame_skip = Analytics.config['acq_detector_frame_skip']
         self.trk_detector_frame_skip = Analytics.config['trk_detector_frame_skip']
         self.acquisition_interval = Analytics.config['acquisition_interval']
-        self.classes = Analytics.config['classes'] # person, bicycle, car, elephant, zebra
-        self.target_classes = Analytics.config['target_classes'] # person, elephant
+        self.classes = Analytics.config['classes']
+        self.target_classes = Analytics.config['target_classes']
 
-        ObjectDetector.init_backend()
         print('[Analytics] Loading acquisition detector model...')
         self.acq_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.ACQUISITION)
-        print('[Analytics] Loading tracking detector model...')
-        self.trk_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.TRACKING)
+        # print('[Analytics] Loading tracking detector model...')
+        # self.trk_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.TRACKING)
+        print('[Analytics] Loading encoder model...')
+        self.encoder = ObjectEncoder()
         self.tracker = KalmanTracker(self.size, capture_dt)
         
         # reset flags
@@ -44,20 +47,38 @@ class Analytics:
         detections = []
         if self.frame_count == 0:
             print('\n[Analytics] Acquiring new targets...')
-            detections = self.detector.detect_sync(frame)
-            self.tracker.init(frame, detections)
+            detections = self.detector.detect(frame)
+            embeddings = self.encoder.encode(frame, detections)
+            self.tracker.init(frame, detections, embeddings)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
-                self.detector.preprocess(frame, self.tracker.tracks, track_id=self.track_id)
-                self.detector.infer_async()
-                self.tracker.track(frame)
+                tic = time.perf_counter()
+                self.detector.detect_async(frame, self.tracker.tracks, track_id=self.track_id)
+                print('det_pre', time.perf_counter() - tic)
+                # self.tracker.track(frame, use_flow=True)
+                tic = time.perf_counter()
+                self.tracker.step_flow(frame)
+                print('flow', time.perf_counter() - tic)
+                tic = time.perf_counter()
                 detections = self.detector.postprocess()
-                self.tracker.update(detections, self.detector.cur_tile, self.detector.tile_overlap, acquire=self.acquire)
+                print('det post', time.perf_counter() - tic)
+                tic = time.perf_counter()
+                self.encoder.encode_async(frame, detections)
+                print('encode_pre', time.perf_counter() - tic)
+                tic = time.perf_counter()
+                self.tracker.step_kalman_filter(use_flow=True)
+                print('kalman filter', time.perf_counter() - tic)
+                tic = time.perf_counter()
+                embeddings = self.encoder.postprocess()
+                print('encode_post', time.perf_counter() - tic)
+                tic = time.perf_counter()
+                self.tracker.update(detections, embeddings, self.detector.cur_tile, self.detector.tile_overlap, self.acquire)
+                print('update', time.perf_counter() - tic)
             else:
-                self.tracker.track(frame)
+                self.tracker.track(frame, use_flow=True)
 
         if self.enable_drawing:
-            self._draw(frame, detections, debug=False)
+            self._draw(frame, detections, debug=True)
 
         if self.acquire:
             if self.frame_count - self.acquisition_start_frame + 1 == self.acquisition_interval:

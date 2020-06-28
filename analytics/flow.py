@@ -3,23 +3,17 @@ import json
 import numpy as np
 import cv2
 import time
-import copyreg
 
-from .utils import Rect
-from .configs import decoder
-
-
-def _pickle_fast_feature_detector(fast):
-    return cv2.FastFeatureDetector_create, (fast.getThreshold(), fast.getNonmaxSuppression(), fast.getType())
+from .utils import Rect, ConfigDecoder
 
 
 class Flow:
-    with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
-        config = json.load(config_file, cls=decoder.decoder)['Flow']
-    # copyreg.pickle(cv2.FastFeatureDetector, _pickle_fast_feature_detector)
+    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
+        config = json.load(config_file, cls=ConfigDecoder)['Flow']
 
     def __init__(self, size, estimate_camera_motion=False):
         self.size = size
+        self.track_targets = estimate_camera_motion
         self.estimate_camera_motion = estimate_camera_motion
         self.bkg_feature_scaling = Flow.config['bkg_feature_scaling']
         self.optflow_scaling = Flow.config['optflow_scaling']
@@ -64,7 +58,8 @@ class Flow:
                 target_mask = inside_bbox.crop(bkg_mask)
                 target_area = np.count_nonzero(target_mask)
                 est_min_dist = self._estimate_feature_dist(target_area)
-                keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, minDistance=est_min_dist, **self.gftt_target_feature_params)
+                keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, minDistance=est_min_dist, 
+                                                    **self.gftt_target_feature_params)
                 if keypoints is None or len(keypoints) == 0:
                     del tracks[track_id]
                     # print('[Flow] Target lost (no corners detected): %s' % track)
@@ -83,8 +78,10 @@ class Flow:
             track.bbox.crop(bkg_mask)[:] = 0
 
         if self.estimate_camera_motion:
-            prev_frame_small_bkg = cv2.resize(prev_frame_gray, None, fx=self.bkg_feature_scaling[0], fy=self.bkg_feature_scaling[1])
-            bkg_mask = cv2.resize(bkg_mask, None, fx=self.bkg_feature_scaling[0], fy=self.bkg_feature_scaling[1], interpolation=cv2.INTER_NEAREST)
+            prev_frame_small_bkg = cv2.resize(prev_frame_gray, None, fx=self.bkg_feature_scaling[0], 
+                                            fy=self.bkg_feature_scaling[1])
+            bkg_mask = cv2.resize(bkg_mask, None, fx=self.bkg_feature_scaling[0], fy=self.bkg_feature_scaling[1],
+                                interpolation=cv2.INTER_NEAREST)
             # keypoints = cv2.goodFeaturesToTrack(prev_frame_small_bkg, mask=bkg_mask, **self.gftt_bkg_feature_params)
             keypoints = self.fast_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask)
             if keypoints is not None and len(keypoints) > 0:
@@ -104,7 +101,8 @@ class Flow:
 
         # tic = time.perf_counter()
         all_prev_pts = np.float32(all_prev_pts).reshape(-1, 1, 2)
-        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, all_prev_pts, None, **self.optflow_params)
+        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, all_prev_pts, None, 
+                                                            **self.optflow_params)
         # print(np.max(err[status==1]))
         with np.errstate(invalid='ignore'):
             status_mask = (status == 1) & (err < self.optflow_err_thresh)
@@ -120,7 +118,8 @@ class Flow:
                 prev_bkg_pts = prev_bkg_pts / self.optflow_scaling
                 matched_bkg_pts = matched_bkg_pts /self.optflow_scaling
                 # H_camera, inlier_mask = cv2.estimateAffinePartial2D(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
-                H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+                H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
+                                                            maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
                 if H_camera is None or np.count_nonzero(inlier_mask) < self.min_bkg_inlier_count:
                     tracks.clear()
                     self.bkg_feature_pts = None
@@ -150,7 +149,8 @@ class Flow:
                 del tracks[track_id]
                 # print('[Flow] Target lost (failed to match): %s' % track)
                 continue
-            H_affine, inlier_mask = cv2.estimateAffinePartial2D(prev_pts, matched_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+            H_affine, inlier_mask = cv2.estimateAffinePartial2D(prev_pts, matched_pts, method=cv2.RANSAC, 
+                                                                maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
             if H_affine is None:
                 del tracks[track_id]
                 # print('[Flow] Target lost (no inlier): %s' % track)
@@ -178,7 +178,8 @@ class Flow:
         if self.bkg_feature_pts is not None:
             [cv2.circle(frame, tuple(pt), 1, (0, 0, 255), -1) for pt in np.int_(np.round(self.bkg_feature_pts))]
         if self.prev_bkg_feature_pts is not None:
-            [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in zip(np.int_(np.round(self.prev_bkg_feature_pts)), np.int_(np.round(self.bkg_feature_pts)))]
+            [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in 
+            zip(np.int_(np.round(self.prev_bkg_feature_pts)), np.int_(np.round(self.bkg_feature_pts)))]
     
     def _estimate_feature_dist(self, target_area):
         est_ft_dist = round(np.sqrt(target_area) * self.feature_dist_factor)

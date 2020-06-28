@@ -6,20 +6,16 @@ import pycuda.autoinit
 import cv2
 import numpy as np
 
-# For reading size information from batches
-import struct
-
-IMG_H, IMG_W, IMG_CH = 300, 300, 3
-
 class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
-    def __init__(self, data_dir, cache_file):
+    def __init__(self, model_shape, data_dir, cache_file):
         # Whenever you specify a custom constructor for a TensorRT class,
         # you MUST call the constructor of the parent explicitly.
         trt.IInt8EntropyCalibrator2.__init__(self)
 
+        self.model_shape = model_shape
         self.num_calib_imgs = 100 # the number of images from the dataset to use for calibration
         self.batch_size = 10
-        self.batch_shape = (self.batch_size, IMG_CH, IMG_H, IMG_W)
+        self.batch_shape = (self.batch_size, *self.model_shape)
         self.cache_file = cache_file
 
         calib_imgs = [os.path.join(data_dir, f) for f in os.listdir(data_dir)]
@@ -45,10 +41,10 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         if self.counter % 10 == 0:
             print('Running Batch:', self.counter)
 
-        batch_imgs = np.zeros((self.batch_size, IMG_H*IMG_W*IMG_CH))
+        batch_imgs = np.zeros((self.batch_size, trt.volume(self.model_shape)))
         for i in range(self.batch_size):
             img = cv2.imread(self.calib_imgs[self.counter + i])
-            img = cv2.resize(img, (IMG_W, IMG_H))
+            img = cv2.resize(img, (self.model_shape[2], self.model_shape[1]))
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             # HWC -> CHW
             img = img.transpose((2, 0, 1))

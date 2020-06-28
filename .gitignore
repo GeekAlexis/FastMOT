@@ -128,5 +128,15 @@ dmypy.json
 # Mac temporary files
 .DS_Store
 
-# TensorRT models
+# TensorRT stuff
 .bin
+INT8CacheFile
+
+# video files
+.mp4
+
+# dataset
+VOCdevkit/
+
+# vscode stuff
+.vscode/

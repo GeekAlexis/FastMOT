@@ -5,11 +5,11 @@ import time
 import json
 import cv2
 
-from .configs import decoder
+from .utils import ConfigDecoder
 
 class VideoIO:
-    with open(Path(__file__).parent / 'configs' / 'config.json') as config_file:
-        config = json.load(config_file, cls=decoder.decoder)['VideoIO']
+    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
+        config = json.load(config_file, cls=ConfigDecoder)['VideoIO']
 
     def __init__(self, size, input_path=None, output_path=None, delay=0):
         self.size = size
