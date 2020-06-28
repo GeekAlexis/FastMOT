@@ -129,11 +129,11 @@ dmypy.json
 .DS_Store
 
 # TensorRT stuff
-.bin
+*.bin
 INT8CacheFile
 
 # video files
-.mp4
+*.mp4
 
 # dataset
 VOCdevkit/
