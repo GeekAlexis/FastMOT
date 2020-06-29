@@ -14,7 +14,10 @@ class Detection:
         self.bbox = bbox
         self.label = label
         self.conf = conf
-        self.tile_id = tile_id
+        if isinstance(tile_id, int):
+            self.tile_id = set([tile_id])
+        else:
+            self.tile_id = tile_id
 
     def __repr__(self):
         return "Detection(bbox=%r, label=%r, conf=%r, tile_id=%r)" % (self.bbox, self.label, self.conf, self.tile_id)
@@ -66,7 +69,7 @@ class ObjectDetector:
             self.model = SSDInceptionV2
             self.tile_size = self.model.INPUT_SHAPE[:0:-1]
         else:
-            raise ValueError(f'Invalid detector type; must be either {ObjectDetector.Type.ACQUISITION} or
+            raise ValueError(f'Invalid detector type; must be either {ObjectDetector.Type.ACQUISITION} or \
                              {ObjectDetector.Type.TRACKING}')
         assert self.max_det <= self.model.TOPK
         self.backend = InferenceBackend(self.model, self.batch_size)
@@ -129,8 +132,8 @@ class ObjectDetector:
                     ymin = int(round(det_out[offset + 4] * tile.size[1])) + tile.ymin
                     xmax = int(round(det_out[offset + 5] * tile.size[0])) + tile.xmin
                     ymax = int(round(det_out[offset + 6] * tile.size[1])) + tile.ymin
-                    bbox = Rect(tf_rect=(xmin, ymin, xmax, ymax))
-                    detections.append(Detection(bbox, label, conf, set([tile_idx])))
+                    bbox = Rect(tlbr=(xmin, ymin, xmax, ymax))
+                    detections.append(Detection(bbox, label, conf, tile_idx))
                     # print('[Detector] Detected: %s' % det)
 
         # merge detections across different tiles
@@ -142,7 +145,7 @@ class ObjectDetector:
                 for j, det2 in enumerate(detections):
                     if j not in merged_det_indices:
                         if not det2.tile_id.issubset(merged_det.tile_id) and merged_det.label == det2.label:
-                            if merged_det.bbox.contains_rect(det2.bbox) or iou(merged_det.bbox, det2.bbox) > self.merge_iou_thresh:
+                            if merged_det.bbox.contains_rect(det2.bbox) or merged_det.bbox.iou(det2.bbox) > self.merge_iou_thresh:
                                 merged_det.bbox |= det2.bbox
                                 merged_det.conf = max(merged_det.conf, det2.conf) 
                                 merged_det.tile_id |= det2.tile_id
@@ -151,7 +154,7 @@ class ObjectDetector:
                 if i in merged_det_indices:
                     merged_detections.append(merged_det)
         detections = np.delete(detections, list(merged_det_indices))
-        detections = np.append(detections, merged_detections)
+        detections = np.r_[detections, merged_detections]
         return detections
 
     def detect(self, frame, tracks={}, track_id=None):
@@ -164,7 +167,7 @@ class ObjectDetector:
 
     def get_tiling_region(self):
         assert self.detector_type == ObjectDetector.Type.ACQUISITION and len(self.tiles) > 0
-        return Rect(tf_rect=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
+        return Rect(tlbr=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
 
     def draw_tile(self, frame):
         if self.cur_tile is not None:
@@ -182,6 +185,6 @@ class ObjectDetector:
         assert total_width <= width and total_height <= height, "Frame size not large enough for %dx%d tiles" % self.tiling_grid
         x_offset = width // 2 - total_width // 2
         y_offset = height // 2 - total_height // 2
-        tiles = [Rect(cv_rect=(int(c * step_width + x_offset), int(r * step_height + y_offset), tile_width, tile_height)) for r in
+        tiles = [Rect(tlwh=(int(c * step_width + x_offset), int(r * step_height + y_offset), tile_width, tile_height)) for r in
                 range(self.tiling_grid[1]) for c in range(self.tiling_grid[0])]
         return tiles

@@ -7,7 +7,6 @@ from scipy.optimize import linear_sum_assignment
 from scipy.linalg import solve_triangular
 import numpy as np
 import cv2
-# import mpipe
 import time
 
 from .flow import Flow
@@ -21,19 +20,20 @@ class Track:
         self.bbox = bbox
         self.init_bbox = bbox
         self.track_id = track_id
+
         self.age = 0
         self.conf = 1
-        self.feature_pts = None
-        self.prev_feature_pts = None
         self.frames_since_acquired = 0
         self.features = []
         self.budget = 10
+        self.feature_pts = None
+        self.prev_feature_pts = None
 
     def __repr__(self):
-        return "Track(label=%r, bbox=%r, track_id=%r, embedding=%r)" % (self.label, self.bbox, self.track_id)
+        return "Track(label=%r, bbox=%r, track_id=%r)" % (self.label, self.bbox, self.track_id)
 
     def __str__(self):
-        return "%s ID%d at %s" % (COCO_LABELS[self.label], self.track_id, self.bbox.cv_rect())
+        return "%s ID%d at %s" % (COCO_LABELS[self.label], self.track_id, self.bbox.tlwh())
 
     def add_embedding(self, embedding):
         self.features.append(embedding)
@@ -156,7 +156,7 @@ class KalmanTracker:
                     if use_flow and track_id in self.flow_tracks: # and track.age == 0
                         flow_track = self.flow_tracks[track_id]
                         occlusion_metric = 0.3 / track.age if track.age > 0 else 1
-                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(flow_track.bbox, 
+                        self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(track.bbox, 
                                                                                                     KalmanTracker.Meas.FLOW, occlusion_metric) # flow_track.conf)
                         flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
                         next_state = self.kalman_filters[track_id].correct(flow_meas)
@@ -168,7 +168,7 @@ class KalmanTracker:
 
                     # check for out of frame case
                     next_bbox = self._convert_state_to_bbox(next_state)
-                    inside_bbox = next_bbox & Rect(cv_rect=(0, 0, self.size[0], self.size[1]))
+                    inside_bbox = next_bbox & Rect(tlwh=(0, 0, self.size[0], self.size[1]))
                     if inside_bbox is not None:
                         track.bbox = next_bbox
                         self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
@@ -241,7 +241,7 @@ class KalmanTracker:
 
                     # check for out of frame case
                     next_bbox = self._convert_state_to_bbox(next_state)
-                    inside_bbox = next_bbox & Rect(cv_rect=(0, 0, self.size[0], self.size[1]))
+                    inside_bbox = next_bbox & Rect(tlwh=(0, 0, self.size[0], self.size[1]))
                     if inside_bbox is not None:
                         track.bbox = next_bbox
                         self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
@@ -255,7 +255,7 @@ class KalmanTracker:
             self.kalman_filters.clear()
         # print('kalman filter:', time.perf_counter() - tic)
 
-    def init(self, frame, detections, embeddings=None):
+    def initiate(self, frame, detections, embeddings=None):
         """
         Initialize the tracker from detections in the first frame
         """
@@ -282,57 +282,29 @@ class KalmanTracker:
             # handle single batch size differently
             sx = sy = 1 - overlap
             scaled_tile = tile.scale(sx, sy)
-            excluded_tracks = []
 
-        use_motion_cost = len(self.tracks) == len(self.kalman_filters)
+        excluded_track_ids = []
         if tile is None:
             track_ids = [*self.tracks]
-            tracks = list(self.tracks.values())
         else:
-            tracks, track_ids = [], []
+            track_ids = []
             for track_id, track in self.tracks.items():
                 if self.acquire != acquire:
                     # reset age when mode toggles
                     track.age = -1
                 # filter out tracks and detections not in tile
                 if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox): 
-                    # if track_id not in self.kalman_filters:
-                    #     use_motion_cost = False
                     track_ids.append(track_id)
-                    tracks.append(track)
                 elif iou(track.bbox, tile) > 0:
-                    excluded_tracks.append(track)
+                    excluded_track_ids.append(track_id)
         self.acquire = acquire
 
         tic = time.perf_counter()
         # compute optimal assignment
         all_det_indices = list(range(len(detections)))
         unmatched_det_indices = all_det_indices
-        if len(detections) > 0 and len(tracks) > 0:
-                cost = np.zeros((len(tracks), len(detections)), dtype=np.float32)
-                gate = np.zeros((len(tracks), len(detections)), dtype=bool)
-                if use_motion_cost:
-                    motion_cost = np.float32([[self._maha_dist(track_id, det) for det in detections] for track_id in track_ids])
-                    # print(np.max(motion_cost))
-                    cost += (self.motion_cost_weight / self.max_motion_cost) * motion_cost 
-                    gate |= (motion_cost > self.max_motion_cost)
-                if embeddings is not None:
-                    appearance_cost = np.float32([[self._appearance_dist(track_id, embedding) for embedding in embeddings] for track_id in track_ids])
-                    cost += ((1 - self.motion_cost_weight) / self.max_appearance_cost) * appearance_cost
-                    # print('appearance cost', appearance_cost)
-                    gate |= (appearance_cost > self.max_appearance_cost)
-                if not use_motion_cost > self.max_motion_cost and embeddings is None:
-                    iou_mat = np.float32([[iou(track.bbox, det.bbox) for det in detections] for track in tracks])
-                    cost -= iou_mat
-                    gate |= (iou_mat < self.min_association_iou)
-                # cost = self.motion_cost_weight * motion_cost + (1 - self.motion_cost_weight) * appearance_cost + (1 - iou_mat)
-                # make sure associated pair has the same class label
-                track_labels = np.array([[track.label] for track in tracks])
-                det_labels = np.array([det.label for det in detections])
-                gate |= (track_labels != det_labels)
-                cost[gate] = KalmanTracker.INF_COST
-                # print('cost', cost)
-
+        if len(detections) > 0 and len(track_ids) > 0:
+                cost = self._compute_cost_matrix(track_ids, detections, embeddings)
                 print('before_matching', time.perf_counter() - tic)
                 track_indices, det_indices = linear_sum_assignment(cost)
                 unmatched_det_indices = list(set(all_det_indices) - set(det_indices))
@@ -341,13 +313,13 @@ class KalmanTracker:
                     assert(cost[track_idx, det_idx] <= KalmanTracker.INF_COST)
                     if cost[track_idx, det_idx] < KalmanTracker.INF_COST:
                         if track_id in self.kalman_filters:
-                            self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(detections[det_idx].bbox, 
+                            self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(self.tracks[track_id].bbox, 
                                                                                                     KalmanTracker.Meas.CNN)
                             det_meas = self._convert_bbox_to_meas(detections[det_idx].bbox)
                             next_state = self.kalman_filters[track_id].correct(det_meas)
                             self._clip_state(track_id)
                             next_bbox = self._convert_state_to_bbox(next_state)
-                            inside_bbox = next_bbox & Rect(cv_rect=(0, 0, self.size[0], self.size[1]))
+                            inside_bbox = next_bbox & Rect(tlwh=(0, 0, self.size[0], self.size[1]))
                             if inside_bbox is not None:
                                 self.tracks[track_id].bbox = next_bbox
                                 self.tracks[track_id].age = -1
@@ -363,17 +335,16 @@ class KalmanTracker:
                             self.tracks[track_id].age = -1
                     else:
                         unmatched_det_indices.append(det_idx)
-        print('association', time.perf_counter() - tic)
+        # print('association', time.perf_counter() - tic)
     
         # register new detections
         for det_idx in unmatched_det_indices:
             if detections[det_idx].conf > self.min_register_conf:
                 register = True
-                if tile is not None:
-                    for track in excluded_tracks:
-                        if detections[det_idx].label == track.label and iou(detections[det_idx].bbox, track.bbox) > 0.1:
-                            register = False
-                            break
+                for track_id in excluded_track_ids:
+                    if detections[det_idx].label == track.label and detections[det_idx].bbox.iou(self.tracks[track_id].bbox) > 0.1:
+                        register = False
+                        break
                 if register:
                     new_track = Track(detections[det_idx].label, detections[det_idx].bbox, self.new_track_id)
                     if embeddings is not None:
@@ -431,7 +402,7 @@ class KalmanTracker:
         
         center_vel = (np.asarray(cur_bbox.center()) - np.asarray(init_bbox.center())) / (self.dt * self.n_init)
         kalman_filter.statePre = np.zeros((8, 1), dtype=np.float32)
-        kalman_filter.statePre[:, 0] = np.r_[cur_bbox.tf_rect(), center_vel, center_vel]
+        kalman_filter.statePre[:, 0] = np.r_[cur_bbox.tlbr(), center_vel, center_vel]
         kalman_filter.statePost = np.empty_like(kalman_filter.statePre, dtype=np.float32)
         np.copyto(kalman_filter.statePost, kalman_filter.statePre)
 
@@ -450,10 +421,10 @@ class KalmanTracker:
         return kalman_filter
         
     def _convert_bbox_to_meas(self, bbox):
-        return np.float32(bbox.tf_rect()).reshape(4, 1)
+        return np.float32(bbox.tlbr()).reshape(4, 1)
 
     def _convert_state_to_bbox(self, state):
-        return Rect(tf_rect=np.int_(np.round(state[:4, 0])))
+        return Rect(tlbr=np.int_(np.round(state[:4, 0])))
 
     def _compute_meas_cov(self, bbox, meas_type, conf=1.0):
         width, height = bbox.size
@@ -481,15 +452,7 @@ class KalmanTracker:
         bbox = self._convert_state_to_bbox(kalman_filter.statePost)
         width = max(self.min_size, bbox.size[0])
         height = max(self.min_size, bbox.size[1])
-        kalman_filter.statePost[:4, 0] = bbox.resize((width, height)).tf_rect()
-
-    # def _clip_state(self, kalman_filter):
-    #     kalman_filter.statePost[4:, 0] = np.clip(kalman_filter.statePost[4:, 0], -self.max_vel, self.max_vel)
-    #     bbox = self._convert_state_to_bbox(kalman_filter.statePost)
-    #     width = max(self.min_size, bbox.size[0])
-    #     height = max(self.min_size, bbox.size[1])
-    #     kalman_filter.statePost[:4, 0] = bbox.resize((width, height)).tf_rect()
-    #     return kalman_filter
+        kalman_filter.statePost[:4, 0] = bbox.resize((width, height)).tlbr()
 
     # def _maha_dist(self, track_id, det):
     #     kalman_filter = self.kalman_filters[track_id]
@@ -512,7 +475,7 @@ class KalmanTracker:
     def _warp_bbox(self, bbox, H_camera):
         corners = np.float32(bbox.corners()).reshape(4, 1, 2)
         warped_corners = cv2.perspectiveTransform(corners, H_camera)
-        return Rect(cv_rect=cv2.boundingRect(warped_corners))
+        return Rect(tlwh=cv2.boundingRect(warped_corners))
 
     def _warp_kalman_filter(self, track_id, H_camera):
         kalman_filter = self.kalman_filters[track_id]
@@ -546,10 +509,44 @@ class KalmanTracker:
                 kalman_filter.errorCovPost[i:i + 2, j:j + 2] = \
                     np.linalg.multi_dot([grad_left, kalman_filter.errorCovPost[i:i + 2, j:j + 2], grad_right.T])
 
-    def _compute_cost_matrix(self, track_ids, detections, embeddings):
-        cost = np.zeros((len(tracks), len(detections)), dtype=np.float32)
+    def _compute_cost_matrix(self, track_ids, detections, embeddings=None):
+        iou_only = False
+        use_motion_cost = False
+        if len(self.tracks) == len(self.kalman_filters):
+            # only use motion cost if all tracks are initialized
+            use_motion_cost = True
+            measurement = np.concatenate([self._convert_bbox_to_meas(det.bbox) for det in detections], axis=1)
+        elif embeddings is None:
+            iou_only = True
+            candidate_bbox = np.array([det.bbox.tlbr_wh() for det in detections])
+        
+        cost = np.zeros((len(track_ids), len(detections)))
+        gate = np.zeros((len(track_ids), len(detections)), dtype=bool)
+        for i, track_id in enumerate(track_ids):
+            if iou_only:
+                track_bbox = self.tracks[track_id].bbox.tlbr_wh()
+                iou_cost = iou(track_bbox, candidate_bbox)
+                cost[i, :] = -iou_cost
+                gate[i, :] = iou_cost < self.min_association_iou
+            else:
+                if use_motion_cost:
+                    motion_cost = self._motion_distance(track_id, measurement)
+                    cost[i, :] += (self.motion_cost_weight / self.max_motion_cost) * motion_cost
+                    gate[i, :] |= motion_cost > self.max_motion_cost
+                if embeddings is not None:
+                    appearance_cost = self._feature_distance(track_id, embeddings)
+                    cost[i, :] += ((1 - self.motion_cost_weight) / self.max_appearance_cost) * appearance_cost
+                    gate[i, :] |= appearance_cost > self.max_appearance_cost
+        
+        # make sure associated pair has the same class label
+        track_labels = np.array([[self.tracks[track_id].label] for track_id in track_ids])
+        det_labels = np.array([det.label for det in detections])
+        gate |= (track_labels != det_labels)
+        # gate cost matrix
+        cost[gate] = KalmanTracker.INF_COST
+        return cost
 
-    def _motion_dist(self, track_id, detections):
+    def _motion_distance(self, track_id, measurement):
         kalman_filter = self.kalman_filters[track_id]
         track = self.tracks[track_id]
 
@@ -557,40 +554,11 @@ class KalmanTracker:
         projected_mean = self.meas_mat @ kalman_filter.statePost
         projected_cov = np.linalg.multi_dot([self.meas_mat, kalman_filter.errorCovPost, self.meas_mat.T])
 
-        # compute innovation and innovation covariance
-        measurement = np.concatenate([self._convert_bbox_to_meas(det.bbox) for det in detections], axis=1)
+        # compute innovation covariance
         meas_cov = self._compute_meas_cov(track.bbox, KalmanTracker.Meas.CNN)
-        innovation = measurement - projected_mean
         innovation_cov = meas_cov + projected_cov
-        return self._mahalanobis_dist(innovation, innovation_cov)
+        return mahalanobis_dist(measurement, projected_mean, innovation_cov)
 
-    def _feature_dist(self, track_id, embeddings):
+    def _feature_distance(self, track_id, embeddings):
         track = self.tracks[track_id]
-        return self._euclidean_dist(track.features, embeddings).min(axis=0)
-
-    def _mahalanobis_dist(self, mean, cov):
-        L = np.linalg.cholesky(cov)
-        y = solve_triangular(L, mean, lower=True, overwrite_b=True, check_finite=False)
-        return np.sum(y**2, axis=0)
-
-    def _euclidean_dist(self, x, y):
-        """Compute pair-wise squared distance between points in `x` and `y`.
-        Parameters
-        ----------
-        x : array_like
-            An NxM matrix of N samples of dimensionality M.
-        y : array_like
-            An LxM matrix of L samples of dimensionality M.
-        Returns
-        -------
-        ndarray
-            Returns a matrix of size len(x), len(y) such that element (i, j)
-            contains the squared distance between `x[i]` and `y[j]`.
-        """
-        x, y = np.asarray(x), np.asarray(y)
-        if len(x) == 0 or len(y) == 0:
-            return np.zeros((len(x), len(y)))
-        xx, yy = np.square(x).sum(axis=1), np.square(y).sum(axis=1)
-        squred_l2 = -2 * x @ y.T + xx[:, np.newaxis] + yy[np.newaxis, :]
-        np.clip(squred_l2, 0, float(np.inf), out=squred_l2)
-        return squred_l2
+        return euclidean_dist(track.features, embeddings).min(axis=0)

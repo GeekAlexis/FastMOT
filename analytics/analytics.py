@@ -5,7 +5,7 @@ import cv2
 import time
 
 from .detector import ObjectDetector
-from .encoder import ObjectEncoder
+from .encoder import ImageEncoder
 from .tracker import KalmanTracker
 from .utils import ConfigDecoder
 
@@ -31,7 +31,7 @@ class Analytics:
         # print('[Analytics] Loading tracking detector model...')
         # self.trk_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.TRACKING)
         print('[Analytics] Loading encoder model...')
-        self.encoder = ObjectEncoder()
+        self.encoder = ImageEncoder()
         self.tracker = KalmanTracker(self.size, capture_dt)
         
         # reset flags
@@ -49,31 +49,31 @@ class Analytics:
             print('\n[Analytics] Acquiring new targets...')
             detections = self.detector.detect(frame)
             embeddings = self.encoder.encode(frame, detections)
-            self.tracker.init(frame, detections, embeddings)
+            self.tracker.initiate(frame, detections, embeddings)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
-                tic = time.perf_counter()
+                # tic = time.perf_counter()
                 self.detector.detect_async(frame, self.tracker.tracks, track_id=self.track_id)
-                print('det_pre', time.perf_counter() - tic)
+                # print('det_pre', time.perf_counter() - tic)
                 # self.tracker.track(frame, use_flow=True)
-                tic = time.perf_counter()
+                # tic = time.perf_counter()
                 self.tracker.step_flow(frame)
-                print('flow', time.perf_counter() - tic)
-                tic = time.perf_counter()
+                # print('flow', time.perf_counter() - tic)
+                # tic = time.perf_counter()
                 detections = self.detector.postprocess()
-                print('det post', time.perf_counter() - tic)
-                tic = time.perf_counter()
+                # print('det post', time.perf_counter() - tic)
+                # tic = time.perf_counter()
                 self.encoder.encode_async(frame, detections)
-                print('encode_pre', time.perf_counter() - tic)
-                tic = time.perf_counter()
+                # print('encode_pre', time.perf_counter() - tic)
+                # tic = time.perf_counter()
                 self.tracker.step_kalman_filter(use_flow=True)
-                print('kalman filter', time.perf_counter() - tic)
-                tic = time.perf_counter()
+                # print('kalman filter', time.perf_counter() - tic)
+                # tic = time.perf_counter()
                 embeddings = self.encoder.postprocess()
-                print('encode_post', time.perf_counter() - tic)
-                tic = time.perf_counter()
+                # print('encode_post', time.perf_counter() - tic)
+                # tic = time.perf_counter()
                 self.tracker.update(detections, embeddings, self.detector.cur_tile, self.detector.tile_overlap, self.acquire)
-                print('update', time.perf_counter() - tic)
+                # print('update', time.perf_counter() - tic)
             else:
                 self.tracker.track(frame, use_flow=True)
 

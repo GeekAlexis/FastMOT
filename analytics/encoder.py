@@ -6,7 +6,7 @@ from .utils import *
 from .models import *
 
 
-class ObjectEncoder:
+class ImageEncoder:
     def __init__(self):
         # initialize parameters
         self.model = OSNet
