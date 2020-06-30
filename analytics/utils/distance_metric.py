@@ -46,7 +46,6 @@ def euclidean_dist(x, y):
         return np.zeros((len(x), len(y)))
     xx, yy = np.square(x).sum(axis=1), np.square(y).sum(axis=1)
     squred_l2 = -2 * x @ y.T + xx[:, np.newaxis] + yy[np.newaxis, :]
-    np.clip(squred_l2, 0, float(np.inf), out=squred_l2)
     return squred_l2
 
 

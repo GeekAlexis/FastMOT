@@ -12,7 +12,7 @@ class ImageEncoder:
         self.model = OSNet
         self.batch_size = 32
         self.backend = InferenceBackend(self.model, self.batch_size)
-        self.input_batch = np.zeros((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
+        self.input_batch = np.empty((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
         # self.pool = ThreadPool(processes=4)
 
     def encode(self, frame, detections):

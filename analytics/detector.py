@@ -73,7 +73,7 @@ class ObjectDetector:
                              {ObjectDetector.Type.TRACKING}')
         assert self.max_det <= self.model.TOPK
         self.backend = InferenceBackend(self.model, self.batch_size)
-        self.input_batch = np.zeros((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
+        self.input_batch = np.empty((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
     
     def preprocess(self, frame, tracks={}, track_id=None):
         if self.batch_size > 1:

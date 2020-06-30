@@ -1,10 +1,5 @@
 from pathlib import Path
-import tensorflow as tf
-import graphsurgeon as gs
 import tensorrt as trt
-import uff
-
-from . import calibrator
 
 
 class SSD:
@@ -22,6 +17,8 @@ class SSD:
 
     @classmethod
     def build_engine(cls, trt_logger, batch_size=1, calib_dataset=Path(__file__).parent / 'VOCdevkit' / 'VOC2007' / 'JPEGImages'):
+        from . import calibrator
+        
         assert batch_size > 0
         # compile model into TensorRT
         dynamic_graph = gs.DynamicGraph(str(cls.TF_PATH))
@@ -70,6 +67,10 @@ class SSDMobileNetV1(SSD):
 
     @classmethod
     def add_plugin(cls, graph):
+        import tensorflow as tf
+        import graphsurgeon as gs
+        import uff
+
         all_assert_nodes = graph.find_nodes_by_op("Assert")
         graph.remove(all_assert_nodes, remove_exclusive_dependencies=True)
         all_identity_nodes = graph.find_nodes_by_op("Identity")
@@ -166,6 +167,10 @@ class SSDMobileNetV2(SSD):
 
     @classmethod
     def add_plugin(cls, graph):
+        import tensorflow as tf
+        import graphsurgeon as gs
+        import uff
+
         all_assert_nodes = graph.find_nodes_by_op("Assert")
         graph.remove(all_assert_nodes, remove_exclusive_dependencies=True)
         all_identity_nodes = graph.find_nodes_by_op("Identity")
@@ -261,6 +266,10 @@ class SSDInceptionV2(SSD):
 
     @classmethod
     def add_plugin(cls, graph):
+        import tensorflow as tf
+        import graphsurgeon as gs
+        import uff
+
         all_assert_nodes = graph.find_nodes_by_op("Assert")
         graph.remove(all_assert_nodes, remove_exclusive_dependencies=True)
         all_identity_nodes = graph.find_nodes_by_op("Identity")
