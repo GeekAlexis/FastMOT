@@ -1,6 +1,5 @@
 from enum import Enum
 from pathlib import Path
-from copy import deepcopy
 from collections import OrderedDict
 import json
 from scipy.optimize import linear_sum_assignment
@@ -9,51 +8,9 @@ import cv2
 from multiprocessing.pool import ThreadPool
 import time
 
+from .track import Track
 from .flow import Flow
-from .models import COCO_LABELS
-from .utils import *
-
-
-class Track:
-    def __init__(self, label, bbox, track_id):
-        self.label = label
-        self.bbox = bbox
-        self.init_bbox = bbox
-        self.track_id = track_id
-
-        self.age = 0
-        self.frames_since_acquired = 0
-        self.features = []
-        self.budget = 10
-        self.feature_pts = None
-        self.prev_feature_pts = None
-
-    def __repr__(self):
-        return "Track(label=%r, bbox=%r, track_id=%r)" % (self.label, self.bbox, self.track_id)
-
-    def __str__(self):
-        return "%s ID%d at %s" % (COCO_LABELS[self.label], self.track_id, self.bbox.tlwh())
-
-    def add_embedding(self, embedding):
-        self.features.append(embedding)
-        self.features = self.features[-self.budget:]
-
-    def draw(self, frame, follow=False, draw_feature_match=False):
-        bbox_color = (127, 255, 0) if follow else (0, 165, 255)
-        text_color = (143, 48, 0)
-        # text = "%s%d" % (COCO_LABELS[self.label], self.track_id) 
-        text = str(self.track_id)
-        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
-        cv2.rectangle(frame, self.bbox.tl(), self.bbox.br(), bbox_color, 2)
-        cv2.rectangle(frame, self.bbox.tl(), (self.bbox.xmin + text_width - 1,
-                        self.bbox.ymin - text_height + 1), bbox_color, cv2.FILLED)
-        cv2.putText(frame, text, self.bbox.tl(), cv2.FONT_HERSHEY_SIMPLEX, 1, text_color, 2, cv2.LINE_AA)
-        if draw_feature_match:
-            if self.feature_pts is not None:
-                [cv2.circle(frame, tuple(pt), 1, (0, 255, 255), -1) for pt in np.int_(np.round(self.feature_pts))]
-                if self.prev_feature_pts is not None:
-                    [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 255, 255), 1, cv2.LINE_AA) for pt1, pt2 in 
-                    zip(np.int_(np.round(self.prev_feature_pts)), np.int_(np.round(self.feature_pts)))]        
+from .utils import * 
 
 
 class KalmanTracker:
@@ -118,11 +75,10 @@ class KalmanTracker:
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         frame_small = cv2.resize(frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
         self.tracks = OrderedDict(sorted(self.tracks.items(), key=self._compare_dist, reverse=True))
-        self.flow_tracks = deepcopy(self.tracks)
         print('gray and sort:', time.perf_counter() - tic)
 
         # tic = time.perf_counter()
-        self.H_camera = self.flow.predict(self.flow_tracks, self.prev_frame_gray, self.prev_frame_small, frame_small)
+        self.flow_tracks, self.H_camera = self.flow.predict(self.tracks, self.prev_frame_gray, self.prev_frame_small, frame_small)
         if self.H_camera is None:
             # clear tracks when camera motion estimation failed
             self.tracks.clear()
@@ -132,52 +88,6 @@ class KalmanTracker:
         self.prev_frame_small = frame_small
         # self.prev_pyramid = pyramid
         # print('opt flow:', time.perf_counter() - tic)
-
-    def step_kalman_filter_worker(self, track_id):
-        track = self.tracks[track_id]
-        track.frames_since_acquired += 1
-        if track.frames_since_acquired <= self.n_init:
-            if track_id in self.flow_tracks:
-                flow_track = self.flow_tracks[track_id]
-                if track.frames_since_acquired == self.n_init:
-                    # initialize kalman filter
-                    self.kalman_filters[track_id] = self._create_kalman_filter(track.init_bbox, flow_track.bbox)
-                else:
-                    track.init_bbox = self._warp_bbox(track.init_bbox, self.H_camera)
-                    track.bbox = flow_track.bbox
-                    track.feature_pts = flow_track.feature_pts
-                    track.prev_feature_pts = flow_track.prev_feature_pts
-            else:
-                print('[Tracker] Target lost (init): %s' % track)
-                del self.tracks[track_id]
-        else:
-            # track using kalman filter and flow measurement
-            self._warp_kalman_filter(track_id, self.H_camera)
-            next_state = self.kalman_filters[track_id].predict()
-            # self._clip_state(track_id)
-            if track_id in self.flow_tracks:
-                flow_track = self.flow_tracks[track_id]
-                conf = 0.3 / track.age if track.age > 0 else 1
-                self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(track.bbox, 
-                                                                                            KalmanTracker.Meas.FLOW, conf)
-                flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
-                next_state = self.kalman_filters[track_id].correct(flow_meas)
-                # self._clip_state(track_id)
-                track.feature_pts = flow_track.feature_pts
-                track.prev_feature_pts = flow_track.prev_feature_pts
-            else:
-                track.feature_pts = None
-
-            # check for out of frame case
-            next_bbox = self._convert_state_to_bbox(next_state)
-            inside_bbox = next_bbox & Rect(tlwh=(0, 0, self.size[0], self.size[1]))
-            if inside_bbox is not None:
-                track.bbox = next_bbox
-                self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
-            else:
-                print('[Tracker] Target lost (outside frame): %s' % track)
-                del self.tracks[track_id]
-                del self.kalman_filters[track_id]
 
     def step_kalman_filter(self, use_flow=True):
         # self.pool.map(self.step_kalman_filter_worker, self.tracks.keys())
@@ -190,10 +100,9 @@ class KalmanTracker:
                         # initialize kalman filter
                         self.kalman_filters[track_id] = self._create_kalman_filter(track.init_bbox, flow_track.bbox)
                     else:
-                        track.init_bbox = self._warp_bbox(track.init_bbox, self.H_camera)
+                        track.init_bbox = track.init_bbox.warp(self.H_camera)
+                        # self._warp_bbox(track.init_bbox, self.H_camera)
                         track.bbox = flow_track.bbox
-                        track.feature_pts = flow_track.feature_pts
-                        track.prev_feature_pts = flow_track.prev_feature_pts
                 else:
                     print('[Tracker] Target lost (init): %s' % track)
                     del self.tracks[track_id]
@@ -210,14 +119,12 @@ class KalmanTracker:
                     flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
                     next_state = self.kalman_filters[track_id].correct(flow_meas)
                     # self._clip_state(track_id)
-                    track.feature_pts = flow_track.feature_pts
-                    track.prev_feature_pts = flow_track.prev_feature_pts
-                else:
-                    track.feature_pts = None
+                # else:
+                #     track.feature_pts = None
 
                 # check for out of frame case
                 next_bbox = self._convert_state_to_bbox(next_state)
-                inside_bbox = next_bbox & Rect(tlwh=(0, 0, self.size[0], self.size[1]))
+                inside_bbox = next_bbox & Rect(tlwh=(0, 0, *self.size))
                 if inside_bbox is not None:
                     track.bbox = next_bbox
                     self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
@@ -237,11 +144,10 @@ class KalmanTracker:
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         frame_small = cv2.resize(frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
         self.tracks = OrderedDict(sorted(self.tracks.items(), key=self._compare_dist, reverse=True))
-        flow_tracks = deepcopy(self.tracks)
         # print('gray and sort:', time.perf_counter() - tic)
 
         # tic = time.perf_counter()
-        H_camera = self.flow.predict(flow_tracks, self.prev_frame_gray, self.prev_frame_small, frame_small)
+        flow_tracks, H_camera = self.flow.predict(self.tracks, self.prev_frame_gray, self.prev_frame_small, frame_small)
         if H_camera is None:
             # clear tracks when camera motion estimation failed
             self.tracks.clear()
@@ -262,10 +168,9 @@ class KalmanTracker:
                         # initialize kalman filter
                         self.kalman_filters[track_id] = self._create_kalman_filter(track.init_bbox, flow_track.bbox)
                     else:
-                        track.init_bbox = self._warp_bbox(track.init_bbox, H_camera)
+                        track.init_bbox = track.init_bbox.warp(H_camera)
+                        # track.init_bbox = self._warp_bbox(track.init_bbox, H_camera)
                         track.bbox = flow_track.bbox
-                        track.feature_pts = flow_track.feature_pts
-                        track.prev_feature_pts = flow_track.prev_feature_pts
                 else:
                     print('[Tracker] Target lost (init): %s' % track)
                     del self.tracks[track_id]
@@ -282,14 +187,12 @@ class KalmanTracker:
                     flow_meas = self._convert_bbox_to_meas(flow_track.bbox)
                     next_state = self.kalman_filters[track_id].correct(flow_meas)
                     # self._clip_state(track_id)
-                    track.feature_pts = flow_track.feature_pts
-                    track.prev_feature_pts = flow_track.prev_feature_pts
-                else:
-                    track.feature_pts = None
+                # else:
+                #     track.feature_pts = None
 
                 # check for out of frame case
                 next_bbox = self._convert_state_to_bbox(next_state)
-                inside_bbox = next_bbox & Rect(tlwh=(0, 0, self.size[0], self.size[1]))
+                inside_bbox = next_bbox & Rect(tlwh=(0, 0, *self.size))
                 if inside_bbox is not None:
                     track.bbox = next_bbox
                     self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
@@ -349,7 +252,7 @@ class KalmanTracker:
         unmatched_det_indices = all_det_indices
         if len(detections) > 0 and len(track_ids) > 0:
                 cost = self._compute_cost_matrix(track_ids, detections, embeddings)
-                print('before_matching', time.perf_counter() - tic)
+                print('BEFORE_MATCHING', time.perf_counter() - tic)
                 track_indices, det_indices = linear_sum_assignment(cost)
                 unmatched_det_indices = list(set(all_det_indices) - set(det_indices))
                 for track_idx, det_idx in zip(track_indices, det_indices):
@@ -357,13 +260,13 @@ class KalmanTracker:
                     assert(cost[track_idx, det_idx] <= KalmanTracker.INF_COST)
                     if cost[track_idx, det_idx] < KalmanTracker.INF_COST:
                         if track_id in self.kalman_filters:
-                            self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(self.tracks[track_id].bbox, 
-                                                                                                    KalmanTracker.Meas.CNN)
+                            self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(self.tracks[track_id].bbox,
+                                                                                                        KalmanTracker.Meas.CNN)
                             det_meas = self._convert_bbox_to_meas(detections[det_idx].bbox)
                             next_state = self.kalman_filters[track_id].correct(det_meas)
                             # self._clip_state(track_id)
                             next_bbox = self._convert_state_to_bbox(next_state)
-                            inside_bbox = next_bbox & Rect(tlwh=(0, 0, self.size[0], self.size[1]))
+                            inside_bbox = next_bbox & Rect(tlwh=(0, 0, *self.size))
                             if inside_bbox is not None:
                                 self.tracks[track_id].bbox = next_bbox
                                 self.tracks[track_id].age = -1
@@ -516,10 +419,10 @@ class KalmanTracker:
     #     x = solve_triangular(L, innovation, lower=True, overwrite_b=True, check_finite=False)
     #     return np.sqrt(np.sum(x**2))
 
-    def _warp_bbox(self, bbox, H_camera):
-        corners = np.float32(bbox.corners()).reshape(4, 1, 2)
-        warped_corners = cv2.perspectiveTransform(corners, H_camera)
-        return Rect(tlwh=cv2.boundingRect(warped_corners))
+    # def _warp_bbox(self, bbox, H_camera):
+    #     corners = np.float32(bbox.corners()).reshape(4, 1, 2)
+    #     warped_corners = cv2.perspectiveTransform(corners, H_camera)
+    #     return Rect(tlwh=cv2.boundingRect(warped_corners))
 
     def _warp_kalman_filter(self, track_id, H_camera):
         kalman_filter = self.kalman_filters[track_id]
@@ -540,7 +443,8 @@ class KalmanTracker:
         grad_br = (tmp * A - np.outer(A @ pos_br + t, v)) / tmp**2
 
         # warp state
-        warped_pos = cv2.perspectiveTransform(np.stack([pos_tl[np.newaxis, :], pos_br[np.newaxis, :]]), H_camera)
+        warped_pos = perspectiveTransform(np.stack([pos_tl, pos_br]) , H_camera)
+        # warped_pos = cv2.perspectiveTransform(np.stack([pos_tl[np.newaxis, :], pos_br[np.newaxis, :]]), H_camera)
         kalman_filter.statePost[:4, 0] = warped_pos.ravel()
         kalman_filter.statePost[4:6, 0] = grad_tl @ vel_tl
         kalman_filter.statePost[6:, 0] = grad_br @ vel_br
@@ -571,26 +475,26 @@ class KalmanTracker:
         # make sure associated pair has the same class label
         track_labels = np.array([self.tracks[track_id].label for track_id in track_ids])
         det_labels = np.array([det.label for det in detections])
-        diff_label_mask = track_labels.reshape(-1, 1) != det_labels
+        diff_label_mask = (track_labels.reshape(-1, 1) != det_labels)
 
         if iou_only:
             for i, track_id in enumerate(track_ids):
                 track_bbox = self.tracks[track_id].bbox.tlbr_wh()
                 cost[i, :] = -iou(track_bbox, candidate_bbox)
-            gate = (diff_label_mask | (cost > -self.min_association_iou))
+            gate_mask = (diff_label_mask | (cost > -self.min_association_iou))
         else:
             for i, track_id in enumerate(track_ids):
                 if use_motion_cost:
                     motion_cost[i, :] = self._motion_distance(track_id, measurement)
                 if embeddings is not None:
                     appearance_cost[i, :] = self._feature_distance(track_id, embeddings)
+            gate_mask = (diff_label_mask | (motion_cost > self.max_motion_cost) | (appearance_cost > self.max_appearance_cost))
             cost[:] = ((self.motion_cost_weight / self.max_motion_cost) * motion_cost +
                     ((1 - self.motion_cost_weight) / self.max_appearance_cost) * appearance_cost)
-            gate = (diff_label_mask | (motion_cost > self.max_motion_cost) | (appearance_cost > self.max_appearance_cost))
-
+            
         # gate cost matrix
-        cost[gate] = KalmanTracker.INF_COST
-        return motion_cost
+        cost[gate_mask] = KalmanTracker.INF_COST
+        return cost
 
     def _motion_distance(self, track_id, measurement):
         kalman_filter = self.kalman_filters[track_id]

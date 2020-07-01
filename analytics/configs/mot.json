@@ -15,6 +15,9 @@
         "classes": [1],
         "target_classes": [1]
     },
+    "Track": {
+        "budget": 10
+    },
     "KalmanTracker": {
         "#acquisition_max_age": 16,
         "acquisition_max_age": 6,
@@ -48,9 +51,7 @@
         "merge_iou_thresh": 0.15,
         "acquisition": {
             "conf_threshold": 0.5,
-            "tiling_grid": [4, 2],
-            "schedule_tiles": false,
-            "age_to_object_ratio": 0.4
+            "tiling_grid": [4, 2]
         },
         "tracking": {
             "conf_threshold": 0.5

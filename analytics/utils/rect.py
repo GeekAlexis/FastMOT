@@ -81,6 +81,10 @@ class Rect:
         xmin = int(round(self.xmin - dx))
         ymin = int(round(self.ymin - dy))
         return Rect(tlwh=(xmin, ymin, *size))
+    
+    def warp(self, m):
+        warped_corners = perspectiveTransform(self.corners(), m)
+        return boundingRect(warped_corners)
 
     def iou(self, other):
         overlap_xmin = max(self.xmin, other.xmin) 
@@ -89,3 +93,23 @@ class Rect:
         overlap_ymax = min(self.ymax, other.ymax)
         area_intersection = max(0, overlap_xmax - overlap_xmin + 1) * max(0, overlap_ymax - overlap_ymin + 1)
         return area_intersection / (self.area() + other.area() - area_intersection)
+
+
+def transform(pts, m):
+    pts = np.atleast_2d(pts)
+    pts = np.insert(pts, pts.shape[1], 1, axis=1).T
+    return (m @ pts).T
+
+
+def perspectiveTransform(pts, m):
+    pts = np.atleast_2d(pts)
+    pts = np.insert(pts, pts.shape[1], 1, axis=1).T
+    pts = m @ pts
+    pts = pts / pts[-1]
+    return pts[:2].T
+
+
+def boundingRect(pts):
+    xmin, ymin = np.int_(np.round(np.min(pts, axis=0)))
+    xmax, ymax = np.int_(np.round(np.max(pts, axis=0)))
+    return Rect(tlbr=(xmin, ymin, xmax, ymax))

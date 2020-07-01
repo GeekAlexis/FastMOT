@@ -53,7 +53,7 @@ class Analytics:
         else:
             if self.frame_count % self.detector_frame_skip == 0:
                 # tic = time.perf_counter()
-                self.detector.detect_async(frame, self.tracker.tracks, track_id=self.track_id)
+                self.detector.detect_async(frame, roi=self.get_target_bbox())
                 # print('det_pre', time.perf_counter() - tic)
                 # self.tracker.track(frame, use_flow=True)
                 tic = time.perf_counter()
@@ -112,7 +112,8 @@ class Analytics:
         self.frame_count = 0
 
     def get_target_bbox(self):
-        assert self.status == Analytics.Status.TARGET_ACQUIRED
+        if self.track_id is None:
+            return
         return self.tracker.tracks[self.track_id].bbox
 
     def _draw(self, frame, detections, debug=False):

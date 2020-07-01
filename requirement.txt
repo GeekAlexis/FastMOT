@@ -1,5 +1,6 @@
-numpy
-scipy >= 0.17
+numpy >= 1.15
+scipy >= 1.0.0
 opencv >= 4.0
 pycuda
 tensorflow < 2.0
+numba

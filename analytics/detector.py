@@ -54,20 +54,19 @@ class ObjectDetector:
 
         self.tiles = None
         self.cur_tile = None
+        self.cur_tile_id = -1
         if self.detector_type == ObjectDetector.Type.ACQUISITION:
-            self.conf_threshold = ObjectDetector.config['acquisition']['conf_threshold']
             self.tiling_grid = ObjectDetector.config['acquisition']['tiling_grid']
-            self.schedule_tiles = ObjectDetector.config['acquisition']['schedule_tiles']
-            self.age_to_object_ratio = ObjectDetector.config['acquisition']['age_to_object_ratio']
+            self.conf_threshold = ObjectDetector.config['acquisition']['conf_threshold']
             self.model = SSDInceptionV2 #SSDMobileNetV1
             self.tile_size = self.model.INPUT_SHAPE[:0:-1]
             self.tiles = self._generate_tiles()
-            self.tile_ages = np.zeros(len(self.tiles))
-            self.cur_tile_id = -1
+            assert self.batch_size == np.prod(self.tiling_grid) or self.batch_size == 1
         elif self.detector_type == ObjectDetector.Type.TRACKING:
             self.conf_threshold = ObjectDetector.config['tracking']['conf_threshold']
             self.model = SSDInceptionV2
             self.tile_size = self.model.INPUT_SHAPE[:0:-1]
+            assert self.batch_size == 1, 'Only batch size = 1 is supported for tracking detector'
         else:
             raise ValueError(f'Invalid detector type; must be either {ObjectDetector.Type.ACQUISITION} or \
                              {ObjectDetector.Type.TRACKING}')
@@ -75,44 +74,31 @@ class ObjectDetector:
         self.backend = InferenceBackend(self.model, self.batch_size)
         self.input_batch = np.empty((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
     
-    def preprocess(self, frame, tracks={}, track_id=None):
-        if self.batch_size > 1:
-            for i, tile in enumerate(self.tiles):
-                frame_tile = tile.crop(frame)
-                frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
-                frame_tile = np.transpose(frame_tile, (2, 0, 1)) # HWC -> CHW
-                self.input_batch[i] = frame_tile.ravel()
-            self.input_batch = self.input_batch * (2 / 255) - 1
-        else:
-            if self.detector_type == ObjectDetector.Type.ACQUISITION:
-                # tile scheduling
-                if self.schedule_tiles:
-                    sx = sy = 1 - self.tile_overlap
-                    tile_num_tracks = np.zeros(len(self.tiles))
-                    for tile_id, tile in enumerate(self.tiles):
-                        scaled_tile = tile.scale(sx, sy)
-                        for track in tracks.values():
-                            if track.bbox.center() in scaled_tile or tile.contains_rect(track.bbox):
-                                tile_num_tracks[tile_id] += 1
-                    tile_scores = self.tile_ages * self.age_to_object_ratio + tile_num_tracks
-                    self.cur_tile_id = np.argmax(tile_scores)
-                    self.tile_ages += 1
-                    self.tile_ages[self.cur_tile_id] = 0
-                else:
-                    self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
+    def preprocess(self, frame, roi=None):
+        if self.detector_type == ObjectDetector.Type.ACQUISITION:
+            if self.batch_size > 1:
+                for i, tile in enumerate(self.tiles):
+                    frame_tile = tile.crop(frame)
+                    frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
+                    frame_tile = np.transpose(frame_tile, (2, 0, 1)) # HWC -> CHW
+                    self.input_batch[i] = frame_tile.ravel()
+                # Normalize to [-1.0, 1.0] interval (expected by model)
+                self.input_batch = self.input_batch * (2 / 255) - 1
+            else:
+                self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
                 self.cur_tile = self.tiles[self.cur_tile_id]
-            elif self.detector_type == ObjectDetector.Type.TRACKING:
-                assert track_id in tracks
-                xmin, ymin = np.int_(np.round(tracks[track_id].bbox.center() - (np.array(self.tile_size) - 1) / 2))
-                xmin = max(min(self.size[0] - self.tile_size[0], xmin), 0)
-                ymin = max(min(self.size[1] - self.tile_size[1], ymin), 0)
-                self.cur_tile = Rect(cv_rect=(xmin, ymin, self.tile_size[0], self.tile_size[1]))
+        elif self.detector_type == ObjectDetector.Type.TRACKING:
+            tile_size = np.asarray(self.tile_size)
+            tl = np.int_(np.round(roi.center() - (tile_size - 1) / 2))
+            tl = np.clip(tl, 0, self.size - tile_size)
+            self.cur_tile = Rect(tlwh=(*tl, *self.tile_size))
 
-            roi = self.cur_tile.crop(roi)
-            roi = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
-            roi = np.transpose(roi, (2, 0, 1)) # HWC -> CHW
-            roi = roi * (2 / 255) - 1 # Normalize to [-1.0, 1.0] interval (expected by model)
-            self.input_batch[0] = roi.ravel()
+        if self.cur_tile is not None:
+            frame_tile = self.cur_tile.crop(frame)
+            frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
+            frame_tile = np.transpose(frame_tile, (2, 0, 1))
+            frame_tile = frame_tile * (2 / 255) - 1
+            self.input_batch[0] = frame_tile.ravel()
         return self.input_batch
 
     def postprocess(self):
@@ -157,16 +143,16 @@ class ObjectDetector:
         detections = np.r_[detections, merged_detections]
         return detections
 
-    def detect(self, frame, tracks={}, track_id=None):
-        self.detect_async(frame, tracks, track_id)
+    def detect(self, frame, roi=None):
+        self.detect_async(frame, roi)
         return self.postprocess()
 
-    def detect_async(self, frame, tracks={}, track_id=None):
-        inp = self.preprocess(frame, tracks, track_id)
+    def detect_async(self, frame, roi=None):
+        inp = self.preprocess(frame, roi)
         self.backend.infer_async(inp)
 
     def get_tiling_region(self):
-        assert self.detector_type == ObjectDetector.Type.ACQUISITION and len(self.tiles) > 0
+        assert self.tiles is not None
         return Rect(tlbr=(self.tiles[0].xmin, self.tiles[0].ymin, self.tiles[-1].xmax, self.tiles[-1].ymax))
 
     def draw_tile(self, frame):
