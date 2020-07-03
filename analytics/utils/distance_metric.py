@@ -26,6 +26,14 @@ def mahalanobis_dist(x, mean, cov):
     y = solve_triangular(L, diff, lower=True, overwrite_b=True, check_finite=False)
     return np.sum(y**2, axis=0)
 
+    # x, mean, cov = np.asarray(x), np.asarray(mean), np.asarray(cov)
+    # if len(x) == 0:
+    #     return np.zeros(len(x))
+    # diff = x - mean
+    # L = np.linalg.cholesky(cov)
+    # y = solve_triangular(L, diff.T, lower=True, overwrite_b=True, check_finite=False)
+    # return np.sum(y**2, axis=0)
+
 
 def euclidean_dist(x, y):
     """Compute pair-wise squared distance between points in `x` and `y`.

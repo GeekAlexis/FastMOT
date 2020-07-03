@@ -6,7 +6,7 @@ import time
 
 from .detector import ObjectDetector
 from .encoder import ImageEncoder
-from .tracker import KalmanTracker
+from .tracker import MultiTracker
 from .utils import ConfigDecoder
 
 
@@ -32,7 +32,7 @@ class Analytics:
         # self.trk_detector = ObjectDetector(self.size, self.classes, ObjectDetector.Type.TRACKING)
         print('[Analytics] Loading encoder model...')
         self.encoder = ImageEncoder()
-        self.tracker = KalmanTracker(self.size, capture_dt)
+        self.tracker = MultiTracker(self.size, capture_dt)
         
         # reset flags
         self.status = Analytics.Status.SEARCHING

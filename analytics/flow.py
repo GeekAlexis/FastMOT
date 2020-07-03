@@ -1,7 +1,8 @@
 from pathlib import Path
-from multiprocessing.pool import ThreadPool
 import json
+
 import numpy as np
+# import numba as nb
 import cv2
 import time
 
@@ -44,36 +45,6 @@ class Flow:
         self.ones = np.full(self.size[::-1], 255, dtype=np.uint8)
         self.bkg_mask = np.empty_like(self.ones)
         self.fg_mask = self.bkg_mask
-        # self.pool = ThreadPool()
-
-    # def detect_features(self, track):
-    #     inside_bbox = track.bbox & Rect(tlwh=(0, 0, self.size[0], self.size[1]))
-    #     if track.feature_pts is not None:
-    #         # only propagate feature points inside the bounding box
-    #         track.feature_pts = np.array([pt for pt in track.feature_pts if pt in inside_bbox])
-    #     if track.feature_pts is None or len(track.feature_pts) / inside_bbox.area() < self.feature_density:
-    #         roi = inside_bbox.crop(prev_frame_gray)
-    #         target_mask = inside_bbox.crop(bkg_mask)
-    #         target_area = np.count_nonzero(target_mask)
-    #         est_min_dist = self._estimate_feature_dist(target_area)
-    #         keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, minDistance=est_min_dist, 
-    #                                             **self.gftt_target_feature_params)
-    #         if keypoints is None or len(keypoints) == 0:
-    #             del tracks[track_id]
-    #             # print('[Flow] Target lost (no corners detected): %s' % track)
-    #             return
-    #         else:
-    #             keypoints = keypoints.reshape(-1, 2) + inside_bbox.tl()
-    #             keypoints = self._ellipse_filter(keypoints, track.bbox)
-    #     else:
-    #         keypoints = track.feature_pts
-    #     # scale and batch all target keypoints
-    #     prev_pts = keypoints * self.optflow_scaling
-    #     target_begin_idices.append(len(all_prev_pts))
-    #     all_prev_pts = np.vstack((all_prev_pts, prev_pts))
-    #     target_end_idices.append(len(all_prev_pts))
-    #     # zero out track in background mask
-    #     track.bbox.crop(bkg_mask)[:] = 0
 
     def predict(self, tracks, prev_frame_gray, prev_frame_small, frame_small):
         """
@@ -85,16 +56,16 @@ class Flow:
         target_begin_idices = []
         target_end_idices = []
         np.copyto(self.bkg_mask, self.ones)
-        for track_id, track in list(tracks.items()):
-            inside_bbox = track.bbox & Rect(tlwh=(0, 0, *self.size))
+        for track in tracks.values():
+            # inside_bbox = track.bbox & Rect(0, 0, *self.size)
+            inside_bbox = track.bbox.intersect(Rect(0, 0, *self.size))
             if track.feature_pts is not None:
                 # only propagate feature points inside the bounding box
                 track.feature_pts = self._rect_filter(track.feature_pts, inside_bbox)
-            if track.feature_pts is None or len(track.feature_pts) / inside_bbox.area() < self.feature_density:
+            if track.feature_pts is None or len(track.feature_pts) / inside_bbox.area < self.feature_density:
                 roi = inside_bbox.crop(prev_frame_gray)
                 target_mask = inside_bbox.crop(self.bkg_mask)
-                target_area = np.count_nonzero(target_mask)
-                est_min_dist = self._estimate_feature_dist(target_area)
+                est_min_dist = self._estimate_feature_dist(target_mask)
                 tic2 = time.perf_counter()
                 keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, minDistance=est_min_dist, 
                                                     **self.gftt_target_feature_params)
@@ -104,7 +75,7 @@ class Flow:
                     track.feature_pts = None
                     continue
                 else:
-                    keypoints = keypoints + inside_bbox.tl()
+                    keypoints = keypoints + inside_bbox.tl
                     keypoints = self._ellipse_filter(keypoints, track.bbox)
             else:
                 keypoints = track.feature_pts
@@ -151,7 +122,7 @@ class Flow:
         all_cur_pts[status_mask] = all_cur_pts[status_mask] / self.optflow_scaling
 
         tic = time.perf_counter()
-        next_tracks = {}
+        next_bboxes = {}
         H_camera = None
         if self.estimate_camera_motion:
             prev_bkg_pts = all_prev_pts[bkg_begin_idx:][status_mask[bkg_begin_idx:]]
@@ -180,10 +151,10 @@ class Flow:
         tic = time.perf_counter()
         affine_time = 0
         np.copyto(self.fg_mask, self.ones)
-        for begin, end, (track_id, track) in zip(target_begin_idices, target_end_idices, list(tracks.items())):
+        for begin, end, (track_id, track) in zip(target_begin_idices, target_end_idices, tracks.items()):
             prev_pts = all_prev_pts[begin:end][status_mask[begin:end]]
             matched_pts = all_cur_pts[begin:end][status_mask[begin:end]]
-            prev_pts, matched_pts = self._fg_filter(prev_pts, matched_pts)
+            prev_pts, matched_pts = self._fg_filter(prev_pts, matched_pts, self.fg_mask, self.size)
             if len(matched_pts) < 3:
                 # print('[Flow] Target lost (failed to match): %s' % track)
                 track.feature_pts = None
@@ -197,7 +168,8 @@ class Flow:
                 continue
             est_bbox = self._estimate_bbox(track.bbox, H_affine)
             # delete track when it goes outside the frame
-            inside_bbox = est_bbox & Rect(tlwh=(0, 0, *self.size))
+            # inside_bbox = est_bbox & Rect(0, 0, *self.size)
+            inside_bbox = est_bbox.intersect(Rect(0, 0, *self.size))
             if inside_bbox is None:
                 # print('[Flow] Target lost (out of frame): %s' % track)
                 track.feature_pts = None
@@ -205,31 +177,34 @@ class Flow:
             inlier_mask = np.bool_(inlier_mask.ravel())
             track.feature_pts = matched_pts[inlier_mask].reshape(-1, 2)
             track.prev_feature_pts = prev_pts[inlier_mask].reshape(-1, 2)
-            next_tracks[track_id] = Track(track.label, est_bbox, track_id)
+            next_bboxes[track_id] = est_bbox
             # zero out current track in foreground mask
             est_bbox.crop(self.fg_mask)[:] = 0
         print('target affine:', time.perf_counter() - tic)
         print('target affine func:', affine_time)
-        return next_tracks, H_camera
+        return next_bboxes, H_camera
 
     def draw_bkg_feature_match(self, frame):
         if self.bkg_feature_pts is not None:
-            [cv2.circle(frame, tuple(pt), 1, (0, 0, 255), -1) for pt in np.int_(np.round(self.bkg_feature_pts))]
+            [cv2.circle(frame, tuple(pt), 1, (0, 0, 255), -1) for pt in np.intc(np.round(self.bkg_feature_pts))]
         if self.prev_bkg_feature_pts is not None:
             [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in 
-            zip(np.int_(np.round(self.prev_bkg_feature_pts)), np.int_(np.round(self.bkg_feature_pts)))]
+            zip(np.intc(np.round(self.prev_bkg_feature_pts)), np.intc(np.round(self.bkg_feature_pts)))]
     
-    def _estimate_feature_dist(self, target_area):
-        est_ft_dist = round(np.sqrt(target_area) * self.feature_dist_factor)
-        return max(est_ft_dist, 1)
+    def _estimate_feature_dist(self, target_mask):
+        target_area = np.count_nonzero(target_mask)
+        est_feat_dist = round(np.sqrt(target_area) * self.feature_dist_factor)
+        return max(est_feat_dist, 1)
 
-    def _estimate_bbox(self, bbox, H_affine):
+    @staticmethod
+    # @nb.njit(parallel=True)
+    def _estimate_bbox(bbox, H_affine):
         # warped_tl = cv2.transform(np.float32(bbox.tl()).reshape(1, 1, 2), H_affine)
-        warped_tl = transform(bbox.tl(), H_affine)
-        warped_tl = np.int_(np.round(warped_tl.ravel()))
+        warped_xmin, warped_ymin = transform(bbox.tl, H_affine).ravel()
         s = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
         s = 1.0 if s < 0.9 or s > 1.1 else s
-        new_bbox = Rect(tlwh=(warped_tl[0], warped_tl[1], int(round(s * bbox.size[0])), int(round(s * bbox.size[1]))))
+        new_w, new_h = s * np.asarray(bbox.size)
+        new_bbox = Rect(warped_xmin, warped_ymin, new_w, new_h)
 
         # warped_center = cv2.transform(np.float32(bbox.center()).reshape(1, 1, 2), H_affine)
         # warped_center = warped_center.ravel()
@@ -237,29 +212,46 @@ class Flow:
         # # s = 1.0 if s < 0.9 or s > 1.1 else s
         # s = max(min(s, 1.1), 0.9)
         # new_size = s * np.asarray(bbox.size)
-        # xmin, ymin = np.int_(np.round(warped_center - (new_size - 1) / 2))
-        # width, height = np.int_(np.round(new_size))
-        # new_bbox = Rect(tlwh=(xmin, ymin, width, height))
+        # xmin, ymin = np.intc(np.round(warped_center - (new_size - 1) / 2))
+        # width, height = np.intc(np.round(new_size))
+        # new_bbox = Rect(xmin, ymin, width, height)
 
         # warped = cv2.transform(np.float32([bbox.tl(), bbox.br()]).reshape(2, 1, 2), H_affine)
-        # warped = np.int_(np.round(warped.ravel()))
+        # warped = np.intc(np.round(warped.ravel()))
         # new_bbox = Rect(tlbr=warped)
         return new_bbox
 
-    def _rect_filter(self, pts, bbox):
-        return np.array([pt for pt in pts if pt in bbox])
+    @staticmethod
+    # @nb.njit(parallel=True)
+    def _rect_filter(pts, bbox):
+        return np.array([pt for pt in pts if bbox.contains(pt)])
 
-    def _ellipse_filter(self, pts, bbox):
+    @staticmethod
+    # @nb.njit(parallel=True)
+    def _ellipse_filter(pts, bbox):
         pts = pts.reshape(-1, 2)
         axes = np.asarray(bbox.size) * 0.5
-        mask = np.sum(((pts - bbox.center()) / axes)**2, axis=1) <= 1
+        mask = np.sum(((pts - bbox.center) / axes)**2, axis=1) <= 1
         return pts[mask]
 
-    def _fg_filter(self, prev_pts, cur_pts):
+    @staticmethod
+    # @nb.njit(parallel=True, cache=True)
+    def _fg_filter(prev_pts, cur_pts, fg_mask, size):
+        size = np.asarray(size)
+        cur_pts = cur_pts.reshape(-1, 2)
         # filter out points outside the frame
-        cur_pts = np.int_(np.round(cur_pts.reshape(-1, 2)))
-        mask = np.all(cur_pts < self.size, axis=1)
+        # mask = cur_pts < size
+        # mask = mask[:, 0] & mask[:, 1]
+        mask = np.all(cur_pts < size, axis=1)
         prev_pts, cur_pts = prev_pts[mask], cur_pts[mask]
         # filter out points not on the foreground
-        mask = self.fg_mask[cur_pts[:, 1], cur_pts[:, 0]] == 255
+        out = np.empty_like(cur_pts)
+        np.round(cur_pts, 0, out)
+        quantized_pts = np.intc(out)
+        mask = fg_mask[quantized_pts[:, 1], quantized_pts[:, 0]] != 0
+        # idx = []
+        # for i in nb.prange(len(cur_pts)):
+        #     pt = quantized_cur_pts[i]
+        #     if fg_mask[pt[1], pt[0]] == 255:
+        #         idx.append(i)
         return prev_pts[mask], cur_pts[mask]

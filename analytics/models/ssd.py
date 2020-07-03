@@ -13,10 +13,12 @@ class SSD:
 
     @classmethod
     def add_plugin(cls, graph):
-        pass
+        raise NotImplementedError
 
     @classmethod
     def build_engine(cls, trt_logger, batch_size=1, calib_dataset=Path(__file__).parent / 'VOCdevkit' / 'VOC2007' / 'JPEGImages'):
+        import graphsurgeon as gs
+        import uff
         from . import calibrator
         
         assert batch_size > 0
@@ -69,7 +71,6 @@ class SSDMobileNetV1(SSD):
     def add_plugin(cls, graph):
         import tensorflow as tf
         import graphsurgeon as gs
-        import uff
 
         all_assert_nodes = graph.find_nodes_by_op("Assert")
         graph.remove(all_assert_nodes, remove_exclusive_dependencies=True)
@@ -169,7 +170,6 @@ class SSDMobileNetV2(SSD):
     def add_plugin(cls, graph):
         import tensorflow as tf
         import graphsurgeon as gs
-        import uff
 
         all_assert_nodes = graph.find_nodes_by_op("Assert")
         graph.remove(all_assert_nodes, remove_exclusive_dependencies=True)
@@ -268,7 +268,6 @@ class SSDInceptionV2(SSD):
     def add_plugin(cls, graph):
         import tensorflow as tf
         import graphsurgeon as gs
-        import uff
 
         all_assert_nodes = graph.find_nodes_by_op("Assert")
         graph.remove(all_assert_nodes, remove_exclusive_dependencies=True)

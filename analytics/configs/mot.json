@@ -16,9 +16,9 @@
         "target_classes": [1]
     },
     "Track": {
-        "budget": 10
+        "feat_buffer_size": 10
     },
-    "KalmanTracker": {
+    "MultiTracker": {
         "#acquisition_max_age": 16,
         "acquisition_max_age": 6,
         "tracking_max_age": 3,
@@ -29,6 +29,8 @@
         "min_association_iou": 0.2,
         "min_register_conf": 0.6,
         "num_vertical_bin": 36,
+        "max_vel": 7500,
+        "min_size": 10,
         "n_init": 3,
         "small_size_std_acc": [32, 100],
         "large_size_std_acc": [256, 1000],
@@ -39,9 +41,20 @@
         "init_std_pos_factor": 20,
         "init_std_vel_factor": 10,
         "vel_coupling": 0.6,
-        "vel_half_life": 2,
-        "max_vel": 7500,
-        "min_size": 10
+        "vel_half_life": 2
+    },
+    "KalmanFilter": {
+        "n_init": 3,
+        "small_size_std_acc": [32, 100],
+        "large_size_std_acc": [256, 1000],
+        "min_std_cnn": [5, 5],
+        "min_std_flow": [5, 5],
+        "std_factor_cnn": [0.16, 0.16],
+        "std_factor_flow": [0.16, 0.16],
+        "init_std_pos_factor": 20,
+        "init_std_vel_factor": 10,
+        "vel_coupling": 0.6,
+        "vel_half_life": 2
     },
     "ObjectDetector": {
         "max_det": 20,

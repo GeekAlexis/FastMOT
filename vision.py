@@ -28,7 +28,7 @@ class MsgType:
 def serialize_to_msg(msg_type, bbox=None):
     if bbox is None:
         return struct.pack('!H8x', msg_type)
-    return struct.pack('!Hhhhh', msg_type, *bbox.tf_rect())
+    return struct.pack('!Hhhhh', msg_type, *bbox.tlbr)
 
 
 def parse_from_msg(msg):
