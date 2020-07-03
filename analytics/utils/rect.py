@@ -139,7 +139,7 @@ class Rect:
         return area_intersection / (self.area + other.area - area_intersection)
 
 
-@nb.njit(parallel=True, cache=True)
+# @nb.njit(fastmath=True, cache=True)
 def transform(pts, m):
     pts = np.asarray(pts)
     pts = np.atleast_2d(pts)
@@ -149,7 +149,7 @@ def transform(pts, m):
     return (m @ pts).T
 
 
-@nb.njit(parallel=True, cache=True)
+# @nb.njit(fastmath=True, cache=True)
 def perspectiveTransform(pts, m):
     pts = np.asarray(pts)
     pts = np.atleast_2d(pts)
@@ -161,13 +161,13 @@ def perspectiveTransform(pts, m):
     return pts[:2].T
 
 
-@nb.njit(parallel=True, cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def iou(bbox, candidates):
     """Vectorized version of intersection over union.
     Parameters
     ----------
     bbox : ndarray
-        A bounding box in format `(top left x, top left y, bottom right x, bottom right y, width, height)`.
+        A bounding box in format `(top left x, top left y, bottom right x, bottom right y)`.
     candidates : ndarray
         A matrix of candidate bounding boxes (one per row) in the same format
         as `bbox`.
@@ -182,6 +182,9 @@ def iou(bbox, candidates):
     if len(candidates) == 0:
         return np.zeros(len(candidates))
 
+    area_bbox = np.prod(bbox[2:] - bbox[:2] + 1)
+    area_candidates = np.prod(candidates[:, 2:] - candidates[:, :2] + 1, axis=1)
+
     overlap_xmin = np.maximum(bbox[0], candidates[:, 0])
     overlap_ymin = np.maximum(bbox[1], candidates[:, 1])
     overlap_xmax = np.minimum(bbox[2], candidates[:, 2])
@@ -189,6 +192,4 @@ def iou(bbox, candidates):
     
     area_intersection = np.maximum(0, overlap_xmax - overlap_xmin + 1) * \
                         np.maximum(0, overlap_ymax - overlap_ymin + 1)
-    area_bbox = bbox[4:].prod()
-    area_candidates = candidates[:, 4:].prod(axis=1)
     return area_intersection / (area_bbox + area_candidates - area_intersection)

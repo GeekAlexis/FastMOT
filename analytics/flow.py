@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 
 import numpy as np
-# import numba as nb
+import numba as nb
 import cv2
 import time
 
@@ -197,7 +197,7 @@ class Flow:
         return max(est_feat_dist, 1)
 
     @staticmethod
-    # @nb.njit(parallel=True)
+    # @nb.njit(fastmath=True)
     def _estimate_bbox(bbox, H_affine):
         # warped_tl = cv2.transform(np.float32(bbox.tl()).reshape(1, 1, 2), H_affine)
         warped_xmin, warped_ymin = transform(bbox.tl, H_affine).ravel()
@@ -227,7 +227,7 @@ class Flow:
         return np.array([pt for pt in pts if bbox.contains(pt)])
 
     @staticmethod
-    # @nb.njit(parallel=True)
+    # @nb.njit(fastmath=True)
     def _ellipse_filter(pts, bbox):
         pts = pts.reshape(-1, 2)
         axes = np.asarray(bbox.size) * 0.5
@@ -235,20 +235,20 @@ class Flow:
         return pts[mask]
 
     @staticmethod
-    # @nb.njit(parallel=True, cache=True)
+    # @nb.njit(fastmath=True, cache=True)
     def _fg_filter(prev_pts, cur_pts, fg_mask, size):
         size = np.asarray(size)
         cur_pts = cur_pts.reshape(-1, 2)
+        out = np.empty_like(cur_pts)
+        np.round(cur_pts, 0, out)
+        cur_pts = np.intc(out)
         # filter out points outside the frame
         # mask = cur_pts < size
         # mask = mask[:, 0] & mask[:, 1]
         mask = np.all(cur_pts < size, axis=1)
         prev_pts, cur_pts = prev_pts[mask], cur_pts[mask]
         # filter out points not on the foreground
-        out = np.empty_like(cur_pts)
-        np.round(cur_pts, 0, out)
-        quantized_pts = np.intc(out)
-        mask = fg_mask[quantized_pts[:, 1], quantized_pts[:, 0]] != 0
+        mask = fg_mask[cur_pts[:, 1], cur_pts[:, 0]] != 0
         # idx = []
         # for i in nb.prange(len(cur_pts)):
         #     pt = quantized_cur_pts[i]

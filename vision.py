@@ -92,7 +92,8 @@ def main():
     stream.start_capture()
     try:
         while not args['gui'] or cv2.getWindowProperty("Video", 0) >= 0:
-            tic = time.perf_counter()
+            if analytics.frame_count > 4:
+                tic = time.perf_counter()
             frame = stream.read()
             if frame is None:
                 break
@@ -157,8 +158,9 @@ def main():
             if args['output'] is not None:
                 stream.write(frame)
             
-            toc = time.perf_counter()
-            elapsed_time += toc - tic
+            if analytics.frame_count > 5:
+                toc = time.perf_counter()
+                elapsed_time += toc - tic
     finally:
         # clean up resources
         stream.release()
@@ -169,7 +171,7 @@ def main():
         cv2.destroyAllWindows()
     
     if not args['socket'] and args['mot']:
-        avg_fps = round(analytics.frame_count / elapsed_time)
+        avg_fps = round((analytics.frame_count - 5) / elapsed_time)
         print('[INFO] Average FPS: %d' % avg_fps)
         if args['gui']:
             avg_time = gui_time / analytics.frame_count
