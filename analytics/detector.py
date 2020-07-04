@@ -145,8 +145,7 @@ class ObjectDetector:
                     if j not in merged_det_indices:
                         if not det2.tile_id.issubset(merged_det.tile_id) and merged_det.label == det2.label:
                             if merged_det.bbox.contains_rect(det2.bbox) or merged_det.bbox.iou(det2.bbox) > self.merge_iou_thresh:
-                                # merged_det.bbox |= det2.bbox
-                                merged_det.bbox = merged_det.bbox.union(det2.bbox)
+                                merged_det.bbox |= det2.bbox
                                 merged_det.conf = max(merged_det.conf, det2.conf) 
                                 merged_det.tile_id |= det2.tile_id
                                 merged_det_indices.add(i)

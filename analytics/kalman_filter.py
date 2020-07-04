@@ -3,10 +3,11 @@ from pathlib import Path
 import json
 
 import numpy as np
+import numba as nb
 import scipy.linalg
-from numba import njit
 
 from .utils import perspectiveTransform, ConfigDecoder
+
 
 class KalmanFilter:
     """

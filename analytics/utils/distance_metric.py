@@ -53,8 +53,9 @@ def euclidean_dist(x, y):
     if len(x) == 0 or len(y) == 0:
         return np.zeros((len(x), len(y)))
     xx, yy = np.square(x).sum(axis=1), np.square(y).sum(axis=1)
-    squred_l2 = -2 * x @ y.T + xx[:, np.newaxis] + yy[np.newaxis, :]
-    return squred_l2
+    squared_l2 = -2 * x @ y.T + xx[:, np.newaxis] + yy[np.newaxis, :]
+    squared_l2 = np.clip(squared_l2, 0, float(np.inf))
+    return np.sqrt(squared_l2)
 
 
 def iou(bbox, candidates):

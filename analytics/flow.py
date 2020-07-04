@@ -18,8 +18,8 @@ class Flow:
         self.size = size
         self.track_targets = estimate_camera_motion
         self.estimate_camera_motion = estimate_camera_motion
-        self.bkg_feature_scaling = Flow.config['bkg_feature_scaling']
-        self.optflow_scaling = Flow.config['optflow_scaling']
+        self.bkg_feature_scaling = np.asarray(Flow.config['bkg_feature_scaling'], np.float32)
+        self.optflow_scaling = np.asarray(Flow.config['optflow_scaling'], np.float32)
         self.feature_density = Flow.config['feature_density']
         self.optflow_err_thresh = Flow.config['optflow_err_thresh']
         self.min_bkg_inlier_count = Flow.config['min_bkg_inlier_count']
@@ -52,37 +52,38 @@ class Flow:
         """
         tic = time.perf_counter()
         feature_time = 0
-        all_prev_pts = np.empty((0, 2), np.float32)
+
+        num_pts = 0
+        all_prev_pts = []
         target_begin_idices = []
         target_end_idices = []
         np.copyto(self.bkg_mask, self.ones)
         for track in tracks.values():
-            # inside_bbox = track.bbox & Rect(0, 0, *self.size)
-            inside_bbox = track.bbox.intersect(Rect(0, 0, *self.size))
+            inside_bbox = track.bbox & Rect(0, 0, *self.size)
             if track.feature_pts is not None:
                 # only propagate feature points inside the bounding box
-                track.feature_pts = self._rect_filter(track.feature_pts, inside_bbox)
+                track.feature_pts = self._rect_filter(track.feature_pts, inside_bbox.tl, inside_bbox.br)
             if track.feature_pts is None or len(track.feature_pts) / inside_bbox.area < self.feature_density:
                 roi = inside_bbox.crop(prev_frame_gray)
                 target_mask = inside_bbox.crop(self.bkg_mask)
-                est_min_dist = self._estimate_feature_dist(target_mask)
+                est_min_dist = self._estimate_feature_dist(target_mask, self.feature_dist_factor)
                 tic2 = time.perf_counter()
                 keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, minDistance=est_min_dist, 
-                                                    **self.gftt_target_feature_params)
+                    **self.gftt_target_feature_params)
                 feature_time += (time.perf_counter() - tic2)
                 if keypoints is None or len(keypoints) == 0:
                     # print('[Flow] Target lost (no corners detected): %s' % track)
                     track.feature_pts = None
                     continue
                 else:
-                    keypoints = keypoints + inside_bbox.tl
-                    keypoints = self._ellipse_filter(keypoints, track.bbox)
+                    keypoints = self._ellipse_filter(keypoints, track.bbox.center, track.bbox.size, inside_bbox.tl)
             else:
                 keypoints = track.feature_pts
             # scale and batch all target keypoints
-            target_begin_idices.append(len(all_prev_pts))
-            all_prev_pts = np.vstack((all_prev_pts, keypoints))
-            target_end_idices.append(len(all_prev_pts))
+            target_begin_idices.append(num_pts)
+            all_prev_pts.append(keypoints)
+            num_pts += len(keypoints)
+            target_end_idices.append(num_pts)
             # zero out track in background mask
             track.bbox.crop(self.bkg_mask)[:] = 0
         print('target feature:', time.perf_counter() - tic)
@@ -91,35 +92,36 @@ class Flow:
         tic = time.perf_counter()
         if self.estimate_camera_motion:
             prev_frame_small_bkg = cv2.resize(prev_frame_gray, None, fx=self.bkg_feature_scaling[0], 
-                                                fy=self.bkg_feature_scaling[1])
-            bkg_mask_small = cv2.resize(self.bkg_mask, None, fx=self.bkg_feature_scaling[0], fy=self.bkg_feature_scaling[1],
-                                        interpolation=cv2.INTER_NEAREST)
+                fy=self.bkg_feature_scaling[1])
+            bkg_mask_small = cv2.resize(self.bkg_mask, None, fx=self.bkg_feature_scaling[0], 
+                fy=self.bkg_feature_scaling[1], interpolation=cv2.INTER_NEAREST)
             # keypoints = cv2.goodFeaturesToTrack(prev_frame_small_bkg, mask=bkg_mask, **self.gftt_bkg_feature_params)
             keypoints = self.fast_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask_small)
             if keypoints is not None and len(keypoints) > 0:
                 keypoints = np.float32([kp.pt for kp in keypoints])
-                prev_bkg_pts = keypoints / self.bkg_feature_scaling
+                prev_bkg_pts = self._unscale_pts(keypoints, self.bkg_feature_scaling, None)
             else:
                 self.bkg_feature_pts = None
                 self.prev_bkg_feature_pts = None
                 print('[Flow] Background registration failed')
                 return {}, None
-            bkg_begin_idx = len(all_prev_pts)
-            all_prev_pts = np.vstack((all_prev_pts, prev_bkg_pts))
+            bkg_begin_idx = num_pts
+            all_prev_pts.append(prev_bkg_pts)
         print('bg feature:', time.perf_counter() - tic)
 
         # level, pyramid = cv2.buildOpticalFlowPyramid(frame_small, self.optflow_params['winSize'], self.optflow_params['maxLevel'])
 
-        # tic = time.perf_counter()
-        all_prev_pts = all_prev_pts.reshape(-1, 1, 2)
-        all_prev_pts_scaled = np.float32(all_prev_pts * self.optflow_scaling)
-        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, all_prev_pts_scaled, None, 
-                                                            **self.optflow_params)
-        # print(np.max(err[status==1]))
+        tic = time.perf_counter()
+        all_prev_pts = np.concatenate(all_prev_pts)
+        all_prev_pts_scaled = self._scale_pts(all_prev_pts, self.optflow_scaling)
+        tic2 = time.perf_counter()
+        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, 
+            all_prev_pts_scaled, None, **self.optflow_params)
+        print('opt flow func:', time.perf_counter() - tic2)
         with np.errstate(invalid='ignore'):
-            status_mask = np.bool_(status) & (err < self.optflow_err_thresh)
-        # print('opt flow:', time.perf_counter() - tic)
-        all_cur_pts[status_mask] = all_cur_pts[status_mask] / self.optflow_scaling
+            status_mask = np.bool_(status.ravel()) & (err.ravel() < self.optflow_err_thresh)
+        all_cur_pts = self._unscale_pts(all_cur_pts, self.optflow_scaling, status_mask)
+        print('opt flow:', time.perf_counter() - tic)
 
         tic = time.perf_counter()
         next_bboxes = {}
@@ -128,19 +130,21 @@ class Flow:
             prev_bkg_pts = all_prev_pts[bkg_begin_idx:][status_mask[bkg_begin_idx:]]
             matched_bkg_pts = all_cur_pts[bkg_begin_idx:][status_mask[bkg_begin_idx:]]
             if len(matched_bkg_pts) >= 4:
-                # H_camera, inlier_mask = cv2.estimateAffinePartial2D(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+                # H_camera, inlier_mask = cv2.estimateAffinePartial2D(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
+                #   maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
                 H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
-                                                            maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
-                if H_camera is None or np.count_nonzero(inlier_mask) < self.min_bkg_inlier_count:
+                    maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+                inlier_mask = np.bool_(inlier_mask.ravel())
+                matched_bkg_inliers = matched_bkg_pts[inlier_mask]
+                if H_camera is None or len(matched_bkg_inliers) < self.min_bkg_inlier_count:
                     self.bkg_feature_pts = None
                     self.prev_bkg_feature_pts = None
                     print('[Flow] Background registration failed')
                     return {}, None
                 else:
                     # H_camera = np.vstack((H_camera, [0, 0, 1]))
-                    inlier_mask = np.bool_(inlier_mask.ravel())
-                    self.prev_bkg_feature_pts = prev_bkg_pts[inlier_mask].reshape(-1, 2)
-                    self.bkg_feature_pts = matched_bkg_pts[inlier_mask].reshape(-1, 2)
+                    self.prev_bkg_feature_pts = prev_bkg_pts[inlier_mask]
+                    self.bkg_feature_pts = matched_bkg_inliers
             else:
                 self.bkg_feature_pts = None
                 self.prev_bkg_feature_pts = None
@@ -151,7 +155,7 @@ class Flow:
         tic = time.perf_counter()
         affine_time = 0
         np.copyto(self.fg_mask, self.ones)
-        for begin, end, (track_id, track) in zip(target_begin_idices, target_end_idices, tracks.items()):
+        for begin, end, track in zip(target_begin_idices, target_end_idices, tracks.values()):
             prev_pts = all_prev_pts[begin:end][status_mask[begin:end]]
             matched_pts = all_cur_pts[begin:end][status_mask[begin:end]]
             prev_pts, matched_pts = self._fg_filter(prev_pts, matched_pts, self.fg_mask, self.size)
@@ -161,23 +165,24 @@ class Flow:
                 continue
             tic2 = time.perf_counter()
             H_affine, inlier_mask = cv2.estimateAffinePartial2D(prev_pts, matched_pts, method=cv2.RANSAC, 
-                                                                maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+                maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
             affine_time += (time.perf_counter() - tic2)
             if H_affine is None:
                 # print('[Flow] Target lost (no inlier): %s' % track)
+                track.feature_pts = None
                 continue
-            est_bbox = self._estimate_bbox(track.bbox, H_affine)
+            est_bbox = Rect(*self._warp_tlwh(track.bbox.tl, track.bbox.size, H_affine))
             # delete track when it goes outside the frame
-            # inside_bbox = est_bbox & Rect(0, 0, *self.size)
-            inside_bbox = est_bbox.intersect(Rect(0, 0, *self.size))
+            inside_bbox = est_bbox & Rect(0, 0, *self.size)
+            # inside_bbox = est_bbox.intersect(Rect(0, 0, *self.size))
             if inside_bbox is None:
                 # print('[Flow] Target lost (out of frame): %s' % track)
                 track.feature_pts = None
                 continue
             inlier_mask = np.bool_(inlier_mask.ravel())
-            track.feature_pts = matched_pts[inlier_mask].reshape(-1, 2)
-            track.prev_feature_pts = prev_pts[inlier_mask].reshape(-1, 2)
-            next_bboxes[track_id] = est_bbox
+            track.feature_pts = matched_pts[inlier_mask]
+            track.prev_feature_pts = prev_pts[inlier_mask]
+            next_bboxes[track.track_id] = est_bbox
             # zero out current track in foreground mask
             est_bbox.crop(self.fg_mask)[:] = 0
         print('target affine:', time.perf_counter() - tic)
@@ -186,72 +191,75 @@ class Flow:
 
     def draw_bkg_feature_match(self, frame):
         if self.bkg_feature_pts is not None:
-            [cv2.circle(frame, tuple(pt), 1, (0, 0, 255), -1) for pt in np.intc(np.round(self.bkg_feature_pts))]
+            [cv2.circle(frame, tuple(pt), 1, (0, 0, 255), -1) for pt in np.intc(np.rint(self.bkg_feature_pts))]
         if self.prev_bkg_feature_pts is not None:
             [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in 
-            zip(np.intc(np.round(self.prev_bkg_feature_pts)), np.intc(np.round(self.bkg_feature_pts)))]
-    
-    def _estimate_feature_dist(self, target_mask):
+            zip(np.intc(np.rint(self.prev_bkg_feature_pts)), np.intc(np.rint(self.bkg_feature_pts)))]
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _estimate_feature_dist(target_mask, feature_dist_factor):
         target_area = np.count_nonzero(target_mask)
-        est_feat_dist = round(np.sqrt(target_area) * self.feature_dist_factor)
+        est_feat_dist = np.rint(np.sqrt(target_area) * feature_dist_factor)
         return max(est_feat_dist, 1)
 
     @staticmethod
-    # @nb.njit(fastmath=True)
-    def _estimate_bbox(bbox, H_affine):
-        # warped_tl = cv2.transform(np.float32(bbox.tl()).reshape(1, 1, 2), H_affine)
-        warped_xmin, warped_ymin = transform(bbox.tl, H_affine).ravel()
-        s = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
-        s = 1.0 if s < 0.9 or s > 1.1 else s
-        new_w, new_h = s * np.asarray(bbox.size)
-        new_bbox = Rect(warped_xmin, warped_ymin, new_w, new_h)
-
-        # warped_center = cv2.transform(np.float32(bbox.center()).reshape(1, 1, 2), H_affine)
-        # warped_center = warped_center.ravel()
-        # s = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
-        # # s = 1.0 if s < 0.9 or s > 1.1 else s
-        # s = max(min(s, 1.1), 0.9)
-        # new_size = s * np.asarray(bbox.size)
-        # xmin, ymin = np.intc(np.round(warped_center - (new_size - 1) / 2))
-        # width, height = np.intc(np.round(new_size))
-        # new_bbox = Rect(xmin, ymin, width, height)
-
-        # warped = cv2.transform(np.float32([bbox.tl(), bbox.br()]).reshape(2, 1, 2), H_affine)
-        # warped = np.intc(np.round(warped.ravel()))
-        # new_bbox = Rect(tlbr=warped)
-        return new_bbox
+    @nb.njit(fastmath=True, cache=True)
+    def _warp_tlwh(tl, size, H_affine):
+        xmin, ymin = transform(tl, H_affine).ravel()
+        scale = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
+        scale = 1. if scale < 0.9 or scale > 1.1 else scale
+        return xmin, ymin, scale * size[0], scale * size[1]
 
     @staticmethod
-    # @nb.njit(parallel=True)
-    def _rect_filter(pts, bbox):
-        return np.array([pt for pt in pts if bbox.contains(pt)])
+    @nb.njit(fastmath=True, cache=True)
+    def _rect_filter(pts, tl, br):
+        keep_tl = pts >= tl
+        keep_br = pts <= br
+        keep = keep_tl[:, 0] & keep_tl[:, 1] & keep_br[:, 0] & keep_br[:, 1]
+        # keep = np.all(pts >= bbox.tl, axis=1) & np.all(pts <= bbox.br, axis=1)
+        return pts[keep]
 
     @staticmethod
-    # @nb.njit(fastmath=True)
-    def _ellipse_filter(pts, bbox):
+    @nb.njit(fastmath=True, cache=True)
+    def _ellipse_filter(pts, center, axes, offset):
         pts = pts.reshape(-1, 2)
-        axes = np.asarray(bbox.size) * 0.5
-        mask = np.sum(((pts - bbox.center) / axes)**2, axis=1) <= 1
-        return pts[mask]
+        pts = pts + offset
+        semi_axes = np.asarray(axes) * 0.5
+        keep = np.sum(((pts - center) / semi_axes)**2, axis=1) <= 1
+        return pts[keep]
 
     @staticmethod
-    # @nb.njit(fastmath=True, cache=True)
-    def _fg_filter(prev_pts, cur_pts, fg_mask, size):
-        size = np.asarray(size)
-        cur_pts = cur_pts.reshape(-1, 2)
-        out = np.empty_like(cur_pts)
-        np.round(cur_pts, 0, out)
-        cur_pts = np.intc(out)
+    @nb.njit(fastmath=True, cache=True)
+    def _fg_filter(prev_pts, cur_pts, fg_mask, frame_size):
+        frame_size = np.asarray(frame_size)
+        cur_pts_int = np.rint(cur_pts)
         # filter out points outside the frame
-        # mask = cur_pts < size
-        # mask = mask[:, 0] & mask[:, 1]
-        mask = np.all(cur_pts < size, axis=1)
+        mask = cur_pts_int < frame_size
+        mask = mask[:, 0] & mask[:, 1]
+        # mask = np.all(cur_pts_int < size, axis=1)
         prev_pts, cur_pts = prev_pts[mask], cur_pts[mask]
+        # cur_pts_int = np.intc(cur_pts_int[mask])
+        cur_pts_int = cur_pts_int[mask]
         # filter out points not on the foreground
-        mask = fg_mask[cur_pts[:, 1], cur_pts[:, 0]] != 0
-        # idx = []
-        # for i in nb.prange(len(cur_pts)):
-        #     pt = quantized_cur_pts[i]
-        #     if fg_mask[pt[1], pt[0]] == 255:
-        #         idx.append(i)
-        return prev_pts[mask], cur_pts[mask]
+        # keep = fg_mask[cur_pts_int[:, 1], cur_pts_int[:, 0]] != 0
+        keep = np.array([i for i in range(len(cur_pts_int)) if 
+            fg_mask[int(cur_pts_int[i][1]), int(cur_pts_int[i][0])] != 0])
+        return prev_pts[keep], cur_pts[keep]
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _scale_pts(pts, scale_factor):
+        pts = pts * scale_factor
+        pts = pts.reshape(-1, 1, 2)
+        return pts
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True) 
+    def _unscale_pts(pts, scale_factor, mask):
+        pts = pts.reshape(-1, 2)
+        if mask is None:
+            pts = pts / scale_factor
+        else:
+            pts[mask] = pts[mask] / scale_factor
+        return pts

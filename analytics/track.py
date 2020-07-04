@@ -46,7 +46,7 @@ class Track:
         cv2.putText(frame, text, tuple(self.bbox.tl), cv2.FONT_HERSHEY_SIMPLEX, 1, text_color, 2, cv2.LINE_AA)
         if draw_feature_match:
             if self.feature_pts is not None:
-                [cv2.circle(frame, tuple(pt), 1, (0, 255, 255), -1) for pt in np.intc(np.round(self.feature_pts))]
+                [cv2.circle(frame, tuple(pt), 1, (0, 255, 255), -1) for pt in np.intc(np.rint(self.feature_pts))]
                 if self.prev_feature_pts is not None:
                     [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 255, 255), 1, cv2.LINE_AA) for pt1, pt2 in 
-                    zip(np.intc(np.round(self.prev_feature_pts)), np.intc(np.round(self.feature_pts)))]
+                    zip(np.intc(np.rint(self.prev_feature_pts)), np.intc(np.rint(self.feature_pts)))]

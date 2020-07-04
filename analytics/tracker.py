@@ -3,9 +3,11 @@ from pathlib import Path
 import json
 
 from collections import OrderedDict
+from numba.typed import Dict
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 import numpy as np
+import numba as nb
 import cv2
 import time
 
@@ -64,6 +66,10 @@ class MultiTracker:
         # self.prev_pyramid = None
         self.next_id = 0
         self.tracks = OrderedDict()
+        self.states = Dict.empty(
+            key_type=nb.types.int64,
+            value_type=nb.types.Tuple((nb.int64[::1], nb.int64[:, ::1])),
+        )
         self.kalman_filters = {}
         self.flow = Flow(self.size, estimate_camera_motion=True)
 
@@ -121,8 +127,7 @@ class MultiTracker:
 
                 # check for out of frame case
                 next_bbox = self._convert_state_to_bbox(next_state)
-                # inside_bbox = next_bbox & Rect(0, 0, *self.size)
-                inside_bbox = next_bbox.intersect(Rect(0, 0, *self.size))
+                inside_bbox = next_bbox & Rect(0, 0, *self.size)
                 if inside_bbox is not None:
                     track.bbox = next_bbox
                     self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
@@ -132,71 +137,12 @@ class MultiTracker:
                     del self.kalman_filters[track_id]
 
     def track(self, frame, use_flow=True):
-        """
-        Track targets across frames. This function should be called in every frame.
-        """
-        assert self.prev_frame_gray is not None
-        assert self.prev_frame_small is not None
-
-        # tic = time.perf_counter()
-        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_small = cv2.resize(frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
-        self.tracks = OrderedDict(sorted(self.tracks.items(), key=self._compare_dist, reverse=True))
-        # print('gray and sort:', time.perf_counter() - tic)
-
-        # tic = time.perf_counter()
-        flow_bboxes, H_camera = self.flow.predict(self.tracks, self.prev_frame_gray, self.prev_frame_small, frame_small)
-        if H_camera is None:
-            # clear tracks when camera motion estimation failed
-            self.tracks.clear()
-            self.kalman_filters.clear()
-
-        self.prev_frame_gray = frame_gray
-        self.prev_frame_small = frame_small
-        # self.prev_pyramid = pyramid
-        # print('opt flow:', time.perf_counter() - tic)
-
-        # tic = time.perf_counter()
-        for track_id, track in list(self.tracks.items()):
-            track.frames_since_acquired += 1
-            if track.frames_since_acquired <= self.n_init:
-                if track_id in flow_bboxes:
-                    flow_bbox = flow_bboxes[track_id]
-                    if track.frames_since_acquired == self.n_init:
-                        # initialize kalman filter
-                        self.kalman_filters[track_id] = self._create_kalman_filter(track.init_bbox, flow_bbox)
-                    else:
-                        track.init_bbox = track.init_bbox.warp(H_camera)
-                        # self._warp_bbox(track.init_bbox, self.H_camera)
-                        track.bbox = flow_bbox
-                else:
-                    print('[Tracker] Target lost (init): %s' % track)
-                    del self.tracks[track_id]
-            else:
-                # track using kalman filter and flow measurement
-                self._warp_kalman_filter(track_id, H_camera)
-                next_state = self.kalman_filters[track_id].predict()
-                # self._clip_state(track_id)
-                if use_flow and track_id in flow_bboxes:
-                    flow_bbox = flow_bboxes[track_id]
-                    conf = 0.3 / track.age if track.age > 0 else 1
-                    self.kalman_filters[track_id].measurementNoiseCov = self._compute_meas_cov(track.bbox, 
-                                                                                                MultiTracker.Meas.FLOW, conf)
-                    flow_meas = self._convert_bbox_to_meas(flow_bbox)
-                    next_state = self.kalman_filters[track_id].correct(flow_meas)
-                    # self._clip_state(track_id)
-
-                # check for out of frame case
-                next_bbox = self._convert_state_to_bbox(next_state)
-                # inside_bbox = next_bbox & Rect(0, 0, *self.size)
-                inside_bbox = next_bbox.intersect(Rect(0, 0, *self.size))
-                if inside_bbox is not None:
-                    track.bbox = next_bbox
-                    self.kalman_filters[track_id].processNoiseCov = self._compute_acc_cov(next_bbox)
-                else:
-                    print('[Tracker] Target lost (outside frame): %s' % track)
-                    del self.tracks[track_id]
-                    del self.kalman_filters[track_id]
+        tic = time.perf_counter()
+        self.step_flow(frame)
+        print('flow', time.perf_counter() - tic)
+        tic = time.perf_counter()
+        self.step_kalman_filter(use_flow)
+        print('kalman filter', time.perf_counter() - tic)
 
     def initiate(self, frame, detections, embeddings=None):
         """
@@ -261,8 +207,7 @@ class MultiTracker:
                             next_state = self.kalman_filters[track_id].correct(det_meas)
                             # self._clip_state(track_id)
                             next_bbox = self._convert_state_to_bbox(next_state)
-                            # inside_bbox = next_bbox & Rect(0, 0, *self.size)
-                            inside_bbox = next_bbox.intersect(Rect(0, 0, *self.size))
+                            inside_bbox = next_bbox & Rect(0, 0, *self.size)
                             if inside_bbox is not None:
                                 self.tracks[track_id].bbox = next_bbox
                                 self.tracks[track_id].age = -1
@@ -489,6 +434,7 @@ class MultiTracker:
             gate_mask = (diff_label_mask | (motion_cost > self.max_motion_cost) | (appearance_cost > self.max_appearance_cost))
             cost[:] = ((self.motion_cost_weight / self.max_motion_cost) * motion_cost +
                     ((1 - self.motion_cost_weight) / self.max_appearance_cost) * appearance_cost)
+        print(appearance_cost)
             
         # gate cost matrix
         cost[gate_mask] = MultiTracker.INF_COST
@@ -509,5 +455,5 @@ class MultiTracker:
 
     def _feature_distance(self, track_id, embeddings):
         track = self.tracks[track_id]
-        # return cdist(track.features, embeddings).min(axis=0)
-        return euclidean_dist(track.features, embeddings).min(axis=0)
+        return cdist(track.features, embeddings).min(axis=0)
+
