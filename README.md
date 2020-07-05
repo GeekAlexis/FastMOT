@@ -9,9 +9,9 @@
   - Speed on Jetson Nano: 20 FPS
 
 ### Dependencies
-- CUDA
 - OpenCV (Built with Gstreamer)
 - Numpy
+- Numba
 - Scipy
 - PyCuda
 - TensorRT  
