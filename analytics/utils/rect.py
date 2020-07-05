@@ -30,7 +30,7 @@ class Rect:
         return "Rect(%r, %r, %r, %r)" % (self.xmin, self.ymin, self.size[0], self.size[1])
 
     def __contains__(self, point):
-        return point[0] >= self.xmin and point[1] >= self.ymin and \ 
+        return point[0] >= self.xmin and point[1] >= self.ymin and \
             point[0] <= self.xmax and point[1] <= self.ymax
 
     def __and__(self, other):
