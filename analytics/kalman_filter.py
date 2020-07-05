@@ -4,7 +4,7 @@ import json
 
 import numpy as np
 import numba as nb
-import scipy.linalg
+import time
 
 from .utils import perspectiveTransform, ConfigDecoder
 
@@ -13,12 +13,11 @@ class KalmanFilter:
     """
     A simple Kalman filter for tracking bounding boxes in image space.
     The 8-dimensional state space
-        x, y, a, h, vx, vy, va, vh
-    contains the bounding box center position (x, y), aspect ratio a, height h,
+        xmin, ymin, xmax, ymax, v_xmin, v_ymin, v_xmax, v_ymax
+    contains the bounding box top left corner, bottom right corner,
     and their respective velocities.
-    Object motion follows a constant velocity model. The bounding box location
-    (x, y, a, h) is taken as direct observation of the state space (linear
-    observation model).
+    Object motion follows a constant velocity model augmented with velocity 
+    coupling and decay for tracking stability.
     """
     class Meas(Enum):
         FLOW = 0
@@ -27,9 +26,9 @@ class KalmanFilter:
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['KalmanFilter']
 
-    def __init__(self, dt):
+    def __init__(self, dt, n_init):
         self.dt = dt
-        self.n_init = KalmanFilter.config['n_init']
+        self.n_init = n_init
         self.small_size_std_acc = KalmanFilter.config['small_size_std_acc']
         self.large_size_std_acc = KalmanFilter.config['large_size_std_acc']
         self.min_std_cnn = KalmanFilter.config['min_std_cnn']
@@ -58,18 +57,6 @@ class KalmanFilter:
             [0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0],
             [0, 0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life)]
         ])
-
-        # # Create Kalman filter model matrices.
-        # self._motion_mat = np.eye(2 * ndim, 2 * ndim)
-        # for i in range(ndim):
-        #     self._motion_mat[i, ndim + i] = dt
-        # self._update_mat = np.eye(ndim, 2 * ndim)
-
-        # # Motion and observation uncertainty are chosen relative to the current
-        # # state estimate. These weights control the amount of uncertainty in
-        # # the model. This is a bit hacky.
-        # self._std_weight_position = 1. / 20
-        # self._std_weight_velocity = 1. / 160
 
     def initiate(self, init_meas, flow_meas):
         """Create track from unassociated measurement.
@@ -100,21 +87,6 @@ class KalmanFilter:
             self.init_std_vel_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
         ]
         covariance = np.diag(np.square(std))
-
-        # mean_pos = measurement
-        # mean_vel = np.zeros_like(mean_pos)
-        # mean = np.r_[mean_pos, mean_vel]
-
-        # std = [
-        #     2 * self._std_weight_position * measurement[3],
-        #     2 * self._std_weight_position * measurement[3],
-        #     1e-2,
-        #     2 * self._std_weight_position * measurement[3],
-        #     10 * self._std_weight_velocity * measurement[3],
-        #     10 * self._std_weight_velocity * measurement[3],
-        #     1e-5,
-        #     10 * self._std_weight_velocity * measurement[3]]
-        # covariance = np.diag(np.square(std))
         return mean, covariance
 
     def predict(self, mean, covariance):
@@ -133,31 +105,8 @@ class KalmanFilter:
             Returns the mean vector and covariance matrix of the predicted
             state. Unobserved velocities are initialized to 0 mean.
         """
-        size = np.max(mean[:2] - mean[2:4] + 1) # max(w, h)
-        std_acc = self.small_size_std_acc[1] + (size - self.small_size_std_acc[0]) * self.std_acc_slope
-        motion_cov = self.acc_cov * std_acc**2
-
-        mean = self.transition_mat @ mean
-        covariance = np.linalg.multi_dot((
-            self.transition_mat, covariance, self.transition_mat.T)) + motion_cov
-
-        # std_pos = [
-        #     self._std_weight_position * mean[3],
-        #     self._std_weight_position * mean[3],
-        #     1e-2,
-        #     self._std_weight_position * mean[3]]
-        # std_vel = [
-        #     self._std_weight_velocity * mean[3],
-        #     self._std_weight_velocity * mean[3],
-        #     1e-5,
-        #     self._std_weight_velocity * mean[3]]
-        # motion_cov = np.diag(np.square(np.r_[std_pos, std_vel]))
-
-        # mean = np.dot(self._motion_mat, mean)
-        # covariance = np.linalg.multi_dot((
-        #     self._motion_mat, covariance, self._motion_mat.T)) + motion_cov
-
-        return mean, covariance
+        return self._predict(mean, covariance, self.small_size_std_acc, self.std_acc_slope, 
+            self.acc_cov, self.transition_mat)
 
     def project(self, mean, covariance, meas_type, conf=1.):
         """Project state distribution to measurement space.
@@ -182,19 +131,7 @@ class KalmanFilter:
         else:
             raise ValueError('Invalid measurement type')
 
-        w, h = mean[:2] - mean[2:4] + 1
-        std = [
-            max(w * std_factor[0], min_std[0]),
-            max(h * std_factor[1], min_std[1]),
-            max(w * std_factor[0], min_std[0]),
-            max(h * std_factor[1], min_std[1])
-        ]
-        innovation_cov = np.diag(np.square(std / conf))
-
-        mean = self.meas_mat @ mean
-        covariance = np.linalg.multi_dot((
-            self.meas_mat, covariance, self.meas_mat.T))
-        return mean, covariance + innovation_cov
+        return self._project(mean, covariance, std_factor, min_std, self.meas_mat, conf)
 
     def update(self, mean, covariance, measurement, meas_type, conf=1.):
         """Run Kalman filter correction step.
@@ -216,17 +153,8 @@ class KalmanFilter:
         projected_mean, projected_cov = self.project(mean, covariance, 
             meas_type, conf)
 
-        chol_factor, lower = scipy.linalg.cho_factor(
-            projected_cov, lower=True, check_finite=False)
-        kalman_gain = scipy.linalg.cho_solve(
-            (chol_factor, lower), np.dot(covariance, self.transition_mat.T).T,
-            check_finite=False).T
-        innovation = measurement - projected_mean
-
-        new_mean = mean + innovation @ kalman_gain.T
-        new_covariance = covariance - np.linalg.multi_dot((
-            kalman_gain, projected_cov, kalman_gain.T))
-        return new_mean, new_covariance
+        return self._update(mean, covariance, projected_mean, 
+            projected_cov, measurement, self.meas_mat)
 
     def motion_distance(self, mean, covariance, measurements):
         """Compute mahalanobis distance between `measurements` and state distribution.
@@ -245,17 +173,15 @@ class KalmanFilter:
             contains the squared mahalanobis distance for `measurements[i]`.
         """
         projected_mean, projected_cov = self.project(mean, covariance, KalmanFilter.Meas.CNN)
+        return self._maha_distance(projected_mean, projected_cov, measurements)
 
-        diff = measurements - projected_mean
-        L = np.linalg.cholesky(projected_cov)
-        y = scipy.linalg.solve_triangular(L, diff.T, lower=True, overwrite_b=True, check_finite=False)
-        return np.sum(y**2, axis=0)
-
-    def warp(self, mean, covariance, H_camera):
+    @staticmethod
+    @nb.njit(parallel=True, fastmath=True, cache=True)
+    def warp(mean, covariance, H_camera):
         pos_tl, pos_br = mean[:2], mean[2:4]
         vel_tl, vel_br = mean[4:6], mean[6:]
         # affine dof
-        A = H_camera[:2, :2]
+        A = np.ascontiguousarray(H_camera[:2, :2])
         # homography dof
         v = H_camera[2, :2] 
         # translation dof
@@ -267,16 +193,64 @@ class KalmanFilter:
         grad_br = (tmp * A - np.outer(A @ pos_br + t, v)) / tmp**2
 
         # warp state
-        warped_pos = perspectiveTransform(np.stack([pos_tl, pos_br]) , H_camera)
+        warped_pos = perspectiveTransform(np.stack((pos_tl, pos_br)) , H_camera)
         mean[:4] = warped_pos.ravel()
         mean[4:6] = grad_tl @ vel_tl
         mean[6:] = grad_br @ vel_br
 
         # warp covariance too
-        for i in range(0, 8, 2):
-            for j in range(0, 8, 2):
-                grad_left = grad_tl if i // 2 % 2 == 0 else grad_br
-                grad_right = grad_tl if j // 2 % 2 == 0 else grad_br
-                covariance[i:i + 2, j:j + 2] = \
-                    np.linalg.multi_dot([grad_left, covariance[i:i + 2, j:j + 2], grad_right.T])
+        for i in nb.prange(0, 4):
+            k = 2 * i
+            for j in nb.prange(0, 4):
+                l = 2 * j
+                grad_left = grad_tl if i % 2 == 0 else grad_br
+                grad_right = grad_tl if j % 2 == 0 else grad_br
+                cov_blk = np.ascontiguousarray(covariance[k:k + 2, l:l + 2])
+                covariance[k:k + 2, l:l + 2] = grad_left @ cov_blk @ grad_right.T
         return mean, covariance
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _predict(mean, covariance, small_size_std_acc, std_acc_slope, acc_cov, transition_mat):
+        size = max(mean[2:4] - mean[:2] + 1) # max(w, h)
+        std_acc = small_size_std_acc[1] + (size - small_size_std_acc[0]) * std_acc_slope
+        motion_cov = acc_cov * std_acc**2
+
+        mean = transition_mat @ mean
+        covariance = transition_mat @ covariance @ transition_mat.T + motion_cov
+        return mean, covariance
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _project(mean, covariance, std_factor, min_std, meas_mat, conf):
+        w, h = mean[2:4] - mean[:2] + 1
+        std = np.array([
+            max(w * std_factor[0], min_std[0]),
+            max(h * std_factor[1], min_std[1]),
+            max(w * std_factor[0], min_std[0]),
+            max(h * std_factor[1], min_std[1])
+        ])
+        meas_cov = np.diag(np.square(std / conf))
+
+        mean = meas_mat @ mean
+        covariance = meas_mat @ covariance @ meas_mat.T
+        innovation_cov = covariance + meas_cov
+        return mean, innovation_cov
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _update(mean, covariance, proj_mean, proj_cov, measurement, meas_mat):
+        kalman_gain = np.linalg.solve(proj_cov, (covariance @ meas_mat.T).T).T
+        innovation = measurement - proj_mean
+        new_mean = mean + innovation @ kalman_gain.T
+        new_covariance = covariance - kalman_gain @ proj_cov @ kalman_gain.T
+        return new_mean, new_covariance
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _maha_distance(mean, covariance, measurements):
+        diff = measurements - mean
+        L = np.linalg.cholesky(covariance)
+        y = np.linalg.solve(L, diff.T)
+        return np.sum(y**2, axis=0)
+

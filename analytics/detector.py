@@ -3,6 +3,8 @@ from pathlib import Path
 import json
 
 import numpy as np
+import numba as nb
+from numba.typed import List
 import cv2
 import time
 
@@ -86,12 +88,7 @@ class ObjectDetector:
         if self.detector_type == ObjectDetector.Type.ACQUISITION:
             if self.batch_size > 1:
                 for i, tile in enumerate(self.tiles):
-                    frame_tile = tile.crop(frame)
-                    frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
-                    frame_tile = np.transpose(frame_tile, (2, 0, 1)) # HWC -> CHW
-                    self.input_batch[i] = frame_tile.ravel()
-                # Normalize to [-1.0, 1.0] interval (expected by model)
-                self.input_batch = self.input_batch * (2 / 255) - 1
+                    self.input_batch[i] = self._preprocess(tile.crop(frame))
             else:
                 self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
                 self.cur_tile = self.tiles[self.cur_tile_id]
@@ -102,16 +99,14 @@ class ObjectDetector:
             self.cur_tile = Rect(*tl, *self.tile_size)
 
         if self.cur_tile is not None:
-            frame_tile = self.cur_tile.crop(frame)
-            frame_tile = cv2.cvtColor(frame_tile, cv2.COLOR_BGR2RGB)
-            frame_tile = np.transpose(frame_tile, (2, 0, 1))
-            frame_tile = frame_tile * (2 / 255) - 1
-            self.input_batch[0] = frame_tile.ravel()
+            self.input_batch[0] = self._preprocess(self.cur_tile.crop(frame))
         return self.input_batch
 
     def postprocess(self):
         det_out = self.backend.synchronize()[0]
         # print(time.perf_counter() - self.tic)
+
+        tic = time.perf_counter()
         detections = []
         for tile_idx in range(self.batch_size):
             tile = self.tiles[tile_idx] if self.batch_size > 1 else self.cur_tile
@@ -122,10 +117,6 @@ class ObjectDetector:
                 label = int(det_out[offset + 1])
                 conf = det_out[offset + 2]
                 if conf > self.conf_threshold and label in self.classes:
-                    # xmin = int(round(det_out[offset + 3] * tile.size[0])) + tile.xmin
-                    # ymin = int(round(det_out[offset + 4] * tile.size[1])) + tile.ymin
-                    # xmax = int(round(det_out[offset + 5] * tile.size[0])) + tile.xmin
-                    # ymax = int(round(det_out[offset + 6] * tile.size[1])) + tile.ymin
                     xmin = det_out[offset + 3] * tile.size[0] + tile.xmin
                     ymin = det_out[offset + 4] * tile.size[1] + tile.ymin
                     xmax = det_out[offset + 5] * tile.size[0] + tile.xmin
@@ -134,7 +125,9 @@ class ObjectDetector:
                     bbox = Rect(xmin, ymin, w, h)
                     detections.append(Detection(bbox, label, conf, tile_idx))
                     # print('[Detector] Detected: %s' % det)
+        print('loop over det out', time.perf_counter() - tic)
 
+        tic = time.perf_counter()
         # merge detections across different tiles
         merged_detections = []
         merged_det_indices = set()
@@ -154,6 +147,7 @@ class ObjectDetector:
                     merged_detections.append(merged_det)
         detections = np.delete(detections, list(merged_det_indices))
         detections = np.r_[detections, merged_detections]
+        print('merge det', time.perf_counter() - tic)
         return detections
 
     def detect(self, frame, roi=None):
@@ -183,4 +177,15 @@ class ObjectDetector:
         tiles = [Rect(c * step_width + x_offset, r * step_height + y_offset, tile_width, tile_height) for r in
                 range(self.tiling_grid[1]) for c in range(self.tiling_grid[0])]
         return tiles
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _preprocess(frame_tile):
+        # BGR to RGB
+        frame_tile = frame_tile[..., ::-1]
+        # HWC -> CHW
+        frame_tile = frame_tile.transpose(2, 0, 1)
+        # Normalize to [-1.0, 1.0] interval (expected by model)
+        frame_tile = frame_tile * (2 / 255) - 1
+        return frame_tile.ravel()
         

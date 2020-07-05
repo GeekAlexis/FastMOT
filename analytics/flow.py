@@ -86,8 +86,8 @@ class Flow:
             target_end_idices.append(num_pts)
             # zero out track in background mask
             track.bbox.crop(self.bkg_mask)[:] = 0
-        print('target feature:', time.perf_counter() - tic)
-        print('target feature func:', feature_time)
+        # print('target feature:', time.perf_counter() - tic)
+        # print('target feature func:', feature_time)
 
         tic = time.perf_counter()
         if self.estimate_camera_motion:
@@ -107,7 +107,7 @@ class Flow:
                 return {}, None
             bkg_begin_idx = num_pts
             all_prev_pts.append(prev_bkg_pts)
-        print('bg feature:', time.perf_counter() - tic)
+        # print('bg feature:', time.perf_counter() - tic)
 
         # level, pyramid = cv2.buildOpticalFlowPyramid(frame_small, self.optflow_params['winSize'], self.optflow_params['maxLevel'])
 
@@ -117,11 +117,11 @@ class Flow:
         tic2 = time.perf_counter()
         all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, 
             all_prev_pts_scaled, None, **self.optflow_params)
-        print('opt flow func:', time.perf_counter() - tic2)
+        # print('opt flow func:', time.perf_counter() - tic2)
         with np.errstate(invalid='ignore'):
             status_mask = np.bool_(status.ravel()) & (err.ravel() < self.optflow_err_thresh)
         all_cur_pts = self._unscale_pts(all_cur_pts, self.optflow_scaling, status_mask)
-        print('opt flow:', time.perf_counter() - tic)
+        # print('opt flow:', time.perf_counter() - tic)
 
         tic = time.perf_counter()
         next_bboxes = {}
@@ -150,7 +150,7 @@ class Flow:
                 self.prev_bkg_feature_pts = None
                 print('[Flow] Background registration failed')
                 return {}, None
-        print('camera homography:', time.perf_counter() - tic)
+        # print('camera homography:', time.perf_counter() - tic)
 
         tic = time.perf_counter()
         affine_time = 0
@@ -171,7 +171,7 @@ class Flow:
                 # print('[Flow] Target lost (no inlier): %s' % track)
                 track.feature_pts = None
                 continue
-            est_bbox = Rect(*self._warp_tlwh(track.bbox.tl, track.bbox.size, H_affine))
+            est_bbox = Rect(*self._estimate_tlwh(track.bbox.tl, track.bbox.size, H_affine))
             # delete track when it goes outside the frame
             inside_bbox = est_bbox & Rect(0, 0, *self.size)
             # inside_bbox = est_bbox.intersect(Rect(0, 0, *self.size))
@@ -185,8 +185,8 @@ class Flow:
             next_bboxes[track.track_id] = est_bbox
             # zero out current track in foreground mask
             est_bbox.crop(self.fg_mask)[:] = 0
-        print('target affine:', time.perf_counter() - tic)
-        print('target affine func:', affine_time)
+        # print('target affine:', time.perf_counter() - tic)
+        # print('target affine func:', affine_time)
         return next_bboxes, H_camera
 
     def draw_bkg_feature_match(self, frame):
@@ -205,7 +205,7 @@ class Flow:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _warp_tlwh(tl, size, H_affine):
+    def _estimate_tlwh(tl, size, H_affine):
         xmin, ymin = transform(tl, H_affine).ravel()
         scale = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
         scale = 1. if scale < 0.9 or scale > 1.1 else scale

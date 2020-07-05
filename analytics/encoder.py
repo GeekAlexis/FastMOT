@@ -1,4 +1,5 @@
 import numpy as np
+import numba as nb
 import cv2
 
 from .utils import *
@@ -26,14 +27,22 @@ class ImageEncoder:
         assert self.num_detections <= 32
         for i, det in enumerate(detections):
             roi = det.bbox.crop(frame)
-            roi = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
             roi = cv2.resize(roi, self.model.INPUT_SHAPE[:0:-1])
-            roi = np.transpose(roi, (2, 0, 1)) # HWC -> CHW
-            self.input_batch[i] = roi.ravel()
-        self.input_batch[:self.num_detections] = self.input_batch[:self.num_detections] * (2 / 255) - 1
+            self.input_batch[i] = self._preprocess(roi)
         return self.input_batch
 
     def postprocess(self):
         embedding_out = self.backend.synchronize()[0]
         embeddings = [embedding_out[i:i + self.model.OUTPUT_LAYOUT] for i in range(self.num_detections)]
         return embeddings
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _preprocess(frame_tile):
+        # BGR to RGB
+        frame_tile = frame_tile[..., ::-1]
+        # HWC -> CHW
+        frame_tile = frame_tile.transpose(2, 0, 1)
+        # Normalize to [-1.0, 1.0] interval (expected by model)
+        frame_tile = frame_tile * (2 / 255) - 1
+        return frame_tile.ravel()

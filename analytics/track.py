@@ -1,38 +1,31 @@
-from pathlib import Path
-import json
-
 from collections import deque
 import numpy as np
 import cv2
 
 from .models import COCO_LABELS
-from .utils import ConfigDecoder
+
 
 class Track:
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['Track']
-
-    def __init__(self, label, bbox, track_id):
+    def __init__(self, label, bbox, track_id, feature_buf_size=10):
         self.label = label
         self.bbox = bbox
         self.init_bbox = bbox
         self.track_id = track_id
+        self.feature_buf_size = feature_buf_size
 
         self.age = 0
         self.frames_since_acquired = 0
-        self.feat_buffer_size = Track.config['feat_buffer_size']
-        self.features = deque([], maxlen=self.feat_buffer_size)
+        self.features = deque([], maxlen=self.feature_buf_size)
+        self.state = None
         self.feature_pts = None
         self.prev_feature_pts = None
 
     def __repr__(self):
-        return "Track(label=%r, bbox=%r, track_id=%r)" % (self.label, self.bbox, self.track_id)
+        return "Track(label=%r, bbox=%r, track_id=%r, feature_buf_size=%r)" % (self.label, self.bbox,
+            self.track_id, self.feature_buf_size)
 
     def __str__(self):
         return "%s ID%d at %s" % (COCO_LABELS[self.label], self.track_id, self.bbox.tlwh)
-
-    def add_embedding(self, embedding):
-        self.features.append(embedding)
 
     def draw(self, frame, follow=False, draw_feature_match=False):
         bbox_color = (127, 255, 0) if follow else (0, 165, 255)
