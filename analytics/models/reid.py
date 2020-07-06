@@ -1,8 +1,5 @@
 from pathlib import Path
 import tensorrt as trt
-import os
-
-from . import calibrator
 
 
 class ReID:
@@ -12,7 +9,7 @@ class ReID:
     OUTPUT_LAYOUT = None
 
     @classmethod
-    def build_engine(cls, trt_logger, batch_size=1, calib_dataset=Path(__file__).parent / 'VOCdevkit' / 'VOC2007' / 'JPEGImages'):
+    def build_engine(cls, trt_logger, batch_size=1):
         assert batch_size > 0
 
         def compute_max_batch_size(n):
@@ -29,9 +26,6 @@ class ReID:
             
             if builder.platform_has_fast_fp16:
                 builder.fp16_mode = True
-            # if builder.platform_has_fast_int8:
-            #     builder.int8_mode = True
-            #     builder.int8_calibrator = calibrator.SSDEntropyCalibrator(cls.INPUT_SHAPE, data_dir=calib_dataset, cache_file=Path(__file__).parent / 'INT8CacheFile')
 
             # Parse model file
             with open(cls.ONNX_PATH, 'rb') as model_file:
@@ -50,8 +44,10 @@ class ReID:
 
 
 class OSNet(ReID):
-    PATH = Path(__file__).parent / 'TRT_osnet_x1_0_market.bin'
-    ONNX_PATH = Path(__file__).parent / 'osnet_x1_0_market' / 'osnet_x1_0.onnx'
+    PATH = Path(__file__).parent / 'TRT_osnet_ain_x1_0_msmt17.bin'
+    ONNX_PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17' / 'osnet_ain_x1_0.onnx'
+    # PATH = Path(__file__).parent / 'TRT_osnet_x1_0_market.bin'
+    # ONNX_PATH = Path(__file__).parent / 'osnet_x1_0_market' / 'osnet_x1_0.onnx'
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
 

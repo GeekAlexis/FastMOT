@@ -59,7 +59,7 @@ class Flow:
         target_end_idices = []
         np.copyto(self.bkg_mask, self.ones)
         for track in tracks.values():
-            inside_bbox = track.bbox & Rect(0, 0, *self.size)
+            inside_bbox = track.bbox & Rect(tlwh=(0, 0, *self.size))
             if track.feature_pts is not None:
                 # only propagate feature points inside the bounding box
                 track.feature_pts = self._rect_filter(track.feature_pts, inside_bbox.tl, inside_bbox.br)
@@ -171,10 +171,9 @@ class Flow:
                 # print('[Flow] Target lost (no inlier): %s' % track)
                 track.feature_pts = None
                 continue
-            est_bbox = Rect(*self._estimate_tlwh(track.bbox.tl, track.bbox.size, H_affine))
+            est_bbox = Rect(tlwh=self._estimate_tlwh(track.bbox.tl, track.bbox.size, H_affine))
             # delete track when it goes outside the frame
-            inside_bbox = est_bbox & Rect(0, 0, *self.size)
-            # inside_bbox = est_bbox.intersect(Rect(0, 0, *self.size))
+            inside_bbox = est_bbox & Rect(tlwh=(0, 0, *self.size))
             if inside_bbox is None:
                 # print('[Flow] Target lost (out of frame): %s' % track)
                 track.feature_pts = None

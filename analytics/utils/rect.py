@@ -4,30 +4,24 @@ import cv2
 
 
 class Rect:
-    # def __init__(self, tlbr=None, tlwh=None):
-    #     if tlbr is not None:
-    #         self.xmin, self.ymin, self.xmax, self.ymax = tlbr
-    #         self.size = (self.xmax - self.xmin + 1, self.ymax - self.ymin + 1)
-    #     elif tlwh is not None:
-    #         self.xmin, self.ymin = tlwh[:2]
-    #         self.size = tuple(tlwh[2:])
-    #         self.xmax = self.size[0] - 1 + self.xmin
-    #         self.ymax = self.size[1] - 1 + self.ymin
-    #     else:
-    #         raise ValueError('Either tlbr or tlwh must not be None') 
-        
-    # def __repr__(self):
-    #     return "Rect(tlbr=(%r, %r, %r, %r))" % (self.xmin, self.ymin, self.xmax, self.ymax)
-
-    def __init__(self, xmin, ymin, width, height):
-        self.xmin = int(round(xmin))
-        self.ymin = int(round(ymin))
-        self.size = (int(round(width)), int(round(height)))
-        self.xmax = self.size[0] - 1 + self.xmin
-        self.ymax = self.size[1] - 1 + self.ymin
+    def __init__(self, tlbr=None, tlwh=None):
+        if tlbr is not None:
+            self.xmin = int(round(tlbr[0]))
+            self.ymin = int(round(tlbr[1]))
+            self.xmax = int(round(tlbr[2]))
+            self.ymax = int(round(tlbr[3]))
+            self.size = (self.xmax - self.xmin + 1, self.ymax - self.ymin + 1)
+        elif tlwh is not None:
+            self.xmin = int(round(tlwh[0]))
+            self.ymin = int(round(tlwh[1]))
+            self.size = (int(round(tlwh[2])), int(round(tlwh[3])))
+            self.xmax = self.xmin + self.size[0] - 1
+            self.ymax = self.ymin + self.size[1] - 1
+        else:
+            raise ValueError('Either tlbr or tlwh must not be None') 
         
     def __repr__(self):
-        return "Rect(%r, %r, %r, %r)" % (self.xmin, self.ymin, self.size[0], self.size[1])
+        return "Rect(tlbr=(%r, %r, %r, %r))" % (self.xmin, self.ymin, self.xmax, self.ymax)
 
     def __contains__(self, point):
         return point[0] >= self.xmin and point[1] >= self.ymin and \
@@ -35,19 +29,14 @@ class Rect:
 
     def __and__(self, other):
         # intersection
-        # tlwh = self._intersection(self.tlbr, other.tlbr)
-        # if tlwh is None:
-        #     return None
-        # else:
-        #     return Rect(*tlwh)
         xmin = max(self.xmin, other.xmin)
         ymin = max(self.ymin, other.ymin)
         xmax = min(self.xmax, other.xmax)
         ymax = min(self.ymax, other.ymax)
-        w, h = xmax - xmin + 1, ymax - ymin + 1
-        if w <= 0 or h <= 0:
+        intersection = Rect(tlbr=(xmin, ymin, xmax, ymax))
+        if intersection.size[0] <= 0 or intersection.size[1] <= 0:
             return None
-        return Rect(xmin, ymin, w, h)
+        return intersection
 
     def __or__(self, other):
         # minimum rect that contains both rects
@@ -55,8 +44,20 @@ class Rect:
         ymin = min(self.ymin, other.ymin)
         xmax = max(self.xmax, other.xmax)
         ymax = max(self.ymax, other.ymax)
-        w, h = xmax - xmin + 1, ymax - ymin + 1
-        return Rect(xmin, ymin, w, h)
+        return Rect(tlbr=(xmin, ymin, xmax, ymax))
+
+    def __mul__(self, scale):
+        # scale rect
+        width = self.size[0] * scale[0] - 1
+        height = self.size[1] * scale[1] - 1
+        center = self.center
+        xmin = center[0] - width / 2
+        ymin = center[1] - height / 2
+        return Rect(tlwh=(xmin, ymin, width, height))
+
+    def contains_rect(self, other):
+        return other.xmin >= self.xmin and other.ymin >= self.ymin and \
+            other.xmax <= self.xmax and other.ymax <= self.ymax
 
     @property
     def tlbr(self):
@@ -65,11 +66,6 @@ class Rect:
     @property
     def tlwh(self):
         return np.array([self.xmin, self.ymin, self.size[0], self.size[1]])
-    
-    @property
-    def tlbr_wh(self):
-        return np.array([self.xmin, self.ymin, self.xmax, self.ymax, 
-            self.size[0], self.size[1]])
 
     @property
     def tl(self):
@@ -85,67 +81,44 @@ class Rect:
 
     @property
     def corners(self):
-        return np.array([[self.xmin, self.ymin], [self.xmax, self.ymin], 
+        return np.array([[self.xmin, self.ymin], [self.xmax, self.ymin],
             [self.xmax, self.ymax], [self.xmin, self.ymax]])
 
     @property
     def area(self):
         return self.size[0] * self.size[1]
 
-    def contains_rect(self, other):
-        return other.xmin >= self.xmin and other.ymin >= self.ymin and \
-            other.xmax <= self.xmax and other.ymax <= self.ymax
-
     def crop(self, image):
         return image[self.ymin:self.ymax + 1, self.xmin:self.xmax + 1]
 
-    def scale(self, sx, sy):
-        size = np.asarray(self.size) * np.array([sx, sy])
-        xmin, ymin = self.center - (size - 1) / 2
-        return Rect(xmin, ymin, *size)
-
     def resize(self, size):
-        dx, dy = (np.asarray(size) - np.asarray(self.size)) / 2
-        xmin, ymin = self.xmin - dx, self.ymin - dy
-        return Rect(xmin, ymin, *size)
-    
+        dx = (size[0] - self.size[0]) / 2
+        dy = (size[1] - self.size[1]) / 2
+        xmin = self.xmin - dx
+        ymin = self.ymin - dy
+        return Rect(tlwh=(xmin, ymin, *size))
+
     def warp(self, m):
-        return Rect(*self._warp(self.corners, m))
-        # warped_corners = perspectiveTransform(self.corners, m)
-        # tl = np.min(warped_corners, axis=0)
-        # br = np.max(warped_corners, axis=0)
-        # w, h = br - tl + 1
-        # return Rect(*tl, w, h)
+        return Rect(tlbr=self._warp(self.corners, m))
 
     def iou(self, other):
         overlap_xmin = max(self.xmin, other.xmin) 
         overlap_ymin = max(self.ymin, other.ymin)
         overlap_xmax = min(self.xmax, other.xmax)
         overlap_ymax = min(self.ymax, other.ymax)
-        area_intersection = max(0, overlap_xmax - overlap_xmin + 1) * max(0, 
-            overlap_ymax - overlap_ymin + 1)
+        area_intersection = max(0, overlap_xmax - overlap_xmin + 1) * \
+            max(0, overlap_ymax - overlap_ymin + 1)
         return area_intersection / (self.area + other.area - area_intersection)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _warp(corners, m):
         warped_corners = perspectiveTransform(corners, m)
-        xmin = np.min(warped_corners[:, 0])
-        ymin = np.min(warped_corners[:, 1])
-        xmax = np.max(warped_corners[:, 0])
-        ymax = np.max(warped_corners[:, 1])
-        w, h = xmax - xmin + 1, ymax - ymin + 1
-        return xmin, ymin, w, h
-
-    # @staticmethod
-    # @nb.njit(fastmath=True, cache=True)
-    # def _intersection(tlbr, other_tlbr):
-    #     tl = np.maximum(tlbr[:2], other_tlbr[:2])
-    #     br = np.minimum(tlbr[2:], other_tlbr[2:])
-    #     w, h = br - tl + 1
-    #     if w <= 0 or h <= 0:
-    #         return None
-    #     return tl[0], tl[1], w, h
+        xmin = min(warped_corners[:, 0])
+        ymin = min(warped_corners[:, 1])
+        xmax = max(warped_corners[:, 0])
+        ymax = max(warped_corners[:, 1])
+        return xmin, ymin, xmax, ymax
 
 
 @nb.njit(fastmath=True, cache=True)
@@ -199,5 +172,5 @@ def iou(bbox, candidates):
     overlap_ymax = np.minimum(bbox[3], candidates[:, 3])
     
     area_intersection = np.maximum(0, overlap_xmax - overlap_xmin + 1) * \
-                        np.maximum(0, overlap_ymax - overlap_ymin + 1)
+        np.maximum(0, overlap_ymax - overlap_ymin + 1)
     return area_intersection / (area_bbox + area_candidates - area_intersection)

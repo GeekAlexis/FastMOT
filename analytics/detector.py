@@ -23,7 +23,8 @@ class Detection:
             self.tile_id = tile_id
 
     def __repr__(self):
-        return "Detection(bbox=%r, label=%r, conf=%r, tile_id=%r)" % (self.bbox, self.label, self.conf, self.tile_id)
+        return "Detection(bbox=%r, label=%r, conf=%r, tile_id=%r)" % (self.bbox, self.label, 
+            self.conf, self.tile_id)
 
     def __str__(self):
         return "%.2f %s at %s" % (self.conf, COCO_LABELS[self.label], self.bbox.tlwh)
@@ -72,8 +73,8 @@ class ObjectDetector:
             self.tile_size = self.model.INPUT_SHAPE[:0:-1]
             assert self.batch_size == 1, 'Only batch size = 1 is supported for tracking detector'
         else:
-            raise ValueError(f'Invalid detector type; must be either {ObjectDetector.Type.ACQUISITION} or \
-                             {ObjectDetector.Type.TRACKING}')
+            raise ValueError(f'Invalid detector type; must be either {ObjectDetector.Type.ACQUISITION} \
+                or {ObjectDetector.Type.TRACKING}')
         assert self.max_det <= self.model.TOPK
         self.backend = InferenceBackend(self.model, self.batch_size)
         self.input_batch = np.empty((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
@@ -81,8 +82,7 @@ class ObjectDetector:
     @property
     def tiling_region(self):
         assert self.tiles is not None
-        size = self.tiles[-1].br - self.tiles[0].tl + 1
-        return Rect(*self.tiles[0].tl, *size)
+        return Rect(tlbr=(*self.tiles[0].tl, *self.tiles[-1].br))
 
     def preprocess(self, frame, roi=None):
         if self.detector_type == ObjectDetector.Type.ACQUISITION:
@@ -117,12 +117,11 @@ class ObjectDetector:
                 label = int(det_out[offset + 1])
                 conf = det_out[offset + 2]
                 if conf > self.conf_threshold and label in self.classes:
-                    xmin = det_out[offset + 3] * tile.size[0] + tile.xmin
-                    ymin = det_out[offset + 4] * tile.size[1] + tile.ymin
-                    xmax = det_out[offset + 5] * tile.size[0] + tile.xmin
-                    ymax = det_out[offset + 6] * tile.size[1] + tile.ymin
-                    w, h = xmax - xmin + 1, ymax - ymin + 1
-                    bbox = Rect(xmin, ymin, w, h)
+                    xmin = det_out[offset + 3] * tile.size[0] + tile.tl[0]
+                    ymin = det_out[offset + 4] * tile.size[1] + tile.tl[1]
+                    xmax = det_out[offset + 5] * tile.size[0] + tile.tl[0]
+                    ymax = det_out[offset + 6] * tile.size[1] + tile.tl[1]
+                    bbox = Rect(tlbr=(xmin, ymin, xmax, ymax))
                     detections.append(Detection(bbox, label, conf, tile_idx))
                     # print('[Detector] Detected: %s' % det)
         print('loop over det out', time.perf_counter() - tic)
@@ -174,8 +173,8 @@ class ObjectDetector:
         assert total_width <= width and total_height <= height, "Frame size not large enough for %dx%d tiles" % self.tiling_grid
         x_offset = width // 2 - total_width // 2
         y_offset = height // 2 - total_height // 2
-        tiles = [Rect(c * step_width + x_offset, r * step_height + y_offset, tile_width, tile_height) for r in
-                range(self.tiling_grid[1]) for c in range(self.tiling_grid[0])]
+        tiles = [Rect(tlwh=(c * step_width + x_offset, r * step_height + y_offset, tile_width, tile_height)) for r in
+            range(self.tiling_grid[1]) for c in range(self.tiling_grid[0])]
         return tiles
 
     @staticmethod

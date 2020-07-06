@@ -4,9 +4,13 @@ import json
 
 import numpy as np
 import numba as nb
-import time
 
 from .utils import perspectiveTransform, ConfigDecoder
+
+
+class MeasType(Enum):
+    FLOW = 0
+    CNN = 1
 
 
 class KalmanFilter:
@@ -19,9 +23,6 @@ class KalmanFilter:
     Object motion follows a constant velocity model augmented with velocity 
     coupling and decay for tracking stability.
     """
-    class Meas(Enum):
-        FLOW = 0
-        CNN = 1
 
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['KalmanFilter']
@@ -122,10 +123,10 @@ class KalmanFilter:
             Returns the projected mean and covariance matrix of the given state
             estimate.
         """
-        if meas_type == KalmanFilter.Meas.FLOW:
+        if meas_type == MeasType.FLOW:
             std_factor = self.std_factor_flow
             min_std = self.min_std_flow
-        elif meas_type == KalmanFilter.Meas.CNN:
+        elif meas_type == MeasType.CNN:
             std_factor = self.std_factor_cnn
             min_std = self.min_std_cnn
         else:
@@ -172,7 +173,7 @@ class KalmanFilter:
             Returns a array of size N such that element i
             contains the squared mahalanobis distance for `measurements[i]`.
         """
-        projected_mean, projected_cov = self.project(mean, covariance, KalmanFilter.Meas.CNN)
+        projected_mean, projected_cov = self.project(mean, covariance, MeasType.CNN)
         return self._maha_distance(projected_mean, projected_cov, measurements)
 
     @staticmethod

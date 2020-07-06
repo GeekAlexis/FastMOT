@@ -13,7 +13,7 @@ import time
 
 from .track import Track
 from .flow import Flow
-from .kalman_filter import KalmanFilter
+from .kalman_filter import MeasType, KalmanFilter
 from .utils import * 
 
 
@@ -97,11 +97,11 @@ class MultiTracker:
                 if track_id in flow_meas:
                     flow_bbox = flow_meas[track_id]
                     conf = 0.3 / track.age if track.age > 0 else 1
-                    mean, cov = self.kf.update(mean, cov, flow_bbox.tlbr, KalmanFilter.Meas.FLOW, conf)
+                    mean, cov = self.kf.update(mean, cov, flow_bbox.tlbr, MeasType.FLOW, conf)
                 track.state = (mean, cov)
                 # check for out of frame case
-                next_bbox = self._state_to_bbox(mean)
-                inside_bbox = next_bbox & Rect(0, 0, *self.size)
+                next_bbox = Rect(tlbr=mean[:4])
+                inside_bbox = next_bbox & Rect(tlwh=(0, 0, *self.size))
                 if inside_bbox is not None:
                     track.bbox = next_bbox
                 else:
@@ -124,7 +124,7 @@ class MultiTracker:
             self.tracks.clear()
         self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.flow.optflow_scaling[0],
-                                            fy=self.flow.optflow_scaling[1])
+            fy=self.flow.optflow_scaling[1])
         for i, det in enumerate(detections):
             new_track = Track(det.label, det.bbox, self.next_id, self.feature_buf_size)
             if embeddings is not None:
@@ -141,7 +141,7 @@ class MultiTracker:
             assert overlap is not None
             # handle single batch size differently
             sx = sy = 1 - overlap
-            scaled_tile = tile.scale(sx, sy)
+            scaled_tile = tile * (sx, sy)
 
         excluded_track_ids = []
         if tile is None:
@@ -178,10 +178,10 @@ class MultiTracker:
                     else:
                         mean, cov = track.state
                         det_meas = detections[det_idx].bbox.tlbr
-                        mean, cov = self.kf.update(mean, cov, det_meas, KalmanFilter.Meas.CNN)
+                        mean, cov = self.kf.update(mean, cov, det_meas, MeasType.CNN)
                         track.state = (mean, cov)
-                        next_bbox = self._state_to_bbox(mean)
-                        inside_bbox = next_bbox & Rect(0, 0, *self.size)
+                        next_bbox = Rect(tlbr=mean[:4])
+                        inside_bbox = next_bbox & Rect(tlwh=(0, 0, *self.size))
                         if inside_bbox is not None:
                             track.bbox = next_bbox
                             if embeddings is not None:
@@ -236,11 +236,6 @@ class MultiTracker:
         # estimate distance using bottow right y coord and area
         return (np.ceil(id_track_pair[1].bbox.ymax / self.vertical_bin_height), id_track_pair[1].bbox.area)
 
-    def _state_to_bbox(self, mean):
-        xmin, ymin = mean[:2]
-        w, h = mean[2:4] - mean[:2] + 1
-        return Rect(xmin, ymin, w, h)
-
     def _compute_cost_matrix(self, track_ids, detections, embeddings=None):
         iou_only = False
         use_motion_cost = False
@@ -273,7 +268,7 @@ class MultiTracker:
                 if embeddings is not None:
                     appearance_cost[i, :] = self._feature_distance(track_id, embeddings)
             gate_mask = (diff_label_mask | (motion_cost > self.max_motion_cost) | (appearance_cost > self.max_appearance_cost))
-            cost = ((self.motion_cost_weight) * motion_cost + (1 - self.motion_cost_weight) * appearance_cost)
+            cost[:] = ((self.motion_cost_weight) * motion_cost + (1 - self.motion_cost_weight) * appearance_cost)
         # print(appearance_cost)
             
         # gate cost matrix
@@ -296,4 +291,4 @@ class MultiTracker:
 
     def _feature_distance(self, track_id, embeddings):
         track = self.tracks[track_id]
-        return cdist(track.features, embeddings).min(axis=0)
+        return cdist(track.features, embeddings, 'cosine').min(axis=0)
