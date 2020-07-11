@@ -212,7 +212,7 @@ class MultiTracker:
         for track_id in u_track_ids:
             track = self.tracks[track_id]
             track.age += 1
-            if track.age > self.max_age:
+            if track.age > self.max_age or not track.confirmed:
                 print('[Tracker] Target lost (age): %s' % track)
                 del self.tracks[track_id]
 

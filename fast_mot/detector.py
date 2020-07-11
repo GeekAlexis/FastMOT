@@ -51,8 +51,8 @@ class ObjectDetector:
         self.max_det = ObjectDetector.config['max_det']
         self.batch_size = ObjectDetector.config['batch_size']
         self.tile_overlap = ObjectDetector.config['tile_overlap']
-        self.tiling_grid = ObjectDetector.config['acquisition']['tiling_grid']
-        self.conf_threshold = ObjectDetector.config['acquisition']['conf_threshold']
+        self.tiling_grid = ObjectDetector.config['tiling_grid']
+        self.conf_threshold = ObjectDetector.config['conf_threshold']
         self.merge_iou_thresh = ObjectDetector.config['merge_iou_thresh']
 
         self.model = SSDInceptionV2 # SSDMobileNetV1

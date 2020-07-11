@@ -141,36 +141,36 @@ def perspectiveTransform(pts, m):
     return pts[:2].T
 
 
-@nb.njit(parallel=True, fastmath=True, cache=True)
-def iou(bbox, candidates):
-    """Vectorized version of intersection over union.
-    Parameters
-    ----------
-    bbox : ndarray
-        A bounding box in format `(top left x, top left y, bottom right x, bottom right y)`.
-    candidates : ndarray
-        A matrix of candidate bounding boxes (one per row) in the same format
-        as `bbox`.
-    Returns
-    -------
-    ndarray
-        The intersection over union in [0, 1] between the `bbox` and each
-        candidate. A higher score means a larger fraction of the `bbox` is
-        occluded by the candidate.
-    """
-    bbox, candidates = np.asarray(bbox), np.asarray(candidates)
-    if len(candidates) == 0:
-        return np.zeros(len(candidates))
+# @nb.njit(parallel=True, fastmath=True, cache=True)
+# def iou(bbox, candidates):
+#     """Vectorized version of intersection over union.
+#     Parameters
+#     ----------
+#     bbox : ndarray
+#         A bounding box in format `(top left x, top left y, bottom right x, bottom right y)`.
+#     candidates : ndarray
+#         A matrix of candidate bounding boxes (one per row) in the same format
+#         as `bbox`.
+#     Returns
+#     -------
+#     ndarray
+#         The intersection over union in [0, 1] between the `bbox` and each
+#         candidate. A higher score means a larger fraction of the `bbox` is
+#         occluded by the candidate.
+#     """
+#     bbox, candidates = np.asarray(bbox), np.asarray(candidates)
+#     if len(candidates) == 0:
+#         return np.zeros(len(candidates))
 
-    area_bbox = np.prod(bbox[2:] - bbox[:2] + 1)
-    size_candidates = candidates[:, 2:] - candidates[:, :2] + 1
-    area_candidates = size_candidates[:, 0] * size_candidates[:, 1]
+#     area_bbox = np.prod(bbox[2:] - bbox[:2] + 1)
+#     size_candidates = candidates[:, 2:] - candidates[:, :2] + 1
+#     area_candidates = size_candidates[:, 0] * size_candidates[:, 1]
 
-    overlap_xmin = np.maximum(bbox[0], candidates[:, 0])
-    overlap_ymin = np.maximum(bbox[1], candidates[:, 1])
-    overlap_xmax = np.minimum(bbox[2], candidates[:, 2])
-    overlap_ymax = np.minimum(bbox[3], candidates[:, 3])
+#     overlap_xmin = np.maximum(bbox[0], candidates[:, 0])
+#     overlap_ymin = np.maximum(bbox[1], candidates[:, 1])
+#     overlap_xmax = np.minimum(bbox[2], candidates[:, 2])
+#     overlap_ymax = np.minimum(bbox[3], candidates[:, 3])
     
-    area_intersection = np.maximum(0, overlap_xmax - overlap_xmin + 1) * \
-        np.maximum(0, overlap_ymax - overlap_ymin + 1)
-    return area_intersection / (area_bbox + area_candidates - area_intersection)
+#     area_intersection = np.maximum(0, overlap_xmax - overlap_xmin + 1) * \
+#         np.maximum(0, overlap_ymax - overlap_ymin + 1)
+#     return area_intersection / (area_bbox + area_candidates - area_intersection)

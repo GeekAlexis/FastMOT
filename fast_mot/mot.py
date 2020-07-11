@@ -79,7 +79,8 @@ class Mot:
 
     def _draw(self, frame, detections, debug=False):
         for track in self.tracker.tracks.values():
-            track.draw(frame, draw_feature_match=debug)
+            if track.isconfirmed:
+                track.draw(frame, draw_feature_match=debug)
         if debug:
             [det.draw(frame) for det in detections]
             # self.tracker.flow.draw_bkg_feature_match(frame)
