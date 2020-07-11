@@ -10,7 +10,7 @@ from .utils import perspectiveTransform, ConfigDecoder
 
 class MeasType(Enum):
     FLOW = 0
-    CNN = 1
+    DETECTOR = 1
 
 
 class KalmanFilter:
@@ -32,9 +32,9 @@ class KalmanFilter:
         self.n_init = n_init
         self.small_size_std_acc = KalmanFilter.config['small_size_std_acc']
         self.large_size_std_acc = KalmanFilter.config['large_size_std_acc']
-        self.min_std_cnn = KalmanFilter.config['min_std_cnn']
+        self.min_std_det = KalmanFilter.config['min_std_det']
         self.min_std_flow = KalmanFilter.config['min_std_flow']
-        self.std_factor_cnn = KalmanFilter.config['std_factor_cnn']
+        self.std_factor_det = KalmanFilter.config['std_factor_det']
         self.std_factor_flow = KalmanFilter.config['std_factor_flow']
         self.init_std_pos_factor = KalmanFilter.config['init_std_pos_factor']
         self.init_std_vel_factor = KalmanFilter.config['init_std_vel_factor']
@@ -126,9 +126,9 @@ class KalmanFilter:
         if meas_type == MeasType.FLOW:
             std_factor = self.std_factor_flow
             min_std = self.min_std_flow
-        elif meas_type == MeasType.CNN:
-            std_factor = self.std_factor_cnn
-            min_std = self.min_std_cnn
+        elif meas_type == MeasType.DETECTOR:
+            std_factor = self.std_factor_det
+            min_std = self.min_std_det
         else:
             raise ValueError('Invalid measurement type')
 
@@ -173,7 +173,7 @@ class KalmanFilter:
             Returns a array of size N such that element i
             contains the squared mahalanobis distance for `measurements[i]`.
         """
-        projected_mean, projected_cov = self.project(mean, covariance, MeasType.CNN)
+        projected_mean, projected_cov = self.project(mean, covariance, MeasType.DETECTOR)
         return self._maha_distance(projected_mean, projected_cov, measurements)
 
     @staticmethod

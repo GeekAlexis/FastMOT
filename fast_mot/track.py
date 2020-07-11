@@ -15,6 +15,7 @@ class Track:
 
         self.age = 0
         self.frames_since_acquired = 0
+        self.confirmed = False
         self.alpha = 0.9
         self.features = deque([], maxlen=self.feature_buf_size)
         self.smooth_feature = None

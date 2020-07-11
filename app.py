@@ -7,8 +7,8 @@ import struct
 import errno
 import cv2
 
-from analytics import VideoIO
-from analytics import Analytics
+from fast_mot import VideoIO
+from fast_mot import Mot
 
 
 """
@@ -67,20 +67,20 @@ def main():
 
     sock = None
     mot_log = None
-    analytics = None
-    enable_analytics = False
+    mot = None
+    enable_mot = False
     elapsed_time = 0    
     gui_time = 0
 
     if args['mot']:
-        analytics = Analytics(PROC_SIZE, stream.capture_dt, args['gui'] or args['output'])
-        enable_analytics = True
+        mot = Mot(PROC_SIZE, stream.capture_dt, args['gui'] or args['output'])
+        enable_mot = True
     if args['socket']:
         assert args['mot'], 'Tracking must be turned on for socket transfer'
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(args['addr'])
         sock.setblocking(False)
-        enable_analytics = False
+        enable_mot = False
         buffer = b''
     if args['log']:
         assert args['mot'], 'Tracking must be turned on for logging'
@@ -92,7 +92,7 @@ def main():
     stream.start_capture()
     try:
         while not args['gui'] or cv2.getWindowProperty("Video", 0) >= 0:
-            if analytics.frame_count > 4:
+            if mot.frame_count > 4:
                 tic = time.perf_counter()
             frame = stream.read()
             if frame is None:
@@ -111,40 +111,40 @@ def main():
                         buffer = b''
                         if signal == MsgType.START:
                             print('client: start')
-                            if not enable_analytics:
-                                analytics.reset()
+                            if not enable_mot:
+                                mot.initiate()
                                 elapsed_time = 0
-                                enable_analytics = True
+                                enable_mot = True
                         elif signal == MsgType.STOP:
                             print('client: stop')
-                            if enable_analytics:
-                                enable_analytics = False
-                                avg_fps = round(analytics.frame_count / elapsed_time)
+                            if enable_mot:
+                                enable_mot = False
+                                avg_fps = round(mot.frame_count / elapsed_time)
                                 print('[INFO] Average FPS: %d' % avg_fps)
                         elif signal == MsgType.TERMINATE:
                             print('client: terminate')
                             stream.stop_capture()
                             break
 
-            if enable_analytics:
-                analytics.run(frame)
+            if enable_mot:
+                mot.run(frame)
                 if args['log']:
-                    for track_id, track in analytics.tracker.tracks.items():
+                    for track_id, track in mot.tracker.tracks.items():
                         scaled_xmin = track.bbox.xmin / PROC_SIZE[0] * stream.vid_size[0]
                         scaled_ymin = track.bbox.ymin / PROC_SIZE[1] * stream.vid_size[1]
                         scaled_xmax = track.bbox.xmax / PROC_SIZE[0] * stream.vid_size[0]
                         scaled_ymax = track.bbox.ymax / PROC_SIZE[1] * stream.vid_size[1]
-                        mot_log.write(f'{analytics.frame_count + 1}, {track_id + 1}, {scaled_xmin}, {scaled_ymin}, {scaled_xmax - scaled_xmin + 1}, {scaled_ymax - scaled_ymin + 1}, -1, -1, -1, -1\n')
-                if args['socket']:
-                    if analytics.status == Analytics.Status.TARGET_ACQUIRED:
-                        msg = serialize_to_msg(MsgType.BBOX, analytics.get_target_bbox())
-                        sock.sendall(msg)
-                    elif analytics.status == Analytics.Status.TARGET_NOT_FOUND:
-                        msg = serialize_to_msg(MsgType.TARGET_NOT_FOUND)
-                        sock.sendall(msg)
-                    elif analytics.status == Analytics.Status.TARGET_LOST:
-                        msg = serialize_to_msg(MsgType.TARGET_LOST)
-                        sock.sendall(msg)
+                        mot_log.write(f'{mot.frame_count + 1}, {track_id + 1}, {scaled_xmin}, {scaled_ymin}, {scaled_xmax - scaled_xmin + 1}, {scaled_ymax - scaled_ymin + 1}, -1, -1, -1, -1\n')
+                # if args['socket']:
+                #     if mot.status == mot.Status.TARGET_ACQUIRED:
+                #         msg = serialize_to_msg(MsgType.BBOX, mot.get_target_bbox())
+                #         sock.sendall(msg)
+                #     elif mot.status == mot.Status.TARGET_NOT_FOUND:
+                #         msg = serialize_to_msg(MsgType.TARGET_NOT_FOUND)
+                #         sock.sendall(msg)
+                #     elif mot.status == mot.Status.TARGET_LOST:
+                #         msg = serialize_to_msg(MsgType.TARGET_LOST)
+                #         sock.sendall(msg)
 
             if args['gui']:
                 tic2 = time.perf_counter()
@@ -158,7 +158,7 @@ def main():
             if args['output'] is not None:
                 stream.write(frame)
             
-            if analytics.frame_count > 5:
+            if mot.frame_count > 5:
                 toc = time.perf_counter()
                 elapsed_time += toc - tic
     finally:
@@ -171,10 +171,10 @@ def main():
         cv2.destroyAllWindows()
     
     if not args['socket'] and args['mot']:
-        avg_fps = round((analytics.frame_count - 5) / elapsed_time)
+        avg_fps = round((mot.frame_count - 5) / elapsed_time)
         print('[INFO] Average FPS: %d' % avg_fps)
         if args['gui']:
-            avg_time = gui_time / analytics.frame_count
+            avg_time = gui_time / mot.frame_count
             print('[INFO] Average GUI time: %f' % avg_time)
 
 

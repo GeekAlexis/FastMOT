@@ -1,3 +1,0 @@
-sudo usermod -a -G dialout $ehc
-sudo chown root:ehc /dev/ttyUSB0
-./djiosdk-flightcontrol-sample UserConfig.txt

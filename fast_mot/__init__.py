@@ -1,5 +1,5 @@
 from .videoio import VideoIO
-from .analytics import Analytics
+from .mot import Mot
 from .detector import ObjectDetector
 from .encoder import ImageEncoder
 from .tracker import MultiTracker

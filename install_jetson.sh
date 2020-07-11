@@ -7,10 +7,10 @@ echo 'export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}' >> ~/.bashrc
 echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}' >> ~/.bashrc 
 source ~/.bashrc
 
-# install pip, numpy, pycuda, tensorflow
+# install pip, numpy, pycuda, tensorflow, cython-bbox
 sudo apt-get update
 sudo apt-get install python3-pip libhdf5-serial-dev hdf5-tools
-sudo pip3 install cython numpy pycuda
+sudo pip3 install cython numpy pycuda cython-bbox
 sudo pip3 install --no-cache-dir --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v44 tensorflow==1.15.2+nv20.4
 
 # install scipy

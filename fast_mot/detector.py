@@ -4,7 +4,7 @@ import json
 
 import numpy as np
 import numba as nb
-from numba.typed import List
+# from numba.typed import List
 import cv2
 import time
 
@@ -40,65 +40,50 @@ class Detection:
 
 
 class ObjectDetector:
-    class Type(Enum):
-        TRACKING = 0
-        ACQUISITION = 1
 
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['ObjectDetector']
 
-    def __init__(self, size, classes, detector_type):
+    def __init__(self, size, classes):
         # initialize parameters
         self.size = size
         self.classes = set(classes)
-        self.detector_type = detector_type
         self.max_det = ObjectDetector.config['max_det']
         self.batch_size = ObjectDetector.config['batch_size']
         self.tile_overlap = ObjectDetector.config['tile_overlap']
+        self.tiling_grid = ObjectDetector.config['acquisition']['tiling_grid']
+        self.conf_threshold = ObjectDetector.config['acquisition']['conf_threshold']
         self.merge_iou_thresh = ObjectDetector.config['merge_iou_thresh']
 
-        self.tiles = None
+        self.model = SSDInceptionV2 # SSDMobileNetV1
         self.cur_tile = None
         self.cur_tile_id = -1
-        if self.detector_type == ObjectDetector.Type.ACQUISITION:
-            self.tiling_grid = ObjectDetector.config['acquisition']['tiling_grid']
-            self.conf_threshold = ObjectDetector.config['acquisition']['conf_threshold']
-            self.model = SSDInceptionV2 #SSDMobileNetV1
-            self.tile_size = self.model.INPUT_SHAPE[:0:-1]
-            self.tiles = self._generate_tiles()
-            assert self.batch_size == np.prod(self.tiling_grid) or self.batch_size == 1
-        elif self.detector_type == ObjectDetector.Type.TRACKING:
-            self.conf_threshold = ObjectDetector.config['tracking']['conf_threshold']
-            self.model = SSDInceptionV2
-            self.tile_size = self.model.INPUT_SHAPE[:0:-1]
-            assert self.batch_size == 1, 'Only batch size = 1 is supported for tracking detector'
-        else:
-            raise ValueError(f'Invalid detector type; must be either {ObjectDetector.Type.ACQUISITION} \
-                or {ObjectDetector.Type.TRACKING}')
+        self.tile_size = self.model.INPUT_SHAPE[:0:-1]
+        self.tiles = self._generate_tiles()
+
+        assert self.batch_size == np.prod(self.tiling_grid) or self.batch_size == 1
         assert self.max_det <= self.model.TOPK
+
         self.backend = InferenceBackend(self.model, self.batch_size)
         self.input_batch = np.empty((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
     
     @property
     def tiling_region(self):
-        assert self.tiles is not None
         return Rect(tlbr=(*self.tiles[0].tl, *self.tiles[-1].br))
 
     def preprocess(self, frame, roi=None):
-        if self.detector_type == ObjectDetector.Type.ACQUISITION:
-            if self.batch_size > 1:
-                for i, tile in enumerate(self.tiles):
-                    self.input_batch[i] = self._preprocess(tile.crop(frame))
-            else:
+        if self.batch_size > 1:
+            for i, tile in enumerate(self.tiles):
+                self.input_batch[i] = self._preprocess(tile.crop(frame))
+        else:
+            if roi is None:
                 self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
                 self.cur_tile = self.tiles[self.cur_tile_id]
-        elif self.detector_type == ObjectDetector.Type.TRACKING:
-            tile_size = np.asarray(self.tile_size)
-            tl = roi.center - (tile_size - 1) / 2
-            tl = np.clip(tl, 0, self.size - tile_size)
-            self.cur_tile = Rect(*tl, *self.tile_size)
-
-        if self.cur_tile is not None:
+            else:
+                tile_size = np.asarray(self.tile_size)
+                tl = roi.center - (tile_size - 1) / 2
+                tl = np.clip(tl, 0, self.size - tile_size)
+                self.cur_tile = Rect(*tl, *self.tile_size)
             self.input_batch[0] = self._preprocess(self.cur_tile.crop(frame))
         return self.input_batch
 
@@ -135,7 +120,7 @@ class ObjectDetector:
                 merged_det = Detection(det1.bbox, det1.label, det1.conf, det1.tile_id)
                 for j, det2 in enumerate(detections):
                     if j not in merged_det_indices:
-                        if not det2.tile_id.issubset(merged_det.tile_id) and merged_det.label == det2.label:
+                        if det2.tile_id.isdisjoint(merged_det.tile_id) and merged_det.label == det2.label:
                             if merged_det.bbox.contains_rect(det2.bbox) or merged_det.bbox.iou(det2.bbox) > self.merge_iou_thresh:
                                 merged_det.bbox |= det2.bbox
                                 merged_det.conf = max(merged_det.conf, det2.conf) 
