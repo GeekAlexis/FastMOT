@@ -9,6 +9,7 @@ from scipy.spatial.distance import cdist
 from cython_bbox import bbox_overlaps
 import numpy as np
 import numba as nb
+import math
 import cv2
 import time
 
@@ -18,9 +19,11 @@ from .kalman_filter import MeasType, KalmanFilter
 from .utils import * 
 
 
+CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution with 4 degrees of freedom
+INF_COST = 1e5
+
+
 class MultiTracker:
-    # 0.95 quantile of the chi-square distribution with 4 degrees of freedom
-    CHI_SQ_INV_95 = 9.4877
 
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['MultiTracker']
@@ -31,7 +34,7 @@ class MultiTracker:
         self.motion_weight = MultiTracker.config['motion_weight']
         self.max_motion_cost = MultiTracker.config['max_motion_cost']
         self.max_feature_cost = MultiTracker.config['max_feature_cost']
-        # self.max_motion_cost = np.sqrt(MultiTracker.CHI_SQ_INV_95)
+        # self.max_motion_cost = math.sqrt(MultiTracker.CHI_SQ_INV_95)
         self.min_iou_cost = MultiTracker.config['min_iou_cost']
         self.feature_buf_size = MultiTracker.config['feature_buf_size']
         self.min_register_conf = MultiTracker.config['min_register_conf']
@@ -87,7 +90,7 @@ class MultiTracker:
                 mean, cov = self.kf.predict(mean, cov)
                 if track_id in flow_meas:
                     flow_bbox = flow_meas[track_id]
-                    conf = 0.3 / track.age if track.age > 0 else 1
+                    conf = 0.5 / track.age if track.age > 0 else 1
                     mean, cov = self.kf.update(mean, cov, flow_bbox.tlbr, MeasType.FLOW, conf)
                 # check for out of frame case
                 next_bbox = Rect(tlbr=mean[:4])
@@ -128,7 +131,7 @@ class MultiTracker:
         """
         Update tracks using detections
         """
-        tic = time.perf_counter()
+        # tic = time.perf_counter()
         # compute optimal assignment
 
         det_ids = list(range(len(detections)))
@@ -142,9 +145,9 @@ class MultiTracker:
         # 2nd association with iou
         candidates = unconfirmed + [track_id for track_id in u_track_ids_a if self.tracks[track_id].age == 0]
         u_track_ids_a = [track_id for track_id in u_track_ids_a if self.tracks[track_id].age != 0]
-        detections = [detections[det_id] for det_id in u_det_ids]
+        u_detections = [detections[det_id] for det_id in u_det_ids]
         
-        ious = self._iou_cost(candidates, detections)
+        ious = self._iou_cost(candidates, u_detections)
         matches_b, u_track_ids_b, u_det_ids = self._linear_assignment(ious, candidates, u_det_ids, maximize=True)
 
         matches = matches_a + matches_b
@@ -166,38 +169,7 @@ class MultiTracker:
             else:
                 print('[Tracker] Target lost (out of frame): %s' % track)
                 del self.tracks[track_id]
-        print('MATCHING', time.perf_counter() - tic)
-
-        # all_det_indices = list(range(len(detections)))
-        # unmatched_det_indices = all_det_indices
-        # if len(detections) > 0 and len(track_ids) > 0:
-        #     cost = self._compute_cost_matrix(track_ids, detections, embeddings)
-        #     print('BEFORE_MATCHING', time.perf_counter() - tic)
-        #     track_indices, det_indices = linear_sum_assignment(cost)
-        #     unmatched_det_indices = list(set(all_det_indices) - set(det_indices))
-        #     for track_idx, det_idx in zip(track_indices, det_indices):
-        #         track_id = track_ids[track_idx]
-        #         if cost[track_idx, det_idx] < MultiTracker.INF_COST:
-        #             track = self.tracks[track_id]
-        #             track.age = -1
-        #             if track.state is None:
-        #                 track.bbox = detections[det_idx].bbox
-        #             else:
-        #                 mean, cov = track.state
-        #                 det_meas = detections[det_idx].bbox.tlbr
-        #                 mean, cov = self.kf.update(mean, cov, det_meas, MeasType.CNN)
-        #                 next_bbox = Rect(tlbr=mean[:4])
-        #                 inside_bbox = next_bbox & Rect(tlwh=(0, 0, *self.size))
-        #                 if inside_bbox is not None:
-        #                     track.state = (mean, cov)
-        #                     track.bbox = next_bbox
-        #                     track.features.append(embeddings[det_idx])
-        #                 else:
-        #                     print('[Tracker] Target lost (out of frame): %s' % track)
-        #                     del self.tracks[track_id]
-        #         else:
-        #             unmatched_det_indices.append(det_idx)
-        # # print('association', time.perf_counter() - tic)
+        # print('MATCHING', time.perf_counter() - tic)
     
         # register new detections
         for det_id in u_det_ids:
@@ -211,18 +183,22 @@ class MultiTracker:
         # clean up lost tracks
         for track_id in u_track_ids:
             track = self.tracks[track_id]
+            if not track.confirmed:
+                print('[Tracker] Target lost (unconfirmed): %s' % track)
+                del self.tracks[track_id]
+                continue
             track.age += 1
-            if track.age > self.max_age or not track.confirmed:
+            if track.age > self.max_age:
                 print('[Tracker] Target lost (age): %s' % track)
                 del self.tracks[track_id]
 
     def _compare_dist(self, id_track_pair):
         # estimate distance using bottow right y coord and area
-        return (np.ceil(id_track_pair[1].bbox.ymax / self.vertical_bin_height), id_track_pair[1].bbox.area)
+        return (math.ceil(id_track_pair[1].bbox.ymax / self.vertical_bin_height), id_track_pair[1].bbox.area)
 
     def _matching_cost(self, track_ids, detections, embeddings):
         if len(track_ids) == 0 or len(detections) == 0:
-            return np.empty(len(track_ids), len(detections))
+            return np.empty((len(track_ids), len(detections)))
 
         measurements = np.array([det.bbox.tlbr for det in detections])
         det_labels = np.array([det.label for det in detections])
@@ -234,38 +210,54 @@ class MultiTracker:
             gate = (cost[i, :] > self.max_feature_cost) | (motion_dist > self.max_motion_cost) | \
                 (track.label != det_labels)
             cost[i, :] = (1 - self.motion_weight) * cost[i, :] + self.motion_weight * motion_dist
-            cost[i, gate] = np.inf
+            cost[i, gate] = INF_COST
         return cost
 
     def _iou_cost(self, track_ids, detections):
         if len(track_ids) == 0 or len(detections) == 0:
-            return np.empty(len(track_ids), len(detections))
+            return np.empty((len(track_ids), len(detections)))
 
         # make sure associated pair has the same class label
         track_labels = np.array([self.tracks[track_id].label for track_id in track_ids])
         det_labels = np.array([det.label for det in detections])
         diff_labels = track_labels.reshape(-1, 1) != det_labels
         
-        track_bboxes = np.ascontinousarray(
+        track_bboxes = np.ascontiguousarray(
             [self.tracks[track_id].bbox.tlbr for track_id in track_ids],
             dtype=np.float
         )
-        det_bboxes = np.ascontinousarray(
+        det_bboxes = np.ascontiguousarray(
             [det.bbox.tlbr for det in detections],
             dtype=np.float
         )
         ious = bbox_overlaps(track_bboxes, det_bboxes)
+        # print(ious)
         gate = (ious < self.min_iou_cost) | diff_labels
-        ious[gate] = -np.inf
+        ious[gate] = 0
         return ious
 
     def _linear_assignment(self, cost, track_ids, det_ids, maximize=False):
-        track_ids, det_ids = np.asarray(track_ids), np.asarray(det_ids)
         rows, cols = linear_sum_assignment(cost, maximize)
         unmatched_rows = list(set(range(cost.shape[0])) - set(rows))
         unmatched_cols = list(set(range(cost.shape[1])) - set(cols))
-        matches = list(zip(track_ids[rows], det_ids[cols]))
-        return matches, track_ids[unmatched_rows], det_ids[unmatched_cols]
+        unmatched_track_ids = [track_ids[row] for row in unmatched_rows]
+        unmatched_det_ids = [det_ids[col] for col in unmatched_cols]
+        matches = []
+        if not maximize:
+            for row, col in zip(rows, cols):
+                if cost[row, col] < INF_COST:
+                    matches.append((track_ids[row], det_ids[col]))
+                else:
+                    unmatched_track_ids.append(track_ids[row])
+                    unmatched_det_ids.append(det_ids[col])
+        else:
+            for row, col in zip(rows, cols):
+                if cost[row, col] > 0:
+                    matches.append((track_ids[row], det_ids[col]))
+                else:
+                    unmatched_track_ids.append(track_ids[row])
+                    unmatched_det_ids.append(det_ids[col])
+        return matches, unmatched_track_ids, unmatched_det_ids
 
     # @staticmethod
     # @nb.njit(fastmath=True, parallel=True)

@@ -3,6 +3,7 @@ import json
 
 import numpy as np
 import numba as nb
+import math
 import cv2
 import time
 
@@ -199,14 +200,14 @@ class Flow:
     @nb.njit(fastmath=True, cache=True)
     def _estimate_feature_dist(target_mask, feature_dist_factor):
         target_area = np.count_nonzero(target_mask)
-        est_feat_dist = np.rint(np.sqrt(target_area) * feature_dist_factor)
+        est_feat_dist = round(math.sqrt(target_area) * feature_dist_factor)
         return max(est_feat_dist, 1)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _estimate_tlwh(tl, size, H_affine):
         xmin, ymin = transform(tl, H_affine).ravel()
-        scale = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
+        scale = math.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
         scale = 1. if scale < 0.9 or scale > 1.1 else scale
         return xmin, ymin, scale * size[0], scale * size[1]
 

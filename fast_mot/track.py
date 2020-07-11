@@ -31,12 +31,12 @@ class Track:
         return "%s ID%d at %s" % (COCO_LABELS[self.label], self.track_id, self.bbox.tlwh)
 
     def update_features(self, embedding):
-        # embedding /= np.linalg.norm(embedding)
+        embedding /= np.linalg.norm(embedding)
         if self.smooth_feature is None:
             self.smooth_feature = embedding
         else:
             self.smooth_feature = self.alpha * self.smooth_feature + (1 - self.alpha) * embedding
-        # self.smooth_feature /= np.linalg.norm(self.smooth_feature)
+        self.smooth_feature /= np.linalg.norm(self.smooth_feature)
         self.features.append(embedding)
 
     def draw(self, frame, follow=False, draw_feature_match=False):

@@ -58,12 +58,20 @@ class Mot:
                 # print('encode_post', time.perf_counter() - tic)
                 # tic = time.perf_counter()
 
+                tic2 = time.perf_counter()
                 self.detector.detect_async(frame)
+                print('detector pre', time.perf_counter() - tic2)
+                tic2 = time.perf_counter()
                 self.tracker.track(frame)
                 detections = self.detector.postprocess()
+                print('det / track + post', time.perf_counter() - tic2)
+                tic2 = time.perf_counter()
                 embeddings = self.encoder.encode(frame, detections)
+                print('embedding', time.perf_counter() - tic2)
+                tic2 = time.perf_counter()
                 self.tracker.update(detections, embeddings)
-                print('update', time.perf_counter() - tic)
+                print('match', time.perf_counter() - tic2)
+                print('UPDATE', time.perf_counter() - tic)
             else:
                 tic = time.perf_counter()
                 self.tracker.track(frame)
@@ -79,7 +87,7 @@ class Mot:
 
     def _draw(self, frame, detections, debug=False):
         for track in self.tracker.tracks.values():
-            if track.isconfirmed:
+            if track.confirmed:
                 track.draw(frame, draw_feature_match=debug)
         if debug:
             [det.draw(frame) for det in detections]
