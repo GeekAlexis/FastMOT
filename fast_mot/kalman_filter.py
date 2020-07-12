@@ -43,7 +43,7 @@ class KalmanFilter:
 
         self.std_acc_slope = (self.large_size_std_acc[1] - self.small_size_std_acc[1]) / \
                             (self.large_size_std_acc[0] - self.small_size_std_acc[0])
-        self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4))
+        self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4, dtype=np.float))
         self.acc_cov[4:, :4] = np.eye(4) * (0.5 * self.dt**3)
         self.acc_cov[:4, 4:] = np.eye(4) * (0.5 * self.dt**3)
 
@@ -56,28 +56,28 @@ class KalmanFilter:
             [0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0, 0], 
             [0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0], 
             [0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0],
-            [0, 0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life)]
-        ])
+            [0, 0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life)],
+        ], dtype=np.float)
 
     def initiate(self, init_meas, flow_meas):
         """Create track from unassociated measurement.
         Parameters
         ----------
-        measurement : ndarray
-            Bounding box coordinates (x, y, a, h) with center position (x, y),
-            aspect ratio a, and height h.
+        init_meas : Rect
+            Initial bounding box registered by the detector.
+        flow_meas : Rect
+            Bounding box tracked by optical flow after n_init frames.
         Returns
         -------
         (ndarray, ndarray)
             Returns the mean vector (8 dimensional) and covariance matrix (8x8
-            dimensional) of the new track. Unobserved velocities are initialized
-            to 0 mean.
+            dimensional) of the new track.
         """
         center_vel = (flow_meas.center - init_meas.center) / (self.dt * self.n_init)
         mean = np.r_[flow_meas.tlbr, center_vel, center_vel]
 
         width, height = flow_meas.size
-        std = [
+        std = np.array([
             self.init_std_pos_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
             self.init_std_pos_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
             self.init_std_pos_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
@@ -86,7 +86,7 @@ class KalmanFilter:
             self.init_std_vel_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
             self.init_std_vel_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
             self.init_std_vel_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
-        ]
+        ], dtype=np.float)
         covariance = np.diag(np.square(std))
         return mean, covariance
 
@@ -104,12 +104,12 @@ class KalmanFilter:
         -------
         (ndarray, ndarray)
             Returns the mean vector and covariance matrix of the predicted
-            state. Unobserved velocities are initialized to 0 mean.
+            state.
         """
         return self._predict(mean, covariance, self.small_size_std_acc, self.std_acc_slope, 
             self.acc_cov, self.transition_mat)
 
-    def project(self, mean, covariance, meas_type, conf=1.):
+    def project(self, mean, covariance, meas_type, multiplier=1.):
         """Project state distribution to measurement space.
         Parameters
         ----------
@@ -132,9 +132,10 @@ class KalmanFilter:
         else:
             raise ValueError('Invalid measurement type')
 
-        return self._project(mean, covariance, std_factor, min_std, self.meas_mat, conf)
+        return self._project(mean, covariance, std_factor, min_std, 
+            self.meas_mat, multiplier)
 
-    def update(self, mean, covariance, measurement, meas_type, conf=1.):
+    def update(self, mean, covariance, measurement, meas_type, multiplier=1.):
         """Run Kalman filter correction step.
         Parameters
         ----------
@@ -142,20 +143,18 @@ class KalmanFilter:
             The predicted state's mean vector (8 dimensional).
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
-        measurement : ndarray
-            The 4 dimensional measurement vector (x, y, a, h), where (x, y)
-            is the center position, a the aspect ratio, and h the height of the
-            bounding box.
+        measurement : Rect
+            Bounding box output from detector or flow
         Returns
         -------
         (ndarray, ndarray)
             Returns the measurement-corrected state distribution.
         """
         projected_mean, projected_cov = self.project(mean, covariance, 
-            meas_type, conf)
+            meas_type, multiplier)
 
         return self._update(mean, covariance, projected_mean, 
-            projected_cov, measurement, self.meas_mat)
+            projected_cov, measurement.tlbr, self.meas_mat)
 
     def motion_distance(self, mean, covariance, measurements):
         """Compute mahalanobis distance between `measurements` and state distribution.
@@ -166,7 +165,7 @@ class KalmanFilter:
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
         measurements : array_like
-            An NxM matrix of N samples of dimensionality M.
+            An Nx4 matrix of N samples of (xmin, ymin, xmax, ymax).
         Returns
         -------
         ndarray
@@ -179,6 +178,20 @@ class KalmanFilter:
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
     def warp(mean, covariance, H_camera):
+        """Transform kalman filter state based on camera motion.
+        ----------
+        mean : ndarray
+            The predicted state's mean vector (8 dimensional).
+        covariance : ndarray
+            The state's covariance matrix (8x8 dimensional).
+        H_camera : ndarray
+            A 3x3 camera homography matrix.
+        Returns
+        -------
+        (ndarray, ndarray)
+            Returns the mean vector and covariance matrix of the transformed
+            state.
+        """
         pos_tl, pos_br = mean[:2], mean[2:4]
         vel_tl, vel_br = mean[4:6], mean[6:]
         # affine dof
@@ -223,7 +236,7 @@ class KalmanFilter:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _project(mean, covariance, std_factor, min_std, meas_mat, conf):
+    def _project(mean, covariance, std_factor, min_std, meas_mat, multiplier):
         w, h = mean[2:4] - mean[:2] + 1
         std = np.array([
             max(w * std_factor[0], min_std[0]),
@@ -231,7 +244,7 @@ class KalmanFilter:
             max(w * std_factor[0], min_std[0]),
             max(h * std_factor[1], min_std[1])
         ])
-        meas_cov = np.diag(np.square(std / conf))
+        meas_cov = np.diag(np.square(std * multiplier))
 
         mean = meas_mat @ mean
         covariance = meas_mat @ covariance @ meas_mat.T

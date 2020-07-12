@@ -17,7 +17,7 @@ class Track:
         self.frames_since_acquired = 0
         self.confirmed = False
         self.alpha = 0.9
-        self.features = deque([], maxlen=self.feature_buf_size)
+        # self.features = deque([], maxlen=self.feature_buf_size)
         self.smooth_feature = None
         self.state = None
         self.feature_pts = None
@@ -36,8 +36,8 @@ class Track:
             self.smooth_feature = embedding
         else:
             self.smooth_feature = self.alpha * self.smooth_feature + (1 - self.alpha) * embedding
-        self.smooth_feature /= np.linalg.norm(self.smooth_feature)
-        self.features.append(embedding)
+            self.smooth_feature /= np.linalg.norm(self.smooth_feature)
+        # self.features.append(embedding)
 
     def draw(self, frame, follow=False, draw_feature_match=False):
         bbox_color = (127, 255, 0) if follow else (0, 165, 255)
@@ -54,4 +54,4 @@ class Track:
                 [cv2.circle(frame, tuple(pt), 1, (0, 255, 255), -1) for pt in np.intc(np.rint(self.feature_pts))]
                 if self.prev_feature_pts is not None:
                     [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 255, 255), 1, cv2.LINE_AA) for pt1, pt2 in 
-                    zip(np.intc(np.rint(self.prev_feature_pts)), np.intc(np.rint(self.feature_pts)))]
+                        zip(np.intc(np.rint(self.prev_feature_pts)), np.intc(np.rint(self.feature_pts)))]

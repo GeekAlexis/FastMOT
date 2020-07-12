@@ -31,13 +31,6 @@ class Flow:
         self.gftt_target_feature_params = Flow.config['gftt_target_feature_params']
         self.fast_bkg_feature_thresh = Flow.config['fast_bkg_feature_thresh']
         self.optflow_params = Flow.config['optflow_params']
-        # self.gftt_bkg_feature_params = dict( 
-        #     maxCorners=1000,
-        #     qualityLevel=0.01,
-        #     minDistance=5,
-        #     blockSize=3
-        # )
-        # self.optflow_params['criteria'] = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
         
         self.fast_feature_detector = cv2.FastFeatureDetector_create(threshold=self.fast_bkg_feature_thresh)
         self.bkg_feature_pts = None
@@ -96,7 +89,6 @@ class Flow:
                 fy=self.bkg_feature_scaling[1])
             bkg_mask_small = cv2.resize(self.bkg_mask, None, fx=self.bkg_feature_scaling[0], 
                 fy=self.bkg_feature_scaling[1], interpolation=cv2.INTER_NEAREST)
-            # keypoints = cv2.goodFeaturesToTrack(prev_frame_small_bkg, mask=bkg_mask, **self.gftt_bkg_feature_params)
             keypoints = self.fast_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask_small)
             if keypoints is not None and len(keypoints) > 0:
                 keypoints = np.float32([kp.pt for kp in keypoints])
@@ -194,7 +186,7 @@ class Flow:
             [cv2.circle(frame, tuple(pt), 1, (0, 0, 255), -1) for pt in np.intc(np.rint(self.bkg_feature_pts))]
         if self.prev_bkg_feature_pts is not None:
             [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in 
-            zip(np.intc(np.rint(self.prev_bkg_feature_pts)), np.intc(np.rint(self.bkg_feature_pts)))]
+                zip(np.intc(np.rint(self.prev_bkg_feature_pts)), np.intc(np.rint(self.bkg_feature_pts)))]
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

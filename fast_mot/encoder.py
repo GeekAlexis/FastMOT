@@ -12,15 +12,14 @@ class ImageEncoder:
         self.model = OSNet
         self.batch_size = 32
         self.backend = InferenceBackend(self.model, self.batch_size)
-        self.input_batch = np.empty((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
 
     def encode(self, frame, detections):
         self.encode_async(frame, detections)
         return self.postprocess()
 
     def encode_async(self, frame, detections):
-        inp = self.preprocess(frame, detections)
-        self.backend.infer_async(inp)
+        self.preprocess(frame, detections)
+        self.backend.infer_async()
     
     def preprocess(self, frame, detections):
         self.num_detections = len(detections)
@@ -28,8 +27,7 @@ class ImageEncoder:
         for i, det in enumerate(detections):
             roi = det.bbox.crop(frame)
             roi = cv2.resize(roi, self.model.INPUT_SHAPE[:0:-1])
-            self.input_batch[i] = self._preprocess(roi)
-        return self.input_batch
+            self.backend.memcpy(self._preprocess(roi), i)
 
     def postprocess(self):
         embedding_out = self.backend.synchronize()[0]

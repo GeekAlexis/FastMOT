@@ -65,7 +65,6 @@ class ObjectDetector:
         assert self.max_det <= self.model.TOPK
 
         self.backend = InferenceBackend(self.model, self.batch_size)
-        self.input_batch = np.empty((self.batch_size, np.prod(self.model.INPUT_SHAPE)))
     
     @property
     def tiling_region(self):
@@ -74,7 +73,8 @@ class ObjectDetector:
     def preprocess(self, frame, roi=None):
         if self.batch_size > 1:
             for i, tile in enumerate(self.tiles):
-                self.input_batch[i] = self._preprocess(tile.crop(frame))
+                frame_tile = self._preprocess(tile.crop(frame))
+                self.backend.memcpy(frame_tile, i)
         else:
             if roi is None:
                 self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
@@ -84,8 +84,8 @@ class ObjectDetector:
                 tl = roi.center - (tile_size - 1) / 2
                 tl = np.clip(tl, 0, self.size - tile_size)
                 self.cur_tile = Rect(*tl, *self.tile_size)
-            self.input_batch[0] = self._preprocess(self.cur_tile.crop(frame))
-        return self.input_batch
+            frame_tile = self._preprocess(self.cur_tile.crop(frame))
+            self.backend.memcpy(frame_tile)
 
     def postprocess(self):
         det_out = self.backend.synchronize()[0]
@@ -139,8 +139,10 @@ class ObjectDetector:
         return self.postprocess()
 
     def detect_async(self, frame, roi=None):
-        inp = self.preprocess(frame, roi)
-        self.backend.infer_async(inp)
+        tic = time.perf_counter()
+        self.preprocess(frame, roi)
+        print('img pre', time.perf_counter() - tic)
+        self.backend.infer_async()
 
     def draw_tile(self, frame):
         if self.cur_tile is not None:

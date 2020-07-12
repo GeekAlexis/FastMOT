@@ -19,7 +19,7 @@ from .kalman_filter import MeasType, KalmanFilter
 from .utils import * 
 
 
-CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution with 4 degrees of freedom
+CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution with 4 dof
 INF_COST = 1e5
 
 
@@ -28,13 +28,15 @@ class MultiTracker:
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['MultiTracker']
 
-    def __init__(self, size, dt):
+    def __init__(self, size, dt, detector_region):
         self.size = size
+        self.detector_region = detector_region
         self.max_age = MultiTracker.config['max_age']
+        self.age_factor = MultiTracker.config['age_factor']
         self.motion_weight = MultiTracker.config['motion_weight']
         self.max_motion_cost = MultiTracker.config['max_motion_cost']
+        # self.max_motion_cost = CHI_SQ_INV_95
         self.max_feature_cost = MultiTracker.config['max_feature_cost']
-        # self.max_motion_cost = math.sqrt(MultiTracker.CHI_SQ_INV_95)
         self.min_iou_cost = MultiTracker.config['min_iou_cost']
         self.feature_buf_size = MultiTracker.config['feature_buf_size']
         self.min_register_conf = MultiTracker.config['min_register_conf']
@@ -43,7 +45,6 @@ class MultiTracker:
         
         self.prev_frame_gray = None
         self.prev_frame_small = None
-        # self.prev_pyramid = None
         self.next_id = 0
         self.tracks = OrderedDict()
         self.kf = KalmanFilter(dt, self.n_init)
@@ -53,7 +54,7 @@ class MultiTracker:
         tic = time.perf_counter()
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         frame_small = cv2.resize(frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
-        self.tracks = OrderedDict(sorted(self.tracks.items(), key=self._compare_dist, reverse=True))
+        self.tracks = OrderedDict(sorted(self.tracks.items(), key=self._compare_track_dist, reverse=True))
         print('gray and sort:', time.perf_counter() - tic)
 
         # tic = time.perf_counter()
@@ -64,7 +65,6 @@ class MultiTracker:
 
         self.prev_frame_gray = frame_gray
         self.prev_frame_small = frame_small
-        # self.prev_pyramid = pyramid
         # print('opt flow:', time.perf_counter() - tic)
         return flow_bboxes, H_camera
 
@@ -90,8 +90,11 @@ class MultiTracker:
                 mean, cov = self.kf.predict(mean, cov)
                 if track_id in flow_meas:
                     flow_bbox = flow_meas[track_id]
-                    conf = 0.5 / track.age if track.age > 0 else 1
-                    mean, cov = self.kf.update(mean, cov, flow_bbox.tlbr, MeasType.FLOW, conf)
+                    std_multiplier = 1
+                    if self.detector_region.contains_rect(track.bbox):
+                        # large flow uncertainty for occluded objects
+                        std_multiplier = max(self.age_factor * track.age, 1)
+                    mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
                 # check for out of frame case
                 next_bbox = Rect(tlbr=mean[:4])
                 inside_bbox = next_bbox & Rect(tlwh=(0, 0, *self.size))
@@ -132,7 +135,6 @@ class MultiTracker:
         Update tracks using detections
         """
         # tic = time.perf_counter()
-        # compute optimal assignment
 
         det_ids = list(range(len(detections)))
         track_ids = [track_id for track_id, track in self.tracks.items() if track.confirmed]
@@ -158,14 +160,15 @@ class MultiTracker:
             track = self.tracks[track_id]
             det = detections[det_id]
             track.age = 0
-            mean, cov = self.kf.update(*track.state, det.bbox.tlbr, MeasType.DETECTOR)
+            mean, cov = self.kf.update(*track.state, det.bbox, MeasType.DETECTOR)
             next_bbox = Rect(tlbr=mean[:4])
             inside_bbox = next_bbox & Rect(tlwh=(0, 0, *self.size))
             if inside_bbox is not None:
                 track.state = (mean, cov)
                 track.bbox = next_bbox
                 track.update_features(embeddings[det_id])
-                track.confirmed = True
+                if not track.confirmed:
+                    track.confirmed = True
             else:
                 print('[Tracker] Target lost (out of frame): %s' % track)
                 del self.tracks[track_id]
@@ -192,8 +195,8 @@ class MultiTracker:
                 print('[Tracker] Target lost (age): %s' % track)
                 del self.tracks[track_id]
 
-    def _compare_dist(self, id_track_pair):
-        # estimate distance using bottow right y coord and area
+    def _compare_track_dist(self, id_track_pair):
+        # estimate distance to camera using bottow right y coord and area
         return (math.ceil(id_track_pair[1].bbox.ymax / self.vertical_bin_height), id_track_pair[1].bbox.area)
 
     def _matching_cost(self, track_ids, detections, embeddings):

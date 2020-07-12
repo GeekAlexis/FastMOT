@@ -21,11 +21,11 @@ class Mot:
         self.detector_frame_skip = Mot.config['detector_frame_skip']
         self.classes = Mot.config['classes']
 
-        print('[Analytics] Loading detector model...')
+        print('[INFO] Loading detector model...')
         self.detector = ObjectDetector(self.size, self.classes)
-        print('[Analytics] Loading encoder model...')
+        print('[INFO] Loading encoder model...')
         self.encoder = ImageEncoder()
-        self.tracker = MultiTracker(self.size, capture_dt)
+        self.tracker = MultiTracker(self.size, capture_dt, self.detector.tiling_region)
         
         # reset flags
         self.frame_count = 0
@@ -33,31 +33,11 @@ class Mot:
     def run(self, frame):
         detections = []
         if self.frame_count == 0:
-            print('\n[Analytics] Acquiring new targets...')
             detections = self.detector.detect(frame)
             self.tracker.initiate(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
                 tic = time.perf_counter()
-                # self.detector.detect_async(frame, roi=self.get_target_bbox())
-                # print('det_pre', time.perf_counter() - tic)
-                # tic = time.perf_counter()
-                # flow_meas, H_camera = self.tracker.step_flow(frame)
-                # print('flow', time.perf_counter() - tic)
-                # tic = time.perf_counter()
-                # detections = self.detector.postprocess()
-                # print('det post', time.perf_counter() - tic)
-                # tic = time.perf_counter()
-                # self.encoder.encode_async(frame, detections)
-                # print('encode_pre', time.perf_counter() - tic)
-                # tic = time.perf_counter()
-                # self.tracker.step_kf(flow_meas, H_camera)
-                # print('kalman filter', time.perf_counter() - tic)
-                # tic = time.perf_counter()
-                # embeddings = self.encoder.postprocess()
-                # print('encode_post', time.perf_counter() - tic)
-                # tic = time.perf_counter()
-
                 tic2 = time.perf_counter()
                 self.detector.detect_async(frame)
                 print('detector pre', time.perf_counter() - tic2)

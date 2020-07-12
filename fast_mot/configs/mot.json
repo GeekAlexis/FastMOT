@@ -1,22 +1,22 @@
 {   
     "VideoIO": {
-        "capture_size": [3264, 1848],
-        "camera_fps": 28,
-        "#capture_size": [1920, 1080],
-        "#camera_fps": 30,
+        "capture_size": [1920, 1080],
+        "camera_fps": 30,
         "flip_method": 0,
         "max_queue_size": 50
     },
     "Mot": {
         "detector_frame_skip": 5,
-        "classes": [1]
+        "classes": [1],
+        "#classes": [1, 2, 3, 4, 8]
     },
     "MultiTracker": {
         "#max_age": 16,
         "max_age": 6,
+        "age_factor": 2,
         "motion_weight": 0.05,
         "max_motion_cost": 10,
-        "#max_motion_cost": 3.08021,
+        "#max_motion_cost": 9.4877,
         "max_feature_cost": 0.8,
         "min_iou_cost": 0.3,
         "feature_buf_size": 5,
@@ -26,15 +26,15 @@
     },
     "KalmanFilter": {
         "small_size_std_acc": [32, 100],
-        "large_size_std_acc": [256, 1000],
+        "large_size_std_acc": [256, 2000],
         "min_std_det": [5, 5],
         "min_std_flow": [5, 5],
         "std_factor_det": [0.16, 0.16],
         "std_factor_flow": [0.16, 0.16],
         "init_std_pos_factor": 20,
-        "init_std_vel_factor": 10,
+        "init_std_vel_factor": 20,
         "vel_coupling": 0.6,
-        "vel_half_life": 1
+        "vel_half_life": 5
     },
     "ObjectDetector": {
         "max_det": 20,

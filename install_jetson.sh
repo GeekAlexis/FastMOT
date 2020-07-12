@@ -9,7 +9,7 @@ source ~/.bashrc
 
 # install pip, numpy, pycuda, tensorflow, cython-bbox
 sudo apt-get update
-sudo apt-get install python3-pip libhdf5-serial-dev hdf5-tools
+sudo apt-get install python3-pip libhdf5-serial-dev hdf5-tools libcanberra-gtk-module
 sudo pip3 install cython numpy pycuda cython-bbox
 sudo pip3 install --no-cache-dir --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v44 tensorflow==1.15.2+nv20.4
 

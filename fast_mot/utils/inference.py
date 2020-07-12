@@ -35,9 +35,9 @@ class InferenceBackend:
                 self.engine = self.runtime.deserialize_cuda_engine(buf)
 
         assert self.batch_size <= self.engine.max_batch_size
+        self.batch_offset = np.prod(self.model.INPUT_SHAPE)
 
         # allocate buffers
-        self.inputs = []
         self.outputs = []
         self.bindings = []
         self.stream = cuda.Stream()
@@ -51,24 +51,30 @@ class InferenceBackend:
             self.bindings.append(int(device_mem))
             # Append to the appropriate list.
             if self.engine.binding_is_input(binding):
-                self.inputs.append(HostDeviceMem(host_mem, device_mem))
+                self.input = HostDeviceMem(host_mem, device_mem)
             else:
                 self.outputs.append(HostDeviceMem(host_mem, device_mem))
         self.context = self.engine.create_execution_context()
 
-    def infer(self, np_input):
-        np.copyto(self.inputs[0].host, np_input.ravel())
-        [cuda.memcpy_htod_async(inp.device, inp.host, self.stream) for inp in self.inputs]
+    def memcpy(self, src, batch_num=0):
+        np.copyto(self.input.host[batch_num * self.batch_offset:(batch_num + 1) * self.batch_offset], src)
+
+    def memcpy_batch(self, src):
+        np.copyto(self.input.host, src)
+
+    def infer(self):
+        cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
         self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
-        [cuda.memcpy_dtoh_async(out.host, out.device, self.stream) for out in self.outputs]
+        for out in self.outputs:
+            cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
         self.stream.synchronize()
         return [out.host for out in self.outputs]
 
-    def infer_async(self, np_input):
-        np.copyto(self.inputs[0].host, np_input.ravel())
-        [cuda.memcpy_htod_async(inp.device, inp.host, self.stream) for inp in self.inputs]
+    def infer_async(self):
+        cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
         self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
-        [cuda.memcpy_dtoh_async(out.host, out.device, self.stream) for out in self.outputs]
+        for out in self.outputs:
+            cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
 
     def synchronize(self):
         self.stream.synchronize()
