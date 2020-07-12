@@ -22,10 +22,10 @@ https://developer.nvidia.com/embedded/jetpack
 - `bash install_jetson.sh`
 
 ### Run tracking
-- With camera: `python3 vision.py --mot`
-- Input video: `python3 vision.py --input video.mp4 --mot`
+- With camera: `python3 app.py --mot`
+- Input video: `python3 app.py --input video.mp4 --mot`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
-- Edit analytics/configs/config.json to configure parameters and change object classes
+- Edit fast_mot/configs/mot.json to configure parameters and change object classes
 
 ### References
 - SORT: https://arxiv.org/abs/1602.00763  
