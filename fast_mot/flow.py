@@ -79,7 +79,7 @@ class Flow:
             num_pts += len(keypoints)
             target_end_idices.append(num_pts)
             # zero out track in background mask
-            track.bbox.crop(self.bkg_mask)[:] = 0
+            np.copyto(track.bbox.crop(self.bkg_mask), 0)
         # print('target feature:', time.perf_counter() - tic)
         # print('target feature func:', feature_time)
 
@@ -176,7 +176,7 @@ class Flow:
             track.prev_feature_pts = prev_pts[inlier_mask]
             next_bboxes[track.track_id] = est_bbox
             # zero out current track in foreground mask
-            est_bbox.crop(self.fg_mask)[:] = 0
+            np.copyto(est_bbox.crop(self.fg_mask), 0)
         # print('target affine:', time.perf_counter() - tic)
         # print('target affine func:', affine_time)
         return next_bboxes, H_camera

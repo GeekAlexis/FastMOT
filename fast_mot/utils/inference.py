@@ -34,33 +34,40 @@ class InferenceBackend:
                 buf = engine_file.read()
                 self.engine = self.runtime.deserialize_cuda_engine(buf)
 
-        assert self.batch_size <= self.engine.max_batch_size
-        self.batch_offset = np.prod(self.model.INPUT_SHAPE)
+        if self.engine.has_implicit_batch_dimension:
+            assert self.batch_size <= self.engine.max_batch_size
+        self.input_size = np.prod(self.model.INPUT_SHAPE)
 
         # allocate buffers
         self.outputs = []
         self.bindings = []
         self.stream = cuda.Stream()
         for binding in self.engine:
-            size = trt.volume(self.engine.get_binding_shape(binding)) * self.batch_size
+            shape = self.engine.get_binding_shape(binding)
+            size = trt.volume(shape)
+            if self.engine.has_implicit_batch_dimension:
+                size *= self.batch_size
             dtype = trt.nptype(self.engine.get_binding_dtype(binding))
             # Allocate host and device buffers
             host_mem = cuda.pagelocked_empty(size, dtype)
             device_mem = cuda.mem_alloc(host_mem.nbytes)
-            # Append the device buffer to device bindings.
+            # Append the device buffer to device bindings
             self.bindings.append(int(device_mem))
-            # Append to the appropriate list.
+            # Append to the appropriate list
             if self.engine.binding_is_input(binding):
+                if not self.engine.has_implicit_batch_dimension:
+                    assert self.batch_size == shape[0]
                 self.input = HostDeviceMem(host_mem, device_mem)
             else:
                 self.outputs.append(HostDeviceMem(host_mem, device_mem))
         self.context = self.engine.create_execution_context()
 
     def memcpy(self, src, batch_num=0):
-        np.copyto(self.input.host[batch_num * self.batch_offset:(batch_num + 1) * self.batch_offset], src)
+        offset = batch_num * self.input_size
+        np.copyto(self.input.host[offset:offset + self.input_size], src)
 
     def memcpy_batch(self, src):
-        np.copyto(self.input.host, src)
+        np.copyto(self.input.host[:src.size], src)
 
     def infer(self):
         cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
@@ -70,9 +77,23 @@ class InferenceBackend:
         self.stream.synchronize()
         return [out.host for out in self.outputs]
 
+    def infer_v2(self):
+        cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
+        self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
+        for out in self.outputs:
+            cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
+        self.stream.synchronize()
+        return [out.host for out in self.outputs]
+
     def infer_async(self):
         cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
         self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
+        for out in self.outputs:
+            cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
+
+    def infer_async_v2(self):
+        cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
+        self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
         for out in self.outputs:
             cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
 

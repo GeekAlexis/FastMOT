@@ -1,4 +1,3 @@
-from enum import Enum
 from pathlib import Path
 import json
 
@@ -121,10 +120,11 @@ class ObjectDetector:
                 for j, det2 in enumerate(detections):
                     if j not in merged_det_indices:
                         if det2.tile_id.isdisjoint(merged_det.tile_id) and merged_det.label == det2.label:
-                            if merged_det.bbox.contains_rect(det2.bbox) or merged_det.bbox.iou(det2.bbox) > self.merge_iou_thresh:
+                            if merged_det.bbox.contains_rect(det2.bbox) or merged_det.bbox.iou(det2.bbox) > \
+                                self.merge_iou_thresh:
                                 merged_det.bbox |= det2.bbox
-                                merged_det.conf = max(merged_det.conf, det2.conf) 
                                 merged_det.tile_id |= det2.tile_id
+                                merged_det.conf = max(merged_det.conf, det2.conf) 
                                 merged_det_indices.add(i)
                                 merged_det_indices.add(j)
                 if i in merged_det_indices:
@@ -166,12 +166,12 @@ class ObjectDetector:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _preprocess(frame_tile):
+    def _preprocess(img):
         # BGR to RGB
-        frame_tile = frame_tile[..., ::-1]
+        img = img[..., ::-1]
         # HWC -> CHW
-        frame_tile = frame_tile.transpose(2, 0, 1)
+        img = img.transpose(2, 0, 1)
         # Normalize to [-1.0, 1.0] interval (expected by model)
-        frame_tile = frame_tile * (2 / 255) - 1
-        return frame_tile.ravel()
+        img = img * (2 / 255) - 1
+        return img.ravel()
         

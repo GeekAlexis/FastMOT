@@ -127,10 +127,11 @@ dmypy.json
 
 # Mac temporary files
 .DS_Store
+._.DS_Store
 
 # TensorRT stuff
 *.bin
-INT8CacheFile
+*calib_cache
 
 # video files
 *.mp4

@@ -1,7 +1,7 @@
 from collections import deque
 import numpy as np
 import cv2
-
+from scipy.spatial.distance import cdist
 from .models import COCO_LABELS
 
 
@@ -16,8 +16,8 @@ class Track:
         self.age = 0
         self.frames_since_acquired = 0
         self.confirmed = False
-        self.alpha = 0.9
-        # self.features = deque([], maxlen=self.feature_buf_size)
+        self.alpha = 0.25
+        self.features = deque([], maxlen=self.feature_buf_size)
         self.smooth_feature = None
         self.state = None
         self.feature_pts = None
@@ -31,13 +31,14 @@ class Track:
         return "%s ID%d at %s" % (COCO_LABELS[self.label], self.track_id, self.bbox.tlwh)
 
     def update_features(self, embedding):
-        embedding /= np.linalg.norm(embedding)
         if self.smooth_feature is None:
             self.smooth_feature = embedding
         else:
             self.smooth_feature = self.alpha * self.smooth_feature + (1 - self.alpha) * embedding
             self.smooth_feature /= np.linalg.norm(self.smooth_feature)
-        # self.features.append(embedding)
+        self.features.append(embedding)
+        # if self.track_id == 1:
+        #     print(cdist(self.features, self.features))
 
     def draw(self, frame, follow=False, draw_feature_match=False):
         bbox_color = (127, 255, 0) if follow else (0, 165, 255)

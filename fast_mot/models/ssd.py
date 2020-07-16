@@ -21,7 +21,6 @@ class SSD:
         import uff
         from . import calibrator
         
-        assert batch_size > 0
         # compile model into TensorRT
         dynamic_graph = gs.DynamicGraph(str(cls.TF_PATH))
         # print([n.name for n in dynamic_graph.as_graph_def().node])
@@ -31,12 +30,12 @@ class SSD:
         # uff_model = uff.from_tensorflow(dynamic_graph.as_graph_def(), model.OUTPUT_NAME, output_filename='ssd.uff')
         # /usr/src/tensorrt/bin/trtexec --uff=ssd.uff --output=MarkOutput_0 --uffInput=Input,3,300,300 --workspace=1024 --maxBatch=8 --best --calib=INT8CacheFile --verbose --saveEngine=TRT_ssd_test.bin
 
-        def compute_max_batch_size(n):
+        def round_up(n):
             return n if n & (n - 1) == 0 else 1 << int.bit_length(n)
 
         with trt.Builder(trt_logger) as builder, builder.create_network() as network, trt.UffParser() as parser:
             builder.max_workspace_size = 1 << 30
-            builder.max_batch_size = compute_max_batch_size(batch_size)
+            builder.max_batch_size = round_up(batch_size)
             print('Building engine with batch size:', builder.max_batch_size)
             print('This may take a while...')
             
@@ -44,7 +43,8 @@ class SSD:
                 builder.fp16_mode = True
             if builder.platform_has_fast_int8:
                 builder.int8_mode = True
-                builder.int8_calibrator = calibrator.SSDEntropyCalibrator(cls.INPUT_SHAPE, data_dir=calib_dataset, cache_file=Path(__file__).parent / 'INT8CacheFile')
+                builder.int8_calibrator = calibrator.SSDEntropyCalibrator(cls.INPUT_SHAPE, data_dir=calib_dataset, 
+                    cache_file=Path(__file__).parent / f'{cls.__name__}_calib_cache')
 
             parser.register_input('Input', cls.INPUT_SHAPE)
             parser.register_output('MarkOutput_0')

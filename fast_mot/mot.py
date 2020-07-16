@@ -5,7 +5,7 @@ import cv2
 import time
 
 from .detector import ObjectDetector
-from .encoder import ImageEncoder
+from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import ConfigDecoder
 
@@ -24,8 +24,8 @@ class Mot:
         print('[INFO] Loading detector model...')
         self.detector = ObjectDetector(self.size, self.classes)
         print('[INFO] Loading encoder model...')
-        self.encoder = ImageEncoder()
-        self.tracker = MultiTracker(self.size, capture_dt, self.detector.tiling_region)
+        self.extractor = FeatureExtractor()
+        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric, self.detector.tiling_region)
         
         # reset flags
         self.frame_count = 0
@@ -46,10 +46,10 @@ class Mot:
                 detections = self.detector.postprocess()
                 print('det / track + post', time.perf_counter() - tic2)
                 tic2 = time.perf_counter()
-                embeddings = self.encoder.encode(frame, detections)
+                embeddings = self.extractor(frame, detections)
                 print('embedding', time.perf_counter() - tic2)
                 tic2 = time.perf_counter()
-                self.tracker.update(detections, embeddings)
+                self.tracker.update(detections, embeddings, frame)
                 print('match', time.perf_counter() - tic2)
                 print('UPDATE', time.perf_counter() - tic)
             else:
@@ -67,11 +67,11 @@ class Mot:
 
     def _draw(self, frame, detections, debug=False):
         for track in self.tracker.tracks.values():
-            if track.confirmed:
+            if track.confirmed and track.age == 0:
                 track.draw(frame, draw_feature_match=debug)
         if debug:
             [det.draw(frame) for det in detections]
             # self.tracker.flow.draw_bkg_feature_match(frame)
             if self.frame_count % self.detector_frame_skip == 0:
                 self.detector.draw_tile(frame)
-        cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
+        # cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

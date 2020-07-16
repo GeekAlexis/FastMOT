@@ -1,4 +1,3 @@
-from enum import Enum
 from pathlib import Path
 import json
 
@@ -28,8 +27,9 @@ class MultiTracker:
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['MultiTracker']
 
-    def __init__(self, size, dt, detector_region):
+    def __init__(self, size, dt, metric, detector_region):
         self.size = size
+        self.metric = metric
         self.detector_region = detector_region
         self.max_age = MultiTracker.config['max_age']
         self.age_factor = MultiTracker.config['age_factor']
@@ -38,6 +38,7 @@ class MultiTracker:
         # self.max_motion_cost = CHI_SQ_INV_95
         self.max_feature_cost = MultiTracker.config['max_feature_cost']
         self.min_iou_cost = MultiTracker.config['min_iou_cost']
+        self.max_feature_overlap = MultiTracker.config['max_feature_overlap']
         self.feature_buf_size = MultiTracker.config['feature_buf_size']
         self.min_register_conf = MultiTracker.config['min_register_conf']
         self.vertical_bin_height = MultiTracker.config['vertical_bin_height']
@@ -88,11 +89,11 @@ class MultiTracker:
                 # track using kalman filter and flow measurement
                 mean, cov = self.kf.warp(mean, cov, H_camera)
                 mean, cov = self.kf.predict(mean, cov)
-                if track_id in flow_meas:
+                if track_id in flow_meas and track.age == 0:
                     flow_bbox = flow_meas[track_id]
                     std_multiplier = 1
                     if self.detector_region.contains_rect(track.bbox):
-                        # large flow uncertainty for occluded objects
+                        # give large flow uncertainty for occluded objects
                         std_multiplier = max(self.age_factor * track.age, 1)
                     mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
                 # check for out of frame case
@@ -130,19 +131,19 @@ class MultiTracker:
             print('[Tracker] Track registered: %s' % new_track)
             self.next_id += 1
 
-    def update(self, detections, embeddings):
+    def update(self, detections, embeddings, frame):
         """
         Update tracks using detections
         """
         # tic = time.perf_counter()
 
         det_ids = list(range(len(detections)))
-        track_ids = [track_id for track_id, track in self.tracks.items() if track.confirmed]
+        confirmed = [track_id for track_id, track in self.tracks.items() if track.confirmed]
         unconfirmed = [track_id for track_id, track in self.tracks.items() if not track.confirmed]
 
         # association with motion and embeddings
-        cost = self._matching_cost(track_ids, detections, embeddings)
-        matches_a, u_track_ids_a, u_det_ids = self._linear_assignment(cost, track_ids, det_ids)
+        cost, feature_cost = self._matching_cost(confirmed, detections, embeddings)
+        matches_a, u_track_ids_a, u_det_ids = self._linear_assignment(cost, confirmed, det_ids, feature_cost=feature_cost)
 
         # 2nd association with iou
         candidates = unconfirmed + [track_id for track_id in u_track_ids_a if self.tracks[track_id].age == 0]
@@ -155,8 +156,11 @@ class MultiTracker:
         matches = matches_a + matches_b
         u_track_ids = u_track_ids_a + u_track_ids_b
 
+        max_overlaps = self._max_overlaps(matches, confirmed, detections)
+
         # update matched tracks
-        for track_id, det_id in matches:
+        for (track_id, det_id), max_overlap in zip(matches, max_overlaps):
+        # for track_id, det_id in matches:
             track = self.tracks[track_id]
             det = detections[det_id]
             track.age = 0
@@ -166,7 +170,10 @@ class MultiTracker:
             if inside_bbox is not None:
                 track.state = (mean, cov)
                 track.bbox = next_bbox
-                track.update_features(embeddings[det_id])
+                if max_overlap < self.max_feature_overlap or not track.confirmed:
+                    # if track_id == 1:
+                    #     cv2.imwrite(f'test/target_{track_id}_{det_id}.jpg', det.bbox.crop(frame))
+                    track.update_features(embeddings[det_id])
                 if not track.confirmed:
                     track.confirmed = True
             else:
@@ -195,26 +202,44 @@ class MultiTracker:
                 print('[Tracker] Target lost (age): %s' % track)
                 del self.tracks[track_id]
 
+        # new_confirmed = [track_id for track_id, track in self.tracks.items() if track.confirmed]
+        # max_overlaps = self._max_overlaps(matches, new_confirmed, detections)
+        # for (track_id, det_id), max_overlap in zip(matches, max_overlaps):
+        #     track = self.tracks[track_id]
+        #     det = detections[det_id]
+        #     if max_overlap < self.max_feature_overlap or track.smooth_feature is None:
+        #         track.update_features(embeddings[det_id])
+
     def _compare_track_dist(self, id_track_pair):
         # estimate distance to camera using bottow right y coord and area
         return (math.ceil(id_track_pair[1].bbox.ymax / self.vertical_bin_height), id_track_pair[1].bbox.area)
 
     def _matching_cost(self, track_ids, detections, embeddings):
+        # cost = np.empty((len(track_ids), len(detections)))
+        # feature_cost = np.empty((len(track_ids), len(detections)))
         if len(track_ids) == 0 or len(detections) == 0:
-            return np.empty((len(track_ids), len(detections)))
+            return np.empty((len(track_ids), len(detections))), np.empty((len(track_ids), len(detections)))
+            # return cost, feature_cost
 
         measurements = np.array([det.bbox.tlbr for det in detections])
         det_labels = np.array([det.label for det in detections])
 
-        cost = self._feature_distance(track_ids, embeddings)
+        feature_cost = self._feature_distance(track_ids, embeddings)
+        cost = feature_cost.copy()
         for i, track_id in enumerate(track_ids):
             track = self.tracks[track_id]
+            # feature_cost[i] = self._feature_distance(track_id, embeddings)
             motion_dist = self.kf.motion_distance(*track.state, measurements)
-            gate = (cost[i, :] > self.max_feature_cost) | (motion_dist > self.max_motion_cost) | \
+            # print(motion_dist)
+            gate = (cost[i] > self.max_feature_cost) | (motion_dist > self.max_motion_cost) | \
                 (track.label != det_labels)
-            cost[i, :] = (1 - self.motion_weight) * cost[i, :] + self.motion_weight * motion_dist
+            cost[i] = (1 - self.motion_weight) * cost[i] + self.motion_weight * motion_dist
+            # gate = (feature_cost[i] > self.max_feature_cost) | (motion_dist > self.max_motion_cost) | \
+            #     (track.label != det_labels)
+            # cost[i] = (1 - self.motion_weight) * feature_cost[i] + self.motion_weight * motion_dist
             cost[i, gate] = INF_COST
-        return cost
+        # print(cost)
+        return cost, feature_cost
 
     def _iou_cost(self, track_ids, detections):
         if len(track_ids) == 0 or len(detections) == 0:
@@ -239,7 +264,7 @@ class MultiTracker:
         ious[gate] = 0
         return ious
 
-    def _linear_assignment(self, cost, track_ids, det_ids, maximize=False):
+    def _linear_assignment(self, cost, track_ids, det_ids, maximize=False, feature_cost=None):
         rows, cols = linear_sum_assignment(cost, maximize)
         unmatched_rows = list(set(range(cost.shape[0])) - set(rows))
         unmatched_cols = list(set(range(cost.shape[1])) - set(cols))
@@ -249,6 +274,7 @@ class MultiTracker:
         if not maximize:
             for row, col in zip(rows, cols):
                 if cost[row, col] < INF_COST:
+                    print(f'matched feature_cost: {feature_cost[row][col]}')
                     matches.append((track_ids[row], det_ids[col]))
                 else:
                     unmatched_track_ids.append(track_ids[row])
@@ -274,5 +300,29 @@ class MultiTracker:
 
     def _feature_distance(self, track_ids, embeddings):
         features = [self.tracks[track_id].smooth_feature for track_id in track_ids]
-        return cdist(features, embeddings, 'cosine')
-        # return cdist(track.features, embeddings, 'cosine').min(axis=0)
+        feature_dist = cdist(features, embeddings, self.metric)
+        print(feature_dist)
+        return feature_dist
+
+    # def _feature_distance(self, track_id, embeddings):
+    #     feature_dist = cdist(self.tracks[track_id].features, embeddings, self.metric).min(axis=0)
+    #     print(feature_dist)
+    #     return feature_dist
+
+    def _max_overlaps(self, matches, track_ids, detections):
+        if len(track_ids) == 0:
+            return np.zeros(len(matches))
+            
+        embedding_bboxes = np.ascontiguousarray(
+            [detections[det_id].bbox.tlbr for _, det_id in matches],
+            dtype=np.float
+        )
+        track_bboxes = np.ascontiguousarray(
+            [self.tracks[track_id].bbox.tlbr for track_id in track_ids],
+            dtype=np.float
+        )
+        ious = bbox_overlaps(embedding_bboxes, track_bboxes)
+        track_ids = np.asarray(track_ids)
+        max_overlaps = [iou[track_ids != track_id].max() for iou, (track_id, _) in zip(ious, matches)]
+        # print(max_overlaps)
+        return max_overlaps

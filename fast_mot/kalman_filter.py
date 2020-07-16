@@ -20,7 +20,7 @@ class KalmanFilter:
         xmin, ymin, xmax, ymax, v_xmin, v_ymin, v_xmax, v_ymax
     contains the bounding box top left corner, bottom right corner,
     and their respective velocities.
-    Object motion follows a constant velocity model augmented with velocity 
+    Object motion follows a constant velocity model augmented with corner 
     coupling and decay for tracking stability.
     """
 
@@ -179,6 +179,7 @@ class KalmanFilter:
     @nb.njit(parallel=True, fastmath=True, cache=True)
     def warp(mean, covariance, H_camera):
         """Transform kalman filter state based on camera motion.
+        https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub
         ----------
         mean : ndarray
             The predicted state's mean vector (8 dimensional).
@@ -200,7 +201,6 @@ class KalmanFilter:
         v = H_camera[2, :2] 
         # translation dof
         t = H_camera[:2, 2] 
-        # h33 = H_camera[-1, -1]
         tmp = np.dot(v, pos_tl) + 1
         grad_tl = (tmp * A - np.outer(A @ pos_tl + t, v)) / tmp**2
         tmp = np.dot(v, pos_br) + 1
