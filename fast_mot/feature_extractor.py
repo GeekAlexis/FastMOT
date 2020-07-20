@@ -16,9 +16,11 @@ class FeatureExtractor:
         self.pool = ThreadPool()
 
     def __call__(self, frame, detections):
+        if len(detections) == 0:
+            return []
+
         targets = [det.bbox.crop(frame) for det in detections]
         
-        cur_targets = []
         embeddings = []
         for offset in range(0, len(targets), self.batch_size):
             cur_targets = targets[offset:offset + self.batch_size]
@@ -30,7 +32,7 @@ class FeatureExtractor:
         embedding_out = self.backend.synchronize()[0][:len(cur_targets) * self.feature_dim]
         embeddings.append(embedding_out)
 
-        embeddings = np.reshape(embeddings, (-1, self.feature_dim))
+        embeddings = np.concatenate(embeddings).reshape(-1, self.feature_dim)
         embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
         return embeddings
 

@@ -38,8 +38,9 @@ class Mot:
     
     def run(self, frame):
         detections = []
+        orig_dets = []
         if self.frame_count == 0:
-            detections = self.detector(frame)
+            detections, orig_dets = self.detector(frame)
             self.tracker.initiate(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
@@ -51,7 +52,7 @@ class Mot:
                 print('detector pre', elapsed)
                 tic2 = time.perf_counter()
                 self.tracker.track(frame)
-                detections = self.detector.postprocess()
+                detections, orig_dets = self.detector.postprocess()
                 elapsed = time.perf_counter() - tic2
                 self.det_time += elapsed
                 print('det / track + post', elapsed)
@@ -75,7 +76,7 @@ class Mot:
                 print('TRACK', elapsed)
 
         if self.enable_drawing:
-            self._draw(frame, detections, debug=True)
+            self._draw(frame, orig_dets, debug=True)
 
         self.frame_count += 1
 

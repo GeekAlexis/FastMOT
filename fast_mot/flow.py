@@ -42,7 +42,7 @@ class Flow:
 
     def predict(self, tracks, prev_frame_gray, prev_frame_small, frame_small):
         """
-        Predict next tracks using optical flow. The function modifies feature points in tracks in place.
+        Predict next tracks using optical flow. The function updates feature points in tracks in place.
         """
         tic = time.perf_counter()
         feature_time = 0

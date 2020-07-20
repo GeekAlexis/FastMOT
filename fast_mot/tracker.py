@@ -310,7 +310,7 @@ class MultiTracker:
     #     return feature_dist
 
     def _max_overlaps(self, matches, track_ids, detections):
-        if len(track_ids) == 0:
+        if len(track_ids) == 0 or len(matches) == 0:
             return np.zeros(len(matches))
             
         embedding_bboxes = np.ascontiguousarray(
@@ -323,6 +323,6 @@ class MultiTracker:
         )
         ious = bbox_overlaps(embedding_bboxes, track_bboxes)
         track_ids = np.asarray(track_ids)
-        max_overlaps = [iou[track_ids != track_id].max() for iou, (track_id, _) in zip(ious, matches)]
+        max_overlaps = [iou[track_ids != track_id].max(initial=0) for iou, (track_id, _) in zip(ious, matches)]
         # print(max_overlaps)
         return max_overlaps

@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-
+from copy import deepcopy
 import numpy as np
 import numba as nb
 import cv2
@@ -52,7 +52,7 @@ class ObjectDetector:
         self.conf_thresh = ObjectDetector.config['conf_thresh']
         self.merge_iou_thresh = ObjectDetector.config['merge_iou_thresh']
 
-        self.model = SSDInceptionV2 # SSDMobileNetV1
+        self.model = SSDInceptionV2
         self.tile_max_det = self.max_det // np.prod(self.tiling_grid)
         self.tile_size = self.model.INPUT_SHAPE[:0:-1]
         self.tiles = self._generate_tiles()
@@ -107,8 +107,10 @@ class ObjectDetector:
                     tl = det_out[offset + 3:offset + 5] * tile.size + tile.tl
                     br = det_out[offset + 5:offset + 7] * tile.size + tile.tl
                     bbox = Rect(tlbr=(*tl, *br))
+                    # TODO: filter out large detection?
                     detections.append(Detection(bbox, label, conf, tile_id))
                     # print('[Detector] Detected: %s' % det)
+        orig_dets = deepcopy(detections)
         print('loop over det out', time.perf_counter() - tic)
 
         tic = time.perf_counter()
@@ -117,7 +119,6 @@ class ObjectDetector:
         for i, det in enumerate(detections):
             if i in keep:
                 for j, other in enumerate(detections):
-                    if j in keep:
                         if other.tile_id.isdisjoint(det.tile_id) and det.label == other.label:
                             if det.bbox.contains_rect(other.bbox) or \
                                 det.bbox.iou(other.bbox) > self.merge_iou_thresh:
@@ -129,7 +130,7 @@ class ObjectDetector:
         detections = detections[list(keep)]
 
         print('merge det', time.perf_counter() - tic)
-        return detections
+        return detections, orig_dets
 
     def draw_tile(self, frame):
         if self.cur_tile is not None:
