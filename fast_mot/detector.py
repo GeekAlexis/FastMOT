@@ -3,7 +3,6 @@ import json
 
 import numpy as np
 import numba as nb
-# from numba.typed import List
 import cv2
 import time
 
@@ -39,7 +38,6 @@ class Detection:
 
 
 class ObjectDetector:
-
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['ObjectDetector']
 
@@ -51,40 +49,45 @@ class ObjectDetector:
         self.batch_size = ObjectDetector.config['batch_size']
         self.tile_overlap = ObjectDetector.config['tile_overlap']
         self.tiling_grid = ObjectDetector.config['tiling_grid']
-        self.conf_threshold = ObjectDetector.config['conf_threshold']
+        self.conf_thresh = ObjectDetector.config['conf_thresh']
         self.merge_iou_thresh = ObjectDetector.config['merge_iou_thresh']
 
         self.model = SSDInceptionV2 # SSDMobileNetV1
-        self.cur_tile = None
-        self.cur_tile_id = -1
+        self.tile_max_det = self.max_det // np.prod(self.tiling_grid)
         self.tile_size = self.model.INPUT_SHAPE[:0:-1]
         self.tiles = self._generate_tiles()
+        self.cur_id = -1
 
         assert self.batch_size == np.prod(self.tiling_grid) or self.batch_size == 1
-        assert self.max_det <= self.model.TOPK
+        assert self.tile_max_det <= self.model.TOPK
 
         self.backend = InferenceBackend(self.model, self.batch_size)
-    
+
+    def __call__(self, frame):
+        self.detect_async(frame)
+        return self.postprocess()
+
     @property
     def tiling_region(self):
         return Rect(tlbr=(*self.tiles[0].tl, *self.tiles[-1].br))
 
-    def preprocess(self, frame, roi=None):
+    @property
+    def cur_tile(self):
+        if self.cur_id == -1:
+            return None
+        return self.tiles[self.cur_id]
+
+    def detect_async(self, frame):
+        tic = time.perf_counter()
         if self.batch_size > 1:
             for i, tile in enumerate(self.tiles):
-                frame_tile = self._preprocess(tile.crop(frame))
-                self.backend.memcpy(frame_tile, i)
+                self._preprocess(i, tile.crop(frame))
         else:
-            if roi is None:
-                self.cur_tile_id = (self.cur_tile_id + 1) % len(self.tiles)
-                self.cur_tile = self.tiles[self.cur_tile_id]
-            else:
-                tile_size = np.asarray(self.tile_size)
-                tl = roi.center - (tile_size - 1) / 2
-                tl = np.clip(tl, 0, self.size - tile_size)
-                self.cur_tile = Rect(*tl, *self.tile_size)
-            frame_tile = self._preprocess(self.cur_tile.crop(frame))
-            self.backend.memcpy(frame_tile)
+            self.cur_id = (self.cur_id + 1) % len(self.tiles)
+            self._preprocess(0, self.cur_tile.crop(frame))
+
+        print('img pre', time.perf_counter() - tic)
+        self.backend.infer_async()
 
     def postprocess(self):
         det_out = self.backend.synchronize()[0]
@@ -92,57 +95,41 @@ class ObjectDetector:
 
         tic = time.perf_counter()
         detections = []
-        for tile_idx in range(self.batch_size):
-            tile = self.tiles[tile_idx] if self.batch_size > 1 else self.cur_tile
-            tile_offset = tile_idx * self.model.TOPK
-            for det_idx in range(self.max_det):
+        for tile_id in range(self.batch_size):
+            tile = self.tiles[tile_id] if self.batch_size > 1 else self.cur_tile
+            tile_offset = tile_id * self.model.TOPK
+            for det_idx in range(self.tile_max_det):
                 offset = (tile_offset + det_idx) * self.model.OUTPUT_LAYOUT
                 # index = int(det_out[offset])
                 label = int(det_out[offset + 1])
                 conf = det_out[offset + 2]
-                if conf > self.conf_threshold and label in self.classes:
-                    xmin = det_out[offset + 3] * tile.size[0] + tile.tl[0]
-                    ymin = det_out[offset + 4] * tile.size[1] + tile.tl[1]
-                    xmax = det_out[offset + 5] * tile.size[0] + tile.tl[0]
-                    ymax = det_out[offset + 6] * tile.size[1] + tile.tl[1]
-                    bbox = Rect(tlbr=(xmin, ymin, xmax, ymax))
-                    detections.append(Detection(bbox, label, conf, tile_idx))
+                if conf > self.conf_thresh and label in self.classes:
+                    tl = det_out[offset + 3:offset + 5] * tile.size + tile.tl
+                    br = det_out[offset + 5:offset + 7] * tile.size + tile.tl
+                    bbox = Rect(tlbr=(*tl, *br))
+                    detections.append(Detection(bbox, label, conf, tile_id))
                     # print('[Detector] Detected: %s' % det)
         print('loop over det out', time.perf_counter() - tic)
 
         tic = time.perf_counter()
         # merge detections across different tiles
-        merged_detections = []
-        merged_det_indices = set()
-        for i, det1 in enumerate(detections):
-            if i not in merged_det_indices:
-                merged_det = Detection(det1.bbox, det1.label, det1.conf, det1.tile_id)
-                for j, det2 in enumerate(detections):
-                    if j not in merged_det_indices:
-                        if det2.tile_id.isdisjoint(merged_det.tile_id) and merged_det.label == det2.label:
-                            if merged_det.bbox.contains_rect(det2.bbox) or merged_det.bbox.iou(det2.bbox) > \
-                                self.merge_iou_thresh:
-                                merged_det.bbox |= det2.bbox
-                                merged_det.tile_id |= det2.tile_id
-                                merged_det.conf = max(merged_det.conf, det2.conf) 
-                                merged_det_indices.add(i)
-                                merged_det_indices.add(j)
-                if i in merged_det_indices:
-                    merged_detections.append(merged_det)
-        detections = np.delete(detections, list(merged_det_indices))
-        detections = np.r_[detections, merged_detections]
+        keep = set(range(len(detections)))
+        for i, det in enumerate(detections):
+            if i in keep:
+                for j, other in enumerate(detections):
+                    if j in keep:
+                        if other.tile_id.isdisjoint(det.tile_id) and det.label == other.label:
+                            if det.bbox.contains_rect(other.bbox) or \
+                                det.bbox.iou(other.bbox) > self.merge_iou_thresh:
+                                det.bbox |= other.bbox
+                                det.tile_id |= other.tile_id
+                                det.conf = max(det.conf, other.conf)
+                                keep.discard(j)
+        detections = np.asarray(detections)
+        detections = detections[list(keep)]
+
         print('merge det', time.perf_counter() - tic)
         return detections
-
-    def detect(self, frame, roi=None):
-        self.detect_async(frame, roi)
-        return self.postprocess()
-
-    def detect_async(self, frame, roi=None):
-        tic = time.perf_counter()
-        self.preprocess(frame, roi)
-        print('img pre', time.perf_counter() - tic)
-        self.backend.infer_async()
 
     def draw_tile(self, frame):
         if self.cur_tile is not None:
@@ -151,22 +138,23 @@ class ObjectDetector:
             [cv2.rectangle(frame, tuple(tile.tl), tuple(tile.br), 0, 2) for tile in self.tiles]
 
     def _generate_tiles(self):
-        width, height = self.size
-        tile_width, tile_height = self.tile_size
-        step_width = (1 - self.tile_overlap) * tile_width
-        step_height = (1 - self.tile_overlap) * tile_height
-        total_width = (self.tiling_grid[0] - 1) * step_width + tile_width
-        total_height = (self.tiling_grid[1] - 1) * step_height + tile_height
-        assert total_width <= width and total_height <= height, "Frame size not large enough for %dx%d tiles" % self.tiling_grid
-        x_offset = width // 2 - total_width // 2
-        y_offset = height // 2 - total_height // 2
-        tiles = [Rect(tlwh=(c * step_width + x_offset, r * step_height + y_offset, tile_width, tile_height)) for r in
-            range(self.tiling_grid[1]) for c in range(self.tiling_grid[0])]
+        size = np.asarray(self.size)
+        tile_size, tiling_grid = np.asarray(self.tile_size), np.asarray(self.tiling_grid)
+        step_size = (1 - self.tile_overlap) * tile_size
+        total_size = (tiling_grid - 1) * step_size + tile_size
+        assert all(total_size <= size), "Frame size too small for %dx%d tiles" % self.tiling_grid
+        offset = (size - total_size) // 2
+        tiles = [Rect(tlwh=(c * step_size[0] + offset[0], r * step_size[1] + offset[1], *tile_size)) 
+            for r in range(tiling_grid[1]) for c in range(tiling_grid[0])]
         return tiles
+
+    def _preprocess(self, idx, img):
+        img = self._normalize(img)
+        self.backend.memcpy(img, idx)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _preprocess(img):
+    def _normalize(img):
         # BGR to RGB
         img = img[..., ::-1]
         # HWC -> CHW

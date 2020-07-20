@@ -36,12 +36,10 @@ class InferenceBackend:
 
         if self.engine.has_implicit_batch_dimension:
             assert self.batch_size <= self.engine.max_batch_size
-        self.input_size = np.prod(self.model.INPUT_SHAPE)
 
         # allocate buffers
-        self.outputs = []
         self.bindings = []
-        self.stream = cuda.Stream()
+        self.outputs = []
         for binding in self.engine:
             shape = self.engine.get_binding_shape(binding)
             size = trt.volume(shape)
@@ -57,9 +55,12 @@ class InferenceBackend:
             if self.engine.binding_is_input(binding):
                 if not self.engine.has_implicit_batch_dimension:
                     assert self.batch_size == shape[0]
+                self.input_size = size // self.batch_size
                 self.input = HostDeviceMem(host_mem, device_mem)
             else:
                 self.outputs.append(HostDeviceMem(host_mem, device_mem))
+        
+        self.stream = cuda.Stream()
         self.context = self.engine.create_execution_context()
 
     def memcpy(self, src, batch_num=0):
@@ -70,30 +71,24 @@ class InferenceBackend:
         np.copyto(self.input.host[:src.size], src)
 
     def infer(self):
-        cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
-        self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
-        for out in self.outputs:
-            cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
-        self.stream.synchronize()
-        return [out.host for out in self.outputs]
-
-    def infer_v2(self):
-        cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
-        self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
-        for out in self.outputs:
-            cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
-        self.stream.synchronize()
-        return [out.host for out in self.outputs]
+        self.infer_async()
+        return self.synchronize()
 
     def infer_async(self):
         cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
-        self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
+        if self.engine.has_implicit_batch_dimension:
+            self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
+        else:
+            self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
         for out in self.outputs:
             cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
 
-    def infer_async_v2(self):
-        cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
-        self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
+    def infer_mixed(self):
+        cuda.memcpy_htod(self.input.device, self.input.host)
+        if self.engine.has_implicit_batch_dimension:
+            self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
+        else:
+            self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
         for out in self.outputs:
             cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
 

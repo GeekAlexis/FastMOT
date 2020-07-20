@@ -1,3 +1,4 @@
+from multiprocessing.pool import ThreadPool
 import numpy as np
 import numba as nb
 import cv2
@@ -8,44 +9,43 @@ from .models import *
 
 class FeatureExtractor:
     def __init__(self):
-        # initialize parameters
         self.model = OSNet025
         self.batch_size = 32
         self.feature_dim = self.model.OUTPUT_LAYOUT
-        self.metric = self.model.METRIC
         self.backend = InferenceBackend(self.model, self.batch_size)
+        self.pool = ThreadPool()
 
     def __call__(self, frame, detections):
-        self.preprocess(frame, detections)
-        self.backend.infer_async_v2()
-        return self.postprocess()
+        targets = [det.bbox.crop(frame) for det in detections]
+        
+        cur_targets = []
+        embeddings = []
+        for offset in range(0, len(targets), self.batch_size):
+            cur_targets = targets[offset:offset + self.batch_size]
+            self.pool.starmap(self._preprocess, enumerate(cur_targets))
+            if offset > 0:
+                embedding_out = self.backend.synchronize()[0]
+                embeddings.append(embedding_out)
+            self.backend.infer_async()
+        embedding_out = self.backend.synchronize()[0][:len(cur_targets) * self.feature_dim]
+        embeddings.append(embedding_out)
 
-    # def encode(self, frame, detections):
-    #     self.encode_async(frame, detections)
-    #     return self.postprocess()
-
-    def extract_async(self, frame, detections):
-        self.preprocess(frame, detections)
-        self.backend.infer_async_v2()
-    
-    def preprocess(self, frame, detections):
-        self.num_detections = len(detections)
-        assert self.num_detections <= self.batch_size
-        for i, det in enumerate(detections):
-            roi = det.bbox.crop(frame)
-            roi = cv2.resize(roi, self.model.INPUT_SHAPE[:0:-1])
-            self.backend.memcpy(self._preprocess(roi), i)
-
-    def postprocess(self):
-        embedding_out = self.backend.synchronize()[0]
-        embeddings = [embedding_out[i:i + self.feature_dim] for i in 
-            range(0, self.num_detections * self.feature_dim, self.feature_dim)]
+        embeddings = np.reshape(embeddings, (-1, self.feature_dim))
         embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
         return embeddings
 
+    @property
+    def metric(self):
+        return self.model.METRIC
+
+    def _preprocess(self, idx, img):
+        img = cv2.resize(img, self.model.INPUT_SHAPE[:0:-1])
+        img = self._normalize(img)
+        self.backend.memcpy(img, idx)
+
     @staticmethod
-    @nb.njit(fastmath=True, cache=True)
-    def _preprocess(img):
+    @nb.njit(fastmath=True, nogil=True, cache=True)
+    def _normalize(img):
         # BGR to RGB
         img = img[..., ::-1]
         # HWC -> CHW
@@ -57,24 +57,13 @@ class FeatureExtractor:
         img[2, ...] = (img[2, ...] - 0.406) / 0.225
         return img.ravel()
 
-
 # from utils import InferenceBackend
 # from models import *
 # import os
+# import time
+# from multiprocessing.pool import ThreadPool
 
-
-# def preproc(img):
-#     img = cv2.resize(img, (128, 256))
-#     img = img[..., ::-1]
-#     img = img.transpose(2, 0, 1)
-
-#     img = img * (1 / 255)
-#     img[0, ...] = (img[0, ...] - 0.485) / 0.229
-#     img[1, ...] = (img[1, ...] - 0.456) / 0.224
-#     img[2, ...] = (img[2, ...] - 0.406) / 0.225
-
-#     # img = img * (2 / 255) - 1
-#     return img
+# pool = ThreadPool()
 
 
 # # inp = np.ones((1, 3, 256, 128))
@@ -91,11 +80,12 @@ class FeatureExtractor:
 
 # # imgs = [cv2.imread('../test/' + f) for f in os.listdir('../test/')]
 
-# imgs = []
-# for i, f in enumerate(os.listdir('../test/')):
-#     print(i, f)
-#     imgs.append(cv2.imread('../test/' + f))
+# # imgs = []
+# # for i, f in enumerate(os.listdir('../test/')):
+# #     print(i, f)
+# #     imgs.append(cv2.imread('../test/' + f))
 
+# imgs = [np.ones((100, 50, 3)) for _ in range(32)]
 
 # # img1 = cv2.imread('../test/target_1_8.jpg')
 # # img2 = cv2.imread('../test/target_1_12.jpg')
@@ -134,20 +124,55 @@ class FeatureExtractor:
 
 
 
-# backend = InferenceBackend(OSNet025, 32)
+# # backend = InferenceBackend(OSNet025, 32)
+# # backend.infer_async()
+# # out = backend.synchronsize()
 
-# for i, img in enumerate(imgs):
-#     img = preproc(img)
-#     backend.memcpy(img.ravel(), i)
+# def preproc(img):
+#     img = cv2.resize(img, (128, 256))
+#     img = _normalize(img)
+#     # img = img[..., ::-1]
+#     # img = img.transpose(2, 0, 1)
 
-# backend.infer_async_v2()
-# out = backend.synchronize()[0]
+#     # img = img * (1 / 255)
+#     # img[0, ...] = (img[0, ...] - 0.485) / 0.229
+#     # img[1, ...] = (img[1, ...] - 0.456) / 0.224
+#     # img[2, ...] = (img[2, ...] - 0.406) / 0.225
+#     # img = img * (2 / 255) - 1
+#     # backend.memcpy(img, i)
 
-# features = [out[i:i + 512] for i in range(0, len(imgs) * 512, 512)]
-# features /= np.linalg.norm(features, axis=1, keepdims=True)
+# @nb.njit(fastmath=True, nogil=True, cache=True)
+# def _normalize(img):
+#     # BGR to RGB
+#     img = img[..., ::-1]
+#     # HWC -> CHW
+#     img = img.transpose(2, 0, 1)
+#     # Normalize using ImageNet's mean and std
+#     img = img * (1 / 255)
+#     img[0, ...] = (img[0, ...] - 0.485) / 0.229
+#     img[1, ...] = (img[1, ...] - 0.456) / 0.224
+#     img[2, ...] = (img[2, ...] - 0.406) / 0.225
+#     return img.ravel()
 
-# # print(out2)
-# from scipy.spatial.distance import cdist
-# # print(cdist(out1[None, ...], out2[None, ...], 'euclidean'))
+# pool.map(preproc, imgs)
+# pool.map(preproc, imgs)
 
-# print(cdist(features, features, 'euclidean'))
+# tic = time.perf_counter()
+# pool.map(preproc, imgs)
+# # for img in imgs:
+# #     preproc(img)
+# print('preproc', time.perf_counter() - tic)
+
+# # tic = time.perf_counter()
+# # backend.infer_async()
+# # out = backend.synchronize()[0]
+# # print(time.perf_counter() - tic)
+
+# # features = [out[i:i + 512] for i in range(0, len(imgs) * 512, 512)]
+# # features /= np.linalg.norm(features, axis=1, keepdims=True)
+
+# # # print(out2)
+# # from scipy.spatial.distance import cdist
+# # # print(cdist(out1[None, ...], out2[None, ...], 'euclidean'))
+
+# # print(cdist(features, features, 'euclidean'))

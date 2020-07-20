@@ -16,7 +16,7 @@ class SSD:
         raise NotImplementedError
 
     @classmethod
-    def build_engine(cls, trt_logger, batch_size=1, calib_dataset=Path(__file__).parent / 'VOCdevkit' / 'VOC2007' / 'JPEGImages'):
+    def build_engine(cls, trt_logger, batch_size, calib_dataset=Path(__file__).parent / 'VOCdevkit' / 'VOC2007' / 'JPEGImages'):
         import graphsurgeon as gs
         import uff
         from . import calibrator

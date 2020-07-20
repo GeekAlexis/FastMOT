@@ -38,12 +38,12 @@
         "vel_half_life": 2
     },
     "ObjectDetector": {
-        "max_det": 20,
+        "max_det": 96,
         "batch_size": 8,
         "#batch_size": 1,
         "tile_overlap": 0.25,
         "merge_iou_thresh": 0.15,
-        "conf_threshold": 0.5,
+        "conf_thresh": 0.5,
         "tiling_grid": [4, 2]
     },
     "Flow": {

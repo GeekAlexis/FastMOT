@@ -36,7 +36,7 @@ class Track:
         else:
             self.smooth_feature = self.alpha * self.smooth_feature + (1 - self.alpha) * embedding
             self.smooth_feature /= np.linalg.norm(self.smooth_feature)
-        self.features.append(embedding)
+        # self.features.append(embedding)
         # if self.track_id == 1:
         #     print(cdist(self.features, self.features))
 

@@ -44,10 +44,10 @@ class VideoIO:
         if not ret:
             raise RuntimeError("Unable to read video stream")
         self.frame_queue.append(frame)
-        print('[Video] Stream specs: %dx%d @ %d FPS' % (*self.vid_size, self.fps))
+        print('[Video] %dx%d @ %d FPS' % (*self.vid_size, self.fps))
         
         if self.output_path is not None:
-            assert Path(self.output_path).suffix == '.mp4', 'Only mp4 is supported'
+            assert Path(self.output_path).suffix == '.mp4', 'Only mp4 format is supported'
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             self.writer = cv2.VideoWriter(self._gst_write_str(), 0, self.fps, self.size, True)
 

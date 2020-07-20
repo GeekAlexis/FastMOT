@@ -46,7 +46,7 @@ class MultiTracker:
         
         self.prev_frame_gray = None
         self.prev_frame_small = None
-        self.next_id = 0
+        self.next_id = 1
         self.tracks = OrderedDict()
         self.kf = KalmanFilter(dt, self.n_init)
         self.flow = Flow(self.size, estimate_camera_motion=True)
@@ -92,9 +92,9 @@ class MultiTracker:
                 if track_id in flow_meas and track.age == 0:
                     flow_bbox = flow_meas[track_id]
                     std_multiplier = 1
-                    if self.detector_region.contains_rect(track.bbox):
-                        # give large flow uncertainty for occluded objects
-                        std_multiplier = max(self.age_factor * track.age, 1)
+                    # if self.detector_region.contains_rect(track.bbox):
+                    #     # give large flow uncertainty for occluded objects
+                    #     std_multiplier = max(self.age_factor * track.age, 1)
                     mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
                 # check for out of frame case
                 next_bbox = Rect(tlbr=mean[:4])
@@ -131,7 +131,7 @@ class MultiTracker:
             print('[Tracker] Track registered: %s' % new_track)
             self.next_id += 1
 
-    def update(self, detections, embeddings, frame):
+    def update(self, detections, embeddings):
         """
         Update tracks using detections
         """
@@ -142,8 +142,8 @@ class MultiTracker:
         unconfirmed = [track_id for track_id, track in self.tracks.items() if not track.confirmed]
 
         # association with motion and embeddings
-        cost, feature_cost = self._matching_cost(confirmed, detections, embeddings)
-        matches_a, u_track_ids_a, u_det_ids = self._linear_assignment(cost, confirmed, det_ids, feature_cost=feature_cost)
+        cost = self._matching_cost(confirmed, detections, embeddings)
+        matches_a, u_track_ids_a, u_det_ids = self._linear_assignment(cost, confirmed, det_ids)
 
         # 2nd association with iou
         candidates = unconfirmed + [track_id for track_id in u_track_ids_a if self.tracks[track_id].age == 0]
@@ -218,14 +218,14 @@ class MultiTracker:
         # cost = np.empty((len(track_ids), len(detections)))
         # feature_cost = np.empty((len(track_ids), len(detections)))
         if len(track_ids) == 0 or len(detections) == 0:
-            return np.empty((len(track_ids), len(detections))), np.empty((len(track_ids), len(detections)))
+            return np.empty((len(track_ids), len(detections))) #, np.empty((len(track_ids), len(detections)))
             # return cost, feature_cost
 
         measurements = np.array([det.bbox.tlbr for det in detections])
         det_labels = np.array([det.label for det in detections])
 
-        feature_cost = self._feature_distance(track_ids, embeddings)
-        cost = feature_cost.copy()
+        cost = self._feature_distance(track_ids, embeddings)
+        # feature_cost = cost.copy()
         for i, track_id in enumerate(track_ids):
             track = self.tracks[track_id]
             # feature_cost[i] = self._feature_distance(track_id, embeddings)
@@ -239,7 +239,7 @@ class MultiTracker:
             # cost[i] = (1 - self.motion_weight) * feature_cost[i] + self.motion_weight * motion_dist
             cost[i, gate] = INF_COST
         # print(cost)
-        return cost, feature_cost
+        return cost #, feature_cost
 
     def _iou_cost(self, track_ids, detections):
         if len(track_ids) == 0 or len(detections) == 0:
@@ -274,7 +274,7 @@ class MultiTracker:
         if not maximize:
             for row, col in zip(rows, cols):
                 if cost[row, col] < INF_COST:
-                    print(f'matched feature_cost: {feature_cost[row][col]}')
+                    # print(f'matched feature_cost: {feature_cost[row][col]}')
                     matches.append((track_ids[row], det_ids[col]))
                 else:
                     unmatched_track_ids.append(track_ids[row])
@@ -301,7 +301,7 @@ class MultiTracker:
     def _feature_distance(self, track_ids, embeddings):
         features = [self.tracks[track_id].smooth_feature for track_id in track_ids]
         feature_dist = cdist(features, embeddings, self.metric)
-        print(feature_dist)
+        # print(feature_dist)
         return feature_dist
 
     # def _feature_distance(self, track_id, embeddings):

@@ -41,7 +41,7 @@ def main():
     parser.add_argument('-o', '--output', help='Path to optional output video file')
     parser.add_argument('-m', '--mot', action='store_true', help='Turn on multi-object tracking')
     parser.add_argument('-s', '--socket', action='store_true', help='Turn on socket communication')
-    parser.add_argument('--addr', default='/tmp/guardian_socket', help='Socket address')
+    parser.add_argument('--addr', default='/tmp/fast_mot_socket', help='Socket address')
     parser.add_argument('-l', '--log', action='store_true', help='Output a MOT format tracking log')
     parser.add_argument('-g', '--gui', action='store_true', help='Turn on visiualization')
     # parser.add_argument('-f', '--flip', type=int, default=0, choices=range(8), help=
@@ -129,11 +129,10 @@ def main():
                 mot.run(frame)
                 if args['log']:
                     for track_id, track in mot.tracker.tracks.items():
-                        scaled_xmin = track.bbox.xmin / PROC_SIZE[0] * stream.vid_size[0]
-                        scaled_ymin = track.bbox.ymin / PROC_SIZE[1] * stream.vid_size[1]
-                        scaled_xmax = track.bbox.xmax / PROC_SIZE[0] * stream.vid_size[0]
-                        scaled_ymax = track.bbox.ymax / PROC_SIZE[1] * stream.vid_size[1]
-                        mot_log.write(f'{mot.frame_count + 1}, {track_id + 1}, {scaled_xmin}, {scaled_ymin}, {scaled_xmax - scaled_xmin + 1}, {scaled_ymax - scaled_ymin + 1}, -1, -1, -1, -1\n')
+                        tl = track.bbox.tl / PROC_SIZE * stream.vid_size
+                        br = track.bbox.br / PROC_SIZE * stream.vid_size
+                        w, h = br - tl + 1
+                        mot_log.write(f'{mot.frame_count + 1}, {track_id}, {tl[0]}, {tl[1]}, {w}, {h}, -1, -1, -1, -1\n')
                 # if args['socket']:
                 #     if mot.status == mot.Status.TARGET_ACQUIRED:
                 #         msg = serialize_to_msg(MsgType.BBOX, mot.get_target_bbox())
@@ -171,6 +170,16 @@ def main():
     if not args['socket'] and args['mot']:
         avg_fps = round(mot.frame_count / elapsed_time)
         print('[INFO] Average FPS: %d' % avg_fps)
+        avg_track_time = mot.track_time / (mot.frame_count - mot.detector_frame_count)
+        print('[INFO] Average track time: %f' % avg_track_time)
+        avg_embedding_time = mot.embedding_time / mot.detector_frame_count
+        print('[INFO] Average embedding time: %f' % avg_embedding_time)
+        avg_det_pre_time = mot.det_pre_time / mot.detector_frame_count
+        print('[INFO] Average det pre time: %f' % avg_det_pre_time)
+        avg_det_time = mot.det_time / mot.detector_frame_count
+        print('[INFO] Average det time: %f' % avg_det_time)
+        avg_match_time = mot.match_time / mot.detector_frame_count
+        print('[INFO] Average match time: %f' % avg_match_time)
         if args['gui']:
             avg_time = gui_time / mot.frame_count
             print('[INFO] Average GUI time: %f' % avg_time)
