@@ -158,7 +158,7 @@ class MultiTracker:
 
         max_overlaps = self._max_overlaps(matches, confirmed, detections)
 
-        # update matched tracks
+        # update matched tracks TODO: duplicate tracks
         for (track_id, det_id), max_overlap in zip(matches, max_overlaps):
         # for track_id, det_id in matches:
             track = self.tracks[track_id]
@@ -170,7 +170,7 @@ class MultiTracker:
             if inside_bbox is not None:
                 track.state = (mean, cov)
                 track.bbox = next_bbox
-                if max_overlap < self.max_feature_overlap or not track.confirmed:
+                if max_overlap <= self.max_feature_overlap or not track.confirmed:
                     # if track_id == 1:
                     #     cv2.imwrite(f'test/target_{track_id}_{det_id}.jpg', det.bbox.crop(frame))
                     track.update_features(embeddings[det_id])
@@ -313,7 +313,7 @@ class MultiTracker:
         if len(track_ids) == 0 or len(matches) == 0:
             return np.zeros(len(matches))
             
-        embedding_bboxes = np.ascontiguousarray(
+        det_bboxes = np.ascontiguousarray(
             [detections[det_id].bbox.tlbr for _, det_id in matches],
             dtype=np.float
         )
@@ -321,7 +321,7 @@ class MultiTracker:
             [self.tracks[track_id].bbox.tlbr for track_id in track_ids],
             dtype=np.float
         )
-        ious = bbox_overlaps(embedding_bboxes, track_bboxes)
+        ious = bbox_overlaps(det_bboxes, track_bboxes)
         track_ids = np.asarray(track_ids)
         max_overlaps = [iou[track_ids != track_id].max(initial=0) for iou, (track_id, _) in zip(ious, matches)]
         # print(max_overlaps)

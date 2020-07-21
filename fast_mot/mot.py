@@ -89,7 +89,7 @@ class Mot:
                 track.draw(frame, draw_feature_match=debug)
         if debug:
             [det.draw(frame) for det in detections]
-            # self.tracker.flow.draw_bkg_feature_match(frame)
+            self.tracker.flow.draw_bkg_feature_match(frame)
             if self.frame_count % self.detector_frame_skip == 0:
                 self.detector.draw_tile(frame)
         # cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

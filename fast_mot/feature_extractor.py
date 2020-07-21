@@ -17,7 +17,7 @@ class FeatureExtractor:
 
     def __call__(self, frame, detections):
         if len(detections) == 0:
-            return []
+            return np.empty((0, self.feature_dim))
 
         targets = [det.bbox.crop(frame) for det in detections]
         

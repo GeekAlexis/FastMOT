@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 
+from multiprocessing.pool import ThreadPool
 import numpy as np
 import numba as nb
 import math
@@ -39,10 +40,57 @@ class Flow:
         self.ones = np.full(self.size[::-1], 255, dtype=np.uint8)
         self.bkg_mask = np.empty_like(self.ones)
         self.fg_mask = self.bkg_mask
+        
+        self.pool = ThreadPool()
+
+    # def detect_feature(track):
+    #     inside_bbox = track.bbox & Rect(tlwh=(0, 0, *self.size))
+    #     if track.feature_pts is not None:
+    #         # only propagate feature points inside the bounding box
+    #         track.feature_pts = self._rect_filter(track.feature_pts, inside_bbox.tl, inside_bbox.br)
+    #     if track.feature_pts is None or len(track.feature_pts) / inside_bbox.area < self.feature_density:
+    #         roi = inside_bbox.crop(prev_frame_gray)
+    #         target_mask = inside_bbox.crop(self.bkg_mask)
+    #         est_min_dist = self._estimate_feature_dist(target_mask, self.feature_dist_factor)
+    #         tic2 = time.perf_counter()
+    #         keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, minDistance=est_min_dist, 
+    #             **self.gftt_target_feature_params)
+    #         feature_time += (time.perf_counter() - tic2)
+    #         if keypoints is None or len(keypoints) == 0:
+    #             # print('[Flow] Target lost (no corners detected): %s' % track)
+    #             # TODO: check this is right
+    #             keypoints = []
+    #         else:
+    #             keypoints = self._ellipse_filter(keypoints, track.bbox.center, track.bbox.size, inside_bbox.tl)
+    #     else:
+    #         keypoints = track.feature_pts
+    #     return keypoints
+    #     # scale and batch all target keypoints
+    #     target_begin_idices.append(num_pts)
+    #     all_prev_pts.append(keypoints)
+    #     num_pts += len(keypoints)
+    #     target_end_idices.append(num_pts)
 
     def predict(self, tracks, prev_frame_gray, prev_frame_small, frame_small):
         """
-        Predict next tracks using optical flow. The function updates feature points in tracks in place.
+        Predict tracks in the current frame using optical flow.
+        Parameters
+        ----------
+        tracks : OrderedDict[int, Track]
+            A dictionary with track IDs as keys and tracks as values.
+            Required to be sorted according to the approximate distance to the
+            image plane. Feature points of each track is updated in place.
+        prev_frame_gray : ndarray
+            Previous gray scale frame for feature points detection.
+        prev_frame_small : ndarray
+            Downsampled previous gray scale frame for optical flow processing.
+        frame_small : ndarray
+            Downsampled current gray scale frame for optical flow processing.
+        Returns
+        -------
+        Dict[int, Rect]
+            Returns a dictionary with track IDs as keys and predicted bounding
+            boxes as values.
         """
         tic = time.perf_counter()
         feature_time = 0
@@ -51,6 +99,14 @@ class Flow:
         all_prev_pts = []
         target_begin_idices = []
         target_end_idices = []
+
+        # target_masks = []
+        # np.copyto(self.bkg_mask, self.ones)
+        # for track in track.values():
+        #     inside_bbox = track.bbox & Rect(tlwh=(0, 0, *self.size))
+        #     target_masks.append(inside_bbox.crop(self.bkg_mask))
+        #     np.copyto(inside_bbox.crop(self.bkg_mask), 0)
+
         np.copyto(self.bkg_mask, self.ones)
         for track in tracks.values():
             inside_bbox = track.bbox & Rect(tlwh=(0, 0, *self.size))
@@ -66,9 +122,7 @@ class Flow:
                     **self.gftt_target_feature_params)
                 feature_time += (time.perf_counter() - tic2)
                 if keypoints is None or len(keypoints) == 0:
-                    # print('[Flow] Target lost (no corners detected): %s' % track)
-                    track.feature_pts = None
-                    continue
+                    keypoints = np.empty((0, 2), dtype=np.float32)
                 else:
                     keypoints = self._ellipse_filter(keypoints, track.bbox.center, track.bbox.size, inside_bbox.tl)
             else:
@@ -79,7 +133,7 @@ class Flow:
             num_pts += len(keypoints)
             target_end_idices.append(num_pts)
             # zero out track in background mask
-            np.copyto(track.bbox.crop(self.bkg_mask), 0)
+            np.copyto(inside_bbox.crop(self.bkg_mask), 0)
         # print('target feature:', time.perf_counter() - tic)
         # print('target feature func:', feature_time)
 
