@@ -1,8 +1,6 @@
 from pathlib import Path
 import json
 
-from collections import OrderedDict
-# from numba.typed import Dict
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 from cython_bbox import bbox_overlaps
@@ -15,7 +13,7 @@ import time
 from .track import Track
 from .flow import Flow
 from .kalman_filter import MeasType, KalmanFilter
-from .utils import * 
+from .utils import *
 
 
 CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution with 4 dof
@@ -41,40 +39,27 @@ class MultiTracker:
         self.max_feature_overlap = MultiTracker.config['max_feature_overlap']
         self.feature_buf_size = MultiTracker.config['feature_buf_size']
         self.min_register_conf = MultiTracker.config['min_register_conf']
-        self.vertical_bin_height = MultiTracker.config['vertical_bin_height']
         self.n_init = MultiTracker.config['n_init']
         
-        self.prev_frame_gray = None
-        self.prev_frame_small = None
         self.next_id = 1
-        self.tracks = OrderedDict()
+        self.tracks = {}
         self.kf = KalmanFilter(dt, self.n_init)
         self.flow = Flow(self.size, estimate_camera_motion=True)
 
-    def step_flow(self, frame):
+    def track(self, frame):
         tic = time.perf_counter()
-        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_small = cv2.resize(frame_gray, None, fx=self.flow.optflow_scaling[0], fy=self.flow.optflow_scaling[1])
-        self.tracks = OrderedDict(sorted(self.tracks.items(), key=self._compare_track_dist, reverse=True))
-        print('gray and sort:', time.perf_counter() - tic)
-
-        # tic = time.perf_counter()
-        flow_bboxes, H_camera = self.flow.predict(self.tracks, self.prev_frame_gray, self.prev_frame_small, frame_small)
+        flow_bboxes, H_camera = self.flow.predict(frame, self.tracks)
         if H_camera is None:
             # clear tracks when camera motion estimation failed
             self.tracks.clear()
+        print('flow', time.perf_counter() - tic)
+        tic = time.perf_counter()
 
-        self.prev_frame_gray = frame_gray
-        self.prev_frame_small = frame_small
-        # print('opt flow:', time.perf_counter() - tic)
-        return flow_bboxes, H_camera
-
-    def step_kf(self, flow_meas, H_camera):
         for track_id, track in list(self.tracks.items()):
             track.frames_since_acquired += 1
             if track.frames_since_acquired <= self.n_init:
-                if track_id in flow_meas:
-                    flow_bbox = flow_meas[track_id]
+                if track_id in flow_bboxes:
+                    flow_bbox = flow_bboxes[track_id]
                     if track.frames_since_acquired == self.n_init:
                         # initialize kalman filter
                         track.state = self.kf.initiate(track.init_bbox, flow_bbox)
@@ -89,10 +74,10 @@ class MultiTracker:
                 # track using kalman filter and flow measurement
                 mean, cov = self.kf.warp(mean, cov, H_camera)
                 mean, cov = self.kf.predict(mean, cov)
-                if track_id in flow_meas and track.age == 0:
-                    flow_bbox = flow_meas[track_id]
+                if track_id in flow_bboxes and track.age == 0:
+                    flow_bbox = flow_bboxes[track_id]
                     std_multiplier = 1
-                    # if self.detector_region.contains_rect(track.bbox):
+                    # if track.bbox in self.detector_region:
                     #     # give large flow uncertainty for occluded objects
                     #     std_multiplier = max(self.age_factor * track.age, 1)
                     mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
@@ -106,12 +91,6 @@ class MultiTracker:
                     print('[Tracker] Target lost (outside frame): %s' % track)
                     del self.tracks[track_id]
 
-    def track(self, frame):
-        tic = time.perf_counter()
-        flow_meas, H_camera = self.step_flow(frame)
-        print('flow', time.perf_counter() - tic)
-        tic = time.perf_counter()
-        self.step_kf(flow_meas, H_camera)
         print('kalman filter', time.perf_counter() - tic)
 
     def initiate(self, frame, detections):
@@ -120,11 +99,7 @@ class MultiTracker:
         """
         if self.tracks:
             self.tracks.clear()
-
-        self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.flow.optflow_scaling[0],
-            fy=self.flow.optflow_scaling[1])
-
+        self.flow.initiate(frame)
         for det in detections:
             new_track = Track(det.label, det.bbox, self.next_id, self.feature_buf_size)
             self.tracks[self.next_id] = new_track
@@ -209,10 +184,6 @@ class MultiTracker:
         #     det = detections[det_id]
         #     if max_overlap < self.max_feature_overlap or track.smooth_feature is None:
         #         track.update_features(embeddings[det_id])
-
-    def _compare_track_dist(self, id_track_pair):
-        # estimate distance to camera using bottow right y coord and area
-        return (math.ceil(id_track_pair[1].bbox.ymax / self.vertical_bin_height), id_track_pair[1].bbox.area)
 
     def _matching_cost(self, track_ids, detections, embeddings):
         # cost = np.empty((len(track_ids), len(detections)))

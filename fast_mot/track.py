@@ -1,7 +1,7 @@
 from collections import deque
 import numpy as np
 import cv2
-from scipy.spatial.distance import cdist
+
 from .models import COCO_LABELS
 
 
@@ -13,13 +13,16 @@ class Track:
         self.track_id = track_id
         self.feature_buf_size = feature_buf_size
 
+        self.bin_height = 10
+        self.alpha = 0.25
+
         self.age = 0
         self.frames_since_acquired = 0
         self.confirmed = False
-        self.alpha = 0.25
         self.features = deque([], maxlen=self.feature_buf_size)
         self.smooth_feature = None
         self.state = None
+
         self.feature_pts = None
         self.prev_feature_pts = None
 
@@ -29,6 +32,11 @@ class Track:
 
     def __str__(self):
         return "%s ID%d at %s" % (COCO_LABELS[self.label], self.track_id, self.bbox.tlwh)
+
+    def __lt__(self, other):
+        # ordered by approximate distance to the image plane
+        return (self.bbox.ymax // self.bin_height, -self.age) < (other.bbox.ymax // self.bin_height, -other.age)
+        # return (self.bbox.ymax // self.bin_height, self.bbox.area) < (other.bbox.ymax // self.bin_height, other.bbox.area)
 
     def update_features(self, embedding):
         if self.smooth_feature is None:

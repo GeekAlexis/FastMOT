@@ -21,7 +21,6 @@
         "feature_buf_size": 5,
         "max_feature_overlap": 0.1,
         "min_register_conf": 0.6,
-        "vertical_bin_height": 10,
         "n_init": 3
     },
     "KalmanFilter": {
@@ -32,7 +31,7 @@
         "std_factor_det": [0.16, 0.16],
         "std_factor_flow": [0.16, 0.16],
         "init_std_pos_factor": 20,
-        "init_std_vel_factor": 10,
+        "init_std_vel_factor": 15,
         "vel_coupling": 0.6,
         "vel_half_life": 1
     },
@@ -41,9 +40,10 @@
         "batch_size": 8,
         "#batch_size": 1,
         "tile_overlap": 0.25,
-        "merge_iou_thresh": 0.15,
+        "tiling_grid": [4, 2],
         "conf_thresh": 0.5,
-        "tiling_grid": [4, 2]
+        "max_area": 75000,
+        "merge_iou_thresh": 0.2
     },
     "Flow": {
         "bkg_feature_scaling": [0.1, 0.1],
@@ -54,14 +54,12 @@
         "feature_dist_factor": 0.06,
         "ransac_max_iter": 500,
         "ransac_conf": 0.99,
-        "#ransac_max_iter": 20,
-        "#ransac_conf": 0.98,
-        "gftt_target_feature_params": {
+        "gftt_target_feat_params": {
             "maxCorners": 1000,
             "qualityLevel": 0.06,
             "blockSize": 3
         },
-        "fast_bkg_feature_thresh": 15,
+        "fast_bkg_feat_thresh": 15,
         "optflow_params": {
             "winSize": [5, 5],
             "maxLevel": 5,

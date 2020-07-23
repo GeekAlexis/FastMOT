@@ -29,17 +29,20 @@ class Flow:
         self.ransac_max_iter = Flow.config['ransac_max_iter']
         self.ransac_conf = Flow.config['ransac_conf']
 
-        self.gftt_target_feature_params = Flow.config['gftt_target_feature_params']
-        self.fast_bkg_feature_thresh = Flow.config['fast_bkg_feature_thresh']
+        self.gftt_target_feat_params = Flow.config['gftt_target_feat_params']
+        self.fast_bkg_feat_thresh = Flow.config['fast_bkg_feat_thresh']
         self.optflow_params = Flow.config['optflow_params']
         
-        self.fast_feature_detector = cv2.FastFeatureDetector_create(threshold=self.fast_bkg_feature_thresh)
+        self.bkg_feature_detector = cv2.FastFeatureDetector_create(threshold=self.fast_bkg_feat_thresh)
         self.bkg_feature_pts = None
         self.prev_bkg_feature_pts = None
 
+        self.prev_frame_gray = None
+        self.prev_frame_small = None
+
         self.ones = np.full(self.size[::-1], 255, dtype=np.uint8)
         self.bkg_mask = np.empty_like(self.ones)
-        self.fg_mask = self.bkg_mask
+        self.fg_mask = self.bkg_mask # alias
         
         self.pool = ThreadPool()
 
@@ -71,7 +74,12 @@ class Flow:
     #     num_pts += len(keypoints)
     #     target_end_idices.append(num_pts)
 
-    def predict(self, tracks, prev_frame_gray, prev_frame_small, frame_small):
+    def initiate(self, frame):
+        self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.optflow_scaling[0],
+            fy=self.optflow_scaling[1])
+
+    def predict(self, frame, tracks):
         """
         Predict tracks in the current frame using optical flow.
         Parameters
@@ -92,6 +100,11 @@ class Flow:
             Returns a dictionary with track IDs as keys and predicted bounding
             boxes as values.
         """
+
+        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame_small = cv2.resize(frame_gray, None, fx=self.optflow_scaling[0], fy=self.optflow_scaling[1])
+        sorted_tracks = sorted(tracks.values(), reverse=True)
+
         tic = time.perf_counter()
         feature_time = 0
 
@@ -108,25 +121,28 @@ class Flow:
         #     np.copyto(inside_bbox.crop(self.bkg_mask), 0)
 
         np.copyto(self.bkg_mask, self.ones)
-        for track in tracks.values():
+        for track in sorted_tracks:
             inside_bbox = track.bbox & Rect(tlwh=(0, 0, *self.size))
             if track.feature_pts is not None:
-                # only propagate feature points inside the bounding box
                 track.feature_pts = self._rect_filter(track.feature_pts, inside_bbox.tl, inside_bbox.br)
+
             if track.feature_pts is None or len(track.feature_pts) / inside_bbox.area < self.feature_density:
-                roi = inside_bbox.crop(prev_frame_gray)
+                # detect new feature points
+                roi = inside_bbox.crop(self.prev_frame_gray)
                 target_mask = inside_bbox.crop(self.bkg_mask)
                 est_min_dist = self._estimate_feature_dist(target_mask, self.feature_dist_factor)
                 tic2 = time.perf_counter()
                 keypoints = cv2.goodFeaturesToTrack(roi, mask=target_mask, minDistance=est_min_dist, 
-                    **self.gftt_target_feature_params)
+                    **self.gftt_target_feat_params)
                 feature_time += (time.perf_counter() - tic2)
                 if keypoints is None or len(keypoints) == 0:
                     keypoints = np.empty((0, 2), dtype=np.float32)
                 else:
                     keypoints = self._ellipse_filter(keypoints, track.bbox.center, track.bbox.size, inside_bbox.tl)
             else:
+                # propagate feature points
                 keypoints = track.feature_pts
+
             # scale and batch all target keypoints
             target_begin_idices.append(num_pts)
             all_prev_pts.append(keypoints)
@@ -134,41 +150,39 @@ class Flow:
             target_end_idices.append(num_pts)
             # zero out track in background mask
             np.copyto(inside_bbox.crop(self.bkg_mask), 0)
-        # print('target feature:', time.perf_counter() - tic)
-        # print('target feature func:', feature_time)
+        print('target feature:', time.perf_counter() - tic)
+        print('target feature func:', feature_time)
 
         tic = time.perf_counter()
         if self.estimate_camera_motion:
-            prev_frame_small_bkg = cv2.resize(prev_frame_gray, None, fx=self.bkg_feature_scaling[0], 
+            prev_frame_small_bkg = cv2.resize(self.prev_frame_gray, None, fx=self.bkg_feature_scaling[0], 
                 fy=self.bkg_feature_scaling[1])
             bkg_mask_small = cv2.resize(self.bkg_mask, None, fx=self.bkg_feature_scaling[0], 
                 fy=self.bkg_feature_scaling[1], interpolation=cv2.INTER_NEAREST)
-            keypoints = self.fast_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask_small)
-            if keypoints is not None and len(keypoints) > 0:
-                keypoints = np.float32([kp.pt for kp in keypoints])
-                prev_bkg_pts = self._unscale_pts(keypoints, self.bkg_feature_scaling, None)
+            keypoints = self.bkg_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask_small)
+            if keypoints is None or len(keypoints) == 0:
+                keypoints = np.empty((0, 2), dtype=np.float32)
             else:
-                self.bkg_feature_pts = None
-                self.prev_bkg_feature_pts = None
-                print('[Flow] Background registration failed')
-                return {}, None
+                keypoints = np.float32([kp.pt for kp in keypoints])
+                keypoints = self._unscale_pts(keypoints, self.bkg_feature_scaling, None)
             bkg_begin_idx = num_pts
-            all_prev_pts.append(prev_bkg_pts)
+            all_prev_pts.append(keypoints)
         # print('bg feature:', time.perf_counter() - tic)
-
-        # level, pyramid = cv2.buildOpticalFlowPyramid(frame_small, self.optflow_params['winSize'], self.optflow_params['maxLevel'])
 
         tic = time.perf_counter()
         all_prev_pts = np.concatenate(all_prev_pts)
         all_prev_pts_scaled = self._scale_pts(all_prev_pts, self.optflow_scaling)
         tic2 = time.perf_counter()
-        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_frame_small, frame_small, 
+        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(self.prev_frame_small, frame_small, 
             all_prev_pts_scaled, None, **self.optflow_params)
         # print('opt flow func:', time.perf_counter() - tic2)
         with np.errstate(invalid='ignore'):
             status_mask = np.bool_(status.ravel()) & (err.ravel() < self.optflow_err_thresh)
         all_cur_pts = self._unscale_pts(all_cur_pts, self.optflow_scaling, status_mask)
-        # print('opt flow:', time.perf_counter() - tic)
+        print('opt flow:', time.perf_counter() - tic)
+
+        self.prev_frame_gray = frame_gray
+        self.prev_frame_small = frame_small
 
         tic = time.perf_counter()
         next_bboxes = {}
@@ -202,7 +216,7 @@ class Flow:
         tic = time.perf_counter()
         affine_time = 0
         np.copyto(self.fg_mask, self.ones)
-        for begin, end, track in zip(target_begin_idices, target_end_idices, tracks.values()):
+        for begin, end, track in zip(target_begin_idices, target_end_idices, sorted_tracks):
             prev_pts = all_prev_pts[begin:end][status_mask[begin:end]]
             matched_pts = all_cur_pts[begin:end][status_mask[begin:end]]
             prev_pts, matched_pts = self._fg_filter(prev_pts, matched_pts, self.fg_mask, self.size)
@@ -231,8 +245,8 @@ class Flow:
             next_bboxes[track.track_id] = est_bbox
             # zero out current track in foreground mask
             np.copyto(est_bbox.crop(self.fg_mask), 0)
-        # print('target affine:', time.perf_counter() - tic)
-        # print('target affine func:', affine_time)
+        print('target affine:', time.perf_counter() - tic)
+        print('target affine func:', affine_time)
         return next_bboxes, H_camera
 
     def draw_bkg_feature_match(self, frame):

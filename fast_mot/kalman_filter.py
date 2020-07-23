@@ -206,7 +206,7 @@ class KalmanFilter:
         tmp = np.dot(v, pos_br) + 1
         grad_br = (tmp * A - np.outer(A @ pos_br + t, v)) / tmp**2
 
-        # warp state
+        # warp state TODO: only warp center velocity? Increase initial vel uncertainty
         warped_pos = perspectiveTransform(np.stack((pos_tl, pos_br)) , H_camera)
         mean[:4] = warped_pos.ravel()
         mean[4:6] = grad_tl @ vel_tl

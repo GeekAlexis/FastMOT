@@ -50,6 +50,7 @@ class ObjectDetector:
         self.tile_overlap = ObjectDetector.config['tile_overlap']
         self.tiling_grid = ObjectDetector.config['tiling_grid']
         self.conf_thresh = ObjectDetector.config['conf_thresh']
+        self.max_area = ObjectDetector.config['max_area']
         self.merge_iou_thresh = ObjectDetector.config['merge_iou_thresh']
 
         self.model = SSDInceptionV2
@@ -78,6 +79,7 @@ class ObjectDetector:
         return self.tiles[self.cur_id]
 
     def detect_async(self, frame):
+        # TODO: resize frame to tiling region?
         tic = time.perf_counter()
         if self.batch_size > 1:
             for i, tile in enumerate(self.tiles):
@@ -108,10 +110,12 @@ class ObjectDetector:
                     br = det_out[offset + 5:offset + 7] * tile.size + tile.tl
                     bbox = Rect(tlbr=(*tl, *br))
                     # TODO: filter out large detection?
-                    detections.append(Detection(bbox, label, conf, tile_id))
+                    # TODO: split duplicate long detection?
+                    if bbox.area <= self.max_area:
+                        detections.append(Detection(bbox, label, conf, tile_id))
                     # print('[Detector] Detected: %s' % det)
-        orig_dets = deepcopy(detections)
         print('loop over det out', time.perf_counter() - tic)
+        orig_dets = deepcopy(detections)
 
         tic = time.perf_counter()
         # merge detections across different tiles
@@ -120,8 +124,7 @@ class ObjectDetector:
             if i in keep:
                 for j, other in enumerate(detections):
                         if other.tile_id.isdisjoint(det.tile_id) and det.label == other.label:
-                            if det.bbox.contains_rect(other.bbox) or \
-                                det.bbox.iou(other.bbox) > self.merge_iou_thresh:
+                            if other.bbox in det.bbox or det.bbox.iou(other.bbox) > self.merge_iou_thresh:
                                 det.bbox |= other.bbox
                                 det.tile_id |= other.tile_id
                                 det.conf = max(det.conf, other.conf)

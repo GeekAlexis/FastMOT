@@ -23,9 +23,9 @@ class Rect:
     def __repr__(self):
         return "Rect(tlbr=(%r, %r, %r, %r))" % (self.xmin, self.ymin, self.xmax, self.ymax)
 
-    def __contains__(self, point):
-        return point[0] >= self.xmin and point[1] >= self.ymin and \
-            point[0] <= self.xmax and point[1] <= self.ymax
+    def __contains__(self, other):
+        return other.xmin >= self.xmin and other.ymin >= self.ymin and \
+            other.xmax <= self.xmax and other.ymax <= self.ymax
 
     def __and__(self, other):
         # intersection
@@ -54,10 +54,6 @@ class Rect:
         xmin = center[0] - width / 2
         ymin = center[1] - height / 2
         return Rect(tlwh=(xmin, ymin, width, height))
-
-    def contains_rect(self, other):
-        return other.xmin >= self.xmin and other.ymin >= self.ymin and \
-            other.xmax <= self.xmax and other.ymax <= self.ymax
 
     @property
     def tlbr(self):
