@@ -15,6 +15,7 @@
 - Scipy
 - PyCuda
 - TensorRT  
+- cython-bbox
 
 #### Install dependencies for Jetson platforms
 - OpenCV, CUDA, and TensorRT can be installed from NVIDIA JetPack:    
