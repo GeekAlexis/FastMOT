@@ -2,11 +2,11 @@
   <img src="demo.gif" width="720" height="405" />
 </p>
 
-- [x] Real-time detection and tracking for resource-constrained embedded systems
+- [x] Real-time detection and tracking for embedded systems
   - Support all classes in the COCO dataset
   - Robust against moderate camera movement
   - Work best on 1280 x 720 input resolution and medium/small objects
-  - Speed on Jetson Nano: 20 FPS
+  - Speed on Jetson Xavier NX: 25 FPS
 
 ### Dependencies
 - OpenCV (Built with Gstreamer)
