@@ -19,17 +19,16 @@ class FeatureExtractor:
         if len(detections) == 0:
             return np.empty((0, self.feature_dim))
 
-        targets = [det.bbox.crop(frame) for det in detections]
-        
+        imgs = [det.bbox.crop(frame) for det in detections]
         embeddings = []
-        for offset in range(0, len(targets), self.batch_size):
-            cur_targets = targets[offset:offset + self.batch_size]
-            self.pool.starmap(self._preprocess, enumerate(cur_targets))
+        for offset in range(0, len(imgs), self.batch_size):
+            cur_imgs = imgs[offset:offset + self.batch_size]
+            self.pool.starmap(self._preprocess, enumerate(cur_imgs))
             if offset > 0:
                 embedding_out = self.backend.synchronize()[0]
                 embeddings.append(embedding_out)
             self.backend.infer_async()
-        embedding_out = self.backend.synchronize()[0][:len(cur_targets) * self.feature_dim]
+        embedding_out = self.backend.synchronize()[0][:len(cur_imgs) * self.feature_dim]
         embeddings.append(embedding_out)
 
         embeddings = np.concatenate(embeddings).reshape(-1, self.feature_dim)

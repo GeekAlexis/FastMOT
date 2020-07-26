@@ -12,7 +12,7 @@
     },
     "MultiTracker": {
         "#max_age": 16,
-        "max_age": 6,
+        "max_age": 10,
         "age_factor": 2,
         "motion_weight": 0.04,
         "max_motion_cost": 9.4877,
@@ -24,8 +24,8 @@
         "n_init": 3
     },
     "KalmanFilter": {
-        "small_size_std_acc": [32, 150],
-        "large_size_std_acc": [256, 1000],
+        "small_std_acc": [32, 150],
+        "large_std_acc": [256, 1000],
         "min_std_det": [5, 5],
         "min_std_flow": [5, 5],
         "std_factor_det": [0.16, 0.16],
@@ -42,7 +42,7 @@
         "tile_overlap": 0.25,
         "tiling_grid": [4, 2],
         "conf_thresh": 0.5,
-        "max_area": 75000,
+        "max_area": 70000,
         "merge_iou_thresh": 0.2
     },
     "Flow": {

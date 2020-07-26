@@ -30,8 +30,8 @@ class KalmanFilter:
     def __init__(self, dt, n_init):
         self.dt = dt
         self.n_init = n_init
-        self.small_size_std_acc = KalmanFilter.config['small_size_std_acc']
-        self.large_size_std_acc = KalmanFilter.config['large_size_std_acc']
+        self.small_std_acc = KalmanFilter.config['small_std_acc']
+        self.large_std_acc = KalmanFilter.config['large_std_acc']
         self.min_std_det = KalmanFilter.config['min_std_det']
         self.min_std_flow = KalmanFilter.config['min_std_flow']
         self.std_factor_det = KalmanFilter.config['std_factor_det']
@@ -41,8 +41,8 @@ class KalmanFilter:
         self.vel_coupling = KalmanFilter.config['vel_coupling']
         self.vel_half_life = KalmanFilter.config['vel_half_life']
 
-        self.std_acc_slope = (self.large_size_std_acc[1] - self.small_size_std_acc[1]) / \
-                            (self.large_size_std_acc[0] - self.small_size_std_acc[0])
+        self.std_acc_slope = (self.large_std_acc[1] - self.small_std_acc[1]) / \
+                            (self.large_std_acc[0] - self.small_std_acc[0])
         self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4, dtype=np.float))
         self.acc_cov[4:, :4] = np.eye(4) * (0.5 * self.dt**3)
         self.acc_cov[:4, 4:] = np.eye(4) * (0.5 * self.dt**3)
@@ -106,10 +106,10 @@ class KalmanFilter:
             Returns the mean vector and covariance matrix of the predicted
             state.
         """
-        return self._predict(mean, covariance, self.small_size_std_acc, self.std_acc_slope, 
+        return self._predict(mean, covariance, self.small_std_acc, self.std_acc_slope, 
             self.acc_cov, self.transition_mat)
 
-    def project(self, mean, covariance, meas_type, multiplier=1.):
+    def project(self, mean, covariance, meas_type):
         """Project state distribution to measurement space.
         Parameters
         ----------
@@ -132,10 +132,9 @@ class KalmanFilter:
         else:
             raise ValueError('Invalid measurement type')
 
-        return self._project(mean, covariance, std_factor, min_std, 
-            self.meas_mat, multiplier)
+        return self._project(mean, covariance, std_factor, min_std, self.meas_mat)
 
-    def update(self, mean, covariance, measurement, meas_type, multiplier=1.):
+    def update(self, mean, covariance, measurement, meas_type):
         """Run Kalman filter correction step.
         Parameters
         ----------
@@ -150,8 +149,7 @@ class KalmanFilter:
         (ndarray, ndarray)
             Returns the measurement-corrected state distribution.
         """
-        projected_mean, projected_cov = self.project(mean, covariance, 
-            meas_type, multiplier)
+        projected_mean, projected_cov = self.project(mean, covariance, meas_type)
 
         return self._update(mean, covariance, projected_mean, 
             projected_cov, measurement.tlbr, self.meas_mat)
@@ -207,7 +205,7 @@ class KalmanFilter:
         grad_br = (tmp * A - np.outer(A @ pos_br + t, v)) / tmp**2
 
         # warp state TODO: only warp center velocity? Increase initial vel uncertainty
-        warped_pos = perspectiveTransform(np.stack((pos_tl, pos_br)) , H_camera)
+        warped_pos = perspectiveTransform(np.stack((pos_tl, pos_br)), H_camera)
         mean[:4] = warped_pos.ravel()
         mean[4:6] = grad_tl @ vel_tl
         mean[6:] = grad_br @ vel_br
@@ -225,9 +223,9 @@ class KalmanFilter:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _predict(mean, covariance, small_size_std_acc, std_acc_slope, acc_cov, transition_mat):
+    def _predict(mean, covariance, small_std_acc, std_acc_slope, acc_cov, transition_mat):
         size = max(mean[2:4] - mean[:2] + 1) # max(w, h)
-        std_acc = small_size_std_acc[1] + (size - small_size_std_acc[0]) * std_acc_slope
+        std_acc = small_std_acc[1] + (size - small_std_acc[0]) * std_acc_slope
         motion_cov = acc_cov * std_acc**2
 
         mean = transition_mat @ mean
@@ -236,7 +234,7 @@ class KalmanFilter:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _project(mean, covariance, std_factor, min_std, meas_mat, multiplier):
+    def _project(mean, covariance, std_factor, min_std, meas_mat):
         w, h = mean[2:4] - mean[:2] + 1
         std = np.array([
             max(w * std_factor[0], min_std[0]),
@@ -244,7 +242,7 @@ class KalmanFilter:
             max(w * std_factor[0], min_std[0]),
             max(h * std_factor[1], min_std[1])
         ])
-        meas_cov = np.diag(np.square(std * multiplier))
+        meas_cov = np.diag(np.square(std))
 
         mean = meas_mat @ mean
         covariance = meas_mat @ covariance @ meas_mat.T

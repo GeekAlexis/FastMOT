@@ -85,7 +85,7 @@ class Mot:
 
     def _draw(self, frame, detections, debug=False):
         for track in self.tracker.tracks.values():
-            if track.confirmed and track.age <= 2:
+            if track.confirmed and track.age < 2:
                 track.draw(frame, draw_feature_match=debug)
         if debug:
             [det.draw(frame) for det in detections]

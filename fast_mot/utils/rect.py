@@ -1,6 +1,5 @@
 import numpy as np
 import numba as nb
-import cv2
 
 
 class Rect:

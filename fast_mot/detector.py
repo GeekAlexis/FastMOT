@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
-from copy import deepcopy
+
+from cython_bbox import bbox_overlaps
 import numpy as np
 import numba as nb
 import cv2
@@ -8,6 +9,19 @@ import time
 
 from .utils import *
 from .models import *
+
+
+COLORS = [
+    (75, 25, 230), 
+    (48, 130, 245), 
+    (25, 225, 255), 
+    (60, 245, 210), 
+    (75, 180, 60), 
+    (240, 240, 70), 
+    (200, 130, 0), 
+    (180, 30, 145), 
+    (230, 50, 240)
+ ]
 
 
 class Detection:
@@ -28,13 +42,13 @@ class Detection:
         return "%.2f %s at %s" % (self.conf, COCO_LABELS[self.label], self.bbox.tlwh)
     
     def draw(self, frame):
-        text = "%s: %.2f" % (COCO_LABELS[self.label], self.conf) 
-        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 1)
-        cv2.rectangle(frame, tuple(self.bbox.tl), tuple(self.bbox.br), (112, 25, 25), 2)
+        # text = "%s: %.2f" % (COCO_LABELS[self.label], self.conf) 
+        text = "%.2f" % self.conf
+        (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, 0.7, 1)
+        cv2.rectangle(frame, tuple(self.bbox.tl), tuple(self.bbox.br), COLORS[next(iter(self.tile_id))], 2)
         cv2.rectangle(frame, tuple(self.bbox.tl), (self.bbox.xmin + text_width - 1, 
-            self.bbox.ymin - text_height + 1), (112, 25, 25), cv2.FILLED)
-        cv2.putText(frame, text, tuple(self.bbox.tl), cv2.FONT_HERSHEY_SIMPLEX, 1, (102, 255, 255), 
-            2, cv2.LINE_AA)
+            self.bbox.ymin - text_height + 1), COLORS[next(iter(self.tile_id))], cv2.FILLED)
+        cv2.putText(frame, text, tuple(self.bbox.tl), cv2.FONT_HERSHEY_DUPLEX, 0.7, 0, 1, cv2.LINE_AA)
 
 
 class ObjectDetector:
@@ -80,6 +94,7 @@ class ObjectDetector:
 
     def detect_async(self, frame):
         # TODO: resize frame to tiling region?
+        # frame = cv2.resize(frame, self.tiling_region.size)
         tic = time.perf_counter()
         if self.batch_size > 1:
             for i, tile in enumerate(self.tiles):
@@ -109,27 +124,35 @@ class ObjectDetector:
                     tl = det_out[offset + 3:offset + 5] * tile.size + tile.tl
                     br = det_out[offset + 5:offset + 7] * tile.size + tile.tl
                     bbox = Rect(tlbr=(*tl, *br))
-                    # TODO: filter out large detection?
-                    # TODO: split duplicate long detection?
+                    # TODO: rec array, duplicate long det?
                     if bbox.area <= self.max_area:
+                        # detections.append()
                         detections.append(Detection(bbox, label, conf, tile_id))
                     # print('[Detector] Detected: %s' % det)
         print('loop over det out', time.perf_counter() - tic)
-        orig_dets = deepcopy(detections)
+        orig_dets = detections
 
         tic = time.perf_counter()
         # merge detections across different tiles
+        detections = np.asarray(detections)
+        if len(detections) > 0:
+            bboxes = np.ascontiguousarray([det.bbox.tlbr for det in detections], dtype=np.float)
+            ious = bbox_overlaps(bboxes, bboxes)
+            idx = ious.argsort()[:, :0:-1]
+        
         keep = set(range(len(detections)))
+        dirty = set()
         for i, det in enumerate(detections):
             if i in keep:
-                for j, other in enumerate(detections):
+                for j, other in zip(idx[i], detections[idx[i]]):
+                    if j in keep and j not in dirty:
                         if other.tile_id.isdisjoint(det.tile_id) and det.label == other.label:
-                            if other.bbox in det.bbox or det.bbox.iou(other.bbox) > self.merge_iou_thresh:
+                            if other.bbox in det.bbox or ious[i, j] > self.merge_iou_thresh:
                                 det.bbox |= other.bbox
                                 det.tile_id |= other.tile_id
                                 det.conf = max(det.conf, other.conf)
                                 keep.discard(j)
-        detections = np.asarray(detections)
+                                dirty.add(i)
         detections = detections[list(keep)]
 
         print('merge det', time.perf_counter() - tic)
@@ -137,9 +160,9 @@ class ObjectDetector:
 
     def draw_tile(self, frame):
         if self.cur_tile is not None:
-            cv2.rectangle(frame, tuple(self.cur_tile.tl), tuple(self.cur_tile.br), 0, 2)
+            cv2.rectangle(frame, tuple(self.cur_tile.tl), tuple(self.cur_tile.br), 0, 1)
         else:
-            [cv2.rectangle(frame, tuple(tile.tl), tuple(tile.br), 0, 2) for tile in self.tiles]
+            [cv2.rectangle(frame, tuple(tile.tl), tuple(tile.br), 0, 1) for tile in self.tiles]
 
     def _generate_tiles(self):
         size = np.asarray(self.size)
@@ -166,4 +189,27 @@ class ObjectDetector:
         # Normalize to [-1.0, 1.0] interval (expected by model)
         img = img * (2 / 255) - 1
         return img.ravel()
-        
+
+    # @staticmethod
+    # @nb.njit(fastmath=True, cache=True)
+    # def _postprocess(det_out, batch_size, tile_max_det, tile_tl):
+    #     detections = []
+    #     bboxes = []
+    #     for tile_id in range(self.batch_size):
+    #         tile = self.tiles[tile_id] if self.batch_size > 1 else self.cur_tile
+    #         tile_offset = tile_id * self.model.TOPK
+    #         for det_idx in range(self.tile_max_det):
+    #             offset = (tile_offset + det_idx) * self.model.OUTPUT_LAYOUT
+    #             # index = int(det_out[offset])
+    #             label = int(det_out[offset + 1])
+    #             conf = det_out[offset + 2]
+    #             if conf > self.conf_thresh and label in self.classes:
+    #                 tl = det_out[offset + 3:offset + 5] * tile.size + tile.tl
+    #                 br = det_out[offset + 5:offset + 7] * tile.size + tile.tl
+    #                 bbox = Rect(tlbr=(*tl, *br))
+    #                 # TODO: split duplicate long detection?
+    #                 if bbox.area <= self.max_area:
+    #                     # detections.append()
+    #                     bboxes.append(np.r_[tl, br])
+    #                     detections.append(Detection(bbox, label, conf, tile_id))
+    #     return img.ravel()
