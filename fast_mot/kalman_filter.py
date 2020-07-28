@@ -5,7 +5,7 @@ import json
 import numpy as np
 import numba as nb
 
-from .utils import perspectiveTransform, ConfigDecoder
+from .utils import *
 
 
 class MeasType(Enum):
@@ -73,10 +73,10 @@ class KalmanFilter:
             Returns the mean vector (8 dimensional) and covariance matrix (8x8
             dimensional) of the new track.
         """
-        center_vel = (flow_meas.center - init_meas.center) / (self.dt * self.n_init)
-        mean = np.r_[flow_meas.tlbr, center_vel, center_vel]
+        center_vel = (get_center(flow_meas) - get_center(init_meas)) / (self.dt * self.n_init)
+        mean = np.r_[flow_meas, center_vel, center_vel]
 
-        width, height = flow_meas.size
+        width, height = get_size(flow_meas)
         std = np.array([
             self.init_std_pos_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
             self.init_std_pos_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
@@ -152,7 +152,7 @@ class KalmanFilter:
         projected_mean, projected_cov = self.project(mean, covariance, meas_type)
 
         return self._update(mean, covariance, projected_mean, 
-            projected_cov, measurement.tlbr, self.meas_mat)
+            projected_cov, measurement, self.meas_mat)
 
     def motion_distance(self, mean, covariance, measurements):
         """Compute mahalanobis distance between `measurements` and state distribution.

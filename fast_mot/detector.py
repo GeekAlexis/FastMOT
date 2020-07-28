@@ -24,15 +24,21 @@ COLORS = [
  ]
 
 
+DET_DTYPE = np.dtype([
+    ('tlbr', float, 4), 
+    ('label', int), 
+    ('conf', float), 
+    ('tile_id', int)], 
+    align=True
+)
+
+
 class Detection:
     def __init__(self, bbox, label, conf, tile_id):
         self.bbox = bbox
         self.label = label
         self.conf = conf
-        if isinstance(tile_id, int):
-            self.tile_id = set([tile_id])
-        else:
-            self.tile_id = tile_id
+        self.tile_id = set([tile_id])
 
     def __repr__(self):
         return "Detection(bbox=%r, label=%r, conf=%r, tile_id=%r)" % (self.bbox, self.label, 
@@ -59,7 +65,6 @@ class ObjectDetector:
         # initialize parameters
         self.size = size
         self.classes = set(classes)
-        self.max_det = ObjectDetector.config['max_det']
         self.batch_size = ObjectDetector.config['batch_size']
         self.tile_overlap = ObjectDetector.config['tile_overlap']
         self.tiling_grid = ObjectDetector.config['tiling_grid']
@@ -68,23 +73,21 @@ class ObjectDetector:
         self.merge_iou_thresh = ObjectDetector.config['merge_iou_thresh']
 
         self.model = SSDInceptionV2
-        self.tile_max_det = self.max_det // np.prod(self.tiling_grid)
-        self.tile_size = self.model.INPUT_SHAPE[:0:-1]
         self.tiles = self._generate_tiles()
+        # self.tiling_region = Rect(tlbr=(*self.tiles[0].tl, *self.tiles[-1].br))
+
+        tiling_region = np.r_[self.tiles[0][:2], self.tiles[-1][2:]]
+        self.tiling_region_size = tuple(get_size(tiling_region).astype(int))
+        self.scale_factor = np.asarray(self.size) / self.tiling_region_size
         self.cur_id = -1
 
         assert self.batch_size == np.prod(self.tiling_grid) or self.batch_size == 1
-        assert self.tile_max_det <= self.model.TOPK
 
         self.backend = InferenceBackend(self.model, self.batch_size)
 
     def __call__(self, frame):
         self.detect_async(frame)
         return self.postprocess()
-
-    @property
-    def tiling_region(self):
-        return Rect(tlbr=(*self.tiles[0].tl, *self.tiles[-1].br))
 
     @property
     def cur_tile(self):
@@ -94,14 +97,14 @@ class ObjectDetector:
 
     def detect_async(self, frame):
         # TODO: resize frame to tiling region?
-        # frame = cv2.resize(frame, self.tiling_region.size)
         tic = time.perf_counter()
+        frame = cv2.resize(frame, self.tiling_region_size)
         if self.batch_size > 1:
             for i, tile in enumerate(self.tiles):
-                self._preprocess(i, tile.crop(frame))
+                self._preprocess(i, crop(frame, tile))
         else:
             self.cur_id = (self.cur_id + 1) % len(self.tiles)
-            self._preprocess(0, self.cur_tile.crop(frame))
+            self._preprocess(0, crop(frame, self.cur_tile))
 
         print('img pre', time.perf_counter() - tic)
         self.backend.infer_async()
@@ -111,52 +114,37 @@ class ObjectDetector:
         # print(time.perf_counter() - self.tic)
 
         tic = time.perf_counter()
-        detections = []
-        for tile_id in range(self.batch_size):
-            tile = self.tiles[tile_id] if self.batch_size > 1 else self.cur_tile
-            tile_offset = tile_id * self.model.TOPK
-            for det_idx in range(self.tile_max_det):
-                offset = (tile_offset + det_idx) * self.model.OUTPUT_LAYOUT
-                # index = int(det_out[offset])
-                label = int(det_out[offset + 1])
-                conf = det_out[offset + 2]
-                if conf > self.conf_thresh and label in self.classes:
-                    tl = det_out[offset + 3:offset + 5] * tile.size + tile.tl
-                    br = det_out[offset + 5:offset + 7] * tile.size + tile.tl
-                    bbox = Rect(tlbr=(*tl, *br))
-                    # TODO: rec array, duplicate long det?
-                    if bbox.area <= self.max_area:
-                        # detections.append()
-                        detections.append(Detection(bbox, label, conf, tile_id))
-                    # print('[Detector] Detected: %s' % det)
+        # detections = []
+        # for tile_idx in range(self.batch_size):
+        #     tile = self.tiles[tile_id] #if self.batch_size > 1 else self.cur_tile
+        #     tile_offset = tile_idx * self.model.TOPK
+        #     for det_idx in range(self.tile_max_det):
+        #         offset = (tile_offset + det_idx) * self.model.OUTPUT_LAYOUT
+        #         # index = int(det_out[offset])
+        #         label = int(det_out[offset + 1])
+        #         conf = det_out[offset + 2]
+        #         if conf > self.conf_thresh and label in self.classes:
+        #             tl = (det_out[offset + 3:offset + 5] * tile.size + tile.tl) * self.scale_factor
+        #             br = (det_out[offset + 5:offset + 7] * tile.size + tile.tl) * self.scale_factor
+        #             # bbox = Rect(tlbr=(*tl, *br))
+        #             tlbr = as_rect((*tl, *br))
+        #             # TODO: rec array, duplicate long det?
+        #             # if bbox.area <= self.max_area:
+        #             if area(tlbr) <= self.max_area:
+        #                 detections.append((tlbr, label, conf, 1 << tile_idx))
+        #                 # detections.append(Detection(bbox, label, conf, tile_id))
+        #             # print('[Detector] Detected: %s' % det)
+
+        detections = self._filter_detections(det_out, self.tiles, self.model.TOPK, 
+            self.model.OUTPUT_LAYOUT, self.scale_factor, self.classes, self.conf_thresh, self.max_area)
         print('loop over det out', time.perf_counter() - tic)
-        orig_dets = detections
+
+        # orig_dets = detections
 
         tic = time.perf_counter()
-        # merge detections across different tiles
-        detections = np.asarray(detections)
-        if len(detections) > 0:
-            bboxes = np.ascontiguousarray([det.bbox.tlbr for det in detections], dtype=np.float)
-            ious = bbox_overlaps(bboxes, bboxes)
-            idx = ious.argsort()[:, :0:-1]
-        
-        keep = set(range(len(detections)))
-        dirty = set()
-        for i, det in enumerate(detections):
-            if i in keep:
-                for j, other in zip(idx[i], detections[idx[i]]):
-                    if j in keep and j not in dirty:
-                        if other.tile_id.isdisjoint(det.tile_id) and det.label == other.label:
-                            if other.bbox in det.bbox or ious[i, j] > self.merge_iou_thresh:
-                                det.bbox |= other.bbox
-                                det.tile_id |= other.tile_id
-                                det.conf = max(det.conf, other.conf)
-                                keep.discard(j)
-                                dirty.add(i)
-        detections = detections[list(keep)]
-
+        detections = self._merge_detections(detections)
         print('merge det', time.perf_counter() - tic)
-        return detections, orig_dets
+        return detections
 
     def draw_tile(self, frame):
         if self.cur_tile is not None:
@@ -166,13 +154,18 @@ class ObjectDetector:
 
     def _generate_tiles(self):
         size = np.asarray(self.size)
-        tile_size, tiling_grid = np.asarray(self.tile_size), np.asarray(self.tiling_grid)
+        tile_size, tiling_grid = np.asarray(self.model.INPUT_SHAPE[:0:-1]), np.asarray(self.tiling_grid)
         step_size = (1 - self.tile_overlap) * tile_size
         total_size = (tiling_grid - 1) * step_size + tile_size
         assert all(total_size <= size), "Frame size too small for %dx%d tiles" % self.tiling_grid
-        offset = (size - total_size) // 2
-        tiles = [Rect(tlwh=(c * step_size[0] + offset[0], r * step_size[1] + offset[1], *tile_size)) 
-            for r in range(tiling_grid[1]) for c in range(tiling_grid[0])]
+        # offset = (size - total_size) // 2
+        # tiles = [Rect(tlwh=(c * step_size[0] + offset[0], r * step_size[1] + offset[1], *tile_size)) 
+        #     for r in range(tiling_grid[1]) for c in range(tiling_grid[0])]
+        # tiles = [Rect(tlwh=(c * step_size[0], r * step_size[1], *tile_size)) 
+        #     for r in range(tiling_grid[1]) for c in range(tiling_grid[0])]
+
+        tiles = np.array([to_tlbr((c * step_size[0], r * step_size[1], *tile_size)) 
+            for r in range(tiling_grid[1]) for c in range(tiling_grid[0])])
         return tiles
 
     def _preprocess(self, idx, img):
@@ -190,26 +183,72 @@ class ObjectDetector:
         img = img * (2 / 255) - 1
         return img.ravel()
 
-    # @staticmethod
-    # @nb.njit(fastmath=True, cache=True)
-    # def _postprocess(det_out, batch_size, tile_max_det, tile_tl):
-    #     detections = []
-    #     bboxes = []
-    #     for tile_id in range(self.batch_size):
-    #         tile = self.tiles[tile_id] if self.batch_size > 1 else self.cur_tile
-    #         tile_offset = tile_id * self.model.TOPK
-    #         for det_idx in range(self.tile_max_det):
-    #             offset = (tile_offset + det_idx) * self.model.OUTPUT_LAYOUT
-    #             # index = int(det_out[offset])
-    #             label = int(det_out[offset + 1])
-    #             conf = det_out[offset + 2]
-    #             if conf > self.conf_thresh and label in self.classes:
-    #                 tl = det_out[offset + 3:offset + 5] * tile.size + tile.tl
-    #                 br = det_out[offset + 5:offset + 7] * tile.size + tile.tl
-    #                 bbox = Rect(tlbr=(*tl, *br))
-    #                 # TODO: split duplicate long detection?
-    #                 if bbox.area <= self.max_area:
-    #                     # detections.append()
-    #                     bboxes.append(np.r_[tl, br])
-    #                     detections.append(Detection(bbox, label, conf, tile_id))
-    #     return img.ravel()
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _filter_detections(det_out, tiles, topk, layout, scale_factor, classes, thresh, max_area):
+        detections = []
+        # detections = np.empty(0, dtype=DET_DTYPE)
+        for tile_idx in range(len(tiles)):
+            tile = tiles[tile_idx]
+            size = get_size(tile)
+            tile_offset = tile_idx * topk
+            for det_idx in range(topk):
+                offset = (tile_offset + det_idx) * layout
+                label = int(det_out[offset + 1])
+                conf = det_out[offset + 2]
+                if conf < thresh:
+                    break
+                if label in classes:
+                    tl = (det_out[offset + 3:offset + 5] * size + tile[:2]) * scale_factor
+                    br = (det_out[offset + 5:offset + 7] * size + tile[:2]) * scale_factor
+                    tlbr = as_rect(np.append(tl, br))
+                    if area(tlbr) <= max_area:
+                        # np.append(detections, [tlbr, label, conf, 1 << tile_idx])
+                        detections.append((tlbr, label, conf, 1 << tile_idx))
+        # detections = np.asarray(detections, dtype=DET_DTYPE)
+        return detections
+
+    def _merge_detections(self, detections):
+        detections = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
+        if len(detections) == 0:
+            return detections
+
+        # merge detections across different tiles
+        # bboxes = np.ascontiguousarray([det.bbox.tlbr for det in detections], dtype=np.float)
+        bboxes = detections.tlbr
+        ious = bbox_overlaps(bboxes, bboxes)
+        idx = ious.argsort()[:, :0:-1]
+        detections = self._merge(detections, ious, idx, self.merge_iou_thresh)
+        return detections.view(np.recarray)
+
+        # keep = set(range(len(detections)))
+        # dirty = set()
+        # for i, det in enumerate(detections):
+        #     if i in keep:
+        #         for j, other in zip(idx[i], detections[idx[i]]):
+        #             if j in keep and j not in dirty:
+        #                 if other.tile_id.isdisjoint(det.tile_id) and det.label == other.label:
+        #                     if other.bbox in det.bbox or ious[i, j] > self.merge_iou_thresh:
+        #                         det.bbox |= other.bbox
+        #                         det.tile_id |= other.tile_id
+        #                         det.conf = max(det.conf, other.conf)
+        #                         keep.discard(j)
+        #                         dirty.add(i)
+        # detections = detections[list(keep)]
+        
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _merge(dets, ious, sorted_idx, thresh):
+        keep = set(range(len(dets)))
+        for i in range(len(dets)):
+            if i in keep:
+                for j in sorted_idx[i]:
+                    if j in keep:
+                        if dets[i].tile_id & dets[j].tile_id == 0 and dets[i].label == dets[j].label:
+                            if contains(dets[i].tlbr, dets[j].tlbr) or ious[i, j] > thresh:
+                                dets[i].tlbr[:] = union(dets[i].tlbr, dets[j].tlbr)
+                                dets[i].conf = max(dets[i].conf, dets[j].conf)
+                                dets[i].tile_id |= dets[j].tile_id
+                                keep.discard(j)
+        keep = np.asarray(list(keep))
+        return dets[keep]

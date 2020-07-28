@@ -25,7 +25,7 @@ class Mot:
         self.detector = ObjectDetector(self.size, self.classes)
         print('[INFO] Loading feature extractor model...')
         self.extractor = FeatureExtractor()
-        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric, self.detector.tiling_region)
+        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric) #, self.detector.tiling_region)
         
         # reset flags
         self.frame_count = 0
@@ -40,7 +40,7 @@ class Mot:
         detections = []
         orig_dets = []
         if self.frame_count == 0:
-            detections, orig_dets = self.detector(frame)
+            detections = self.detector(frame)
             self.tracker.initiate(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
@@ -52,7 +52,7 @@ class Mot:
                 print('detector pre', elapsed)
                 tic2 = time.perf_counter()
                 self.tracker.track(frame)
-                detections, orig_dets = self.detector.postprocess()
+                detections = self.detector.postprocess()
                 elapsed = time.perf_counter() - tic2
                 self.det_time += elapsed
                 print('det / track + post', elapsed)
@@ -76,7 +76,7 @@ class Mot:
                 print('TRACK', elapsed)
 
         if self.enable_drawing:
-            self._draw(frame, orig_dets, debug=True)
+            self._draw(frame, detections, debug=True)
 
         self.frame_count += 1
 
@@ -84,12 +84,14 @@ class Mot:
         self.frame_count = 0
 
     def _draw(self, frame, detections, debug=False):
+        count = 0
         for track in self.tracker.tracks.values():
-            if track.confirmed and track.age < 2:
+            if track.confirmed and track.age < 3:
                 track.draw(frame, draw_feature_match=debug)
-        if debug:
-            [det.draw(frame) for det in detections]
+                count += 1
+        # if debug:
+            # [det.draw(frame) for det in detections]
             # self.tracker.flow.draw_bkg_feature_match(frame)
-            if self.frame_count % self.detector_frame_skip == 0:
-                self.detector.draw_tile(frame)
-        # cv2.putText(frame, 'Acquiring', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
+            # if self.frame_count % self.detector_frame_skip == 0:
+            #     self.detector.draw_tile(frame)
+        cv2.putText(frame, f'visible count: {count}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

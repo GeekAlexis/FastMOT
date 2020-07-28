@@ -83,8 +83,8 @@ class Rect:
     def area(self):
         return self.size[0] * self.size[1]
 
-    def crop(self, image):
-        return image[self.ymin:self.ymax + 1, self.xmin:self.xmax + 1]
+    def crop(self, img):
+        return img[self.ymin:self.ymax + 1, self.xmin:self.xmax + 1]
 
     def resize(self, size):
         dx = (size[0] - self.size[0]) / 2
@@ -114,6 +114,104 @@ class Rect:
         xmax = max(warped_corners[:, 0])
         ymax = max(warped_corners[:, 1])
         return xmin, ymin, xmax, ymax
+
+
+@nb.njit(cache=True)
+def as_rect(tlbr):
+    tlbr = np.asarray(tlbr, np.float64)
+    tlbr = np.rint(tlbr)
+    return tlbr
+
+
+@nb.njit(cache=True)
+def get_size(tlbr):
+    tl, br = tlbr[:2], tlbr[2:]
+    size = br - tl + 1
+    return size
+
+
+@nb.njit(cache=True)
+def area(tlbr):
+    size = get_size(tlbr)
+    return int(size[0] * size[1])
+
+
+@nb.njit(cache=True)
+def get_center(tlbr):
+    xmin, ymin, xmax, ymax = tlbr
+    return np.array([(xmin + xmax) / 2, (ymin + ymax) / 2])
+
+
+@nb.njit(cache=True)
+def get_corners(tlbr):
+    xmin, ymin, xmax, ymax = tlbr
+    return np.array([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
+
+
+@nb.njit(cache=True)
+def to_tlwh(tlbr):
+    return np.append(tlbr[:2], get_size(tlbr))
+
+
+@nb.njit(cache=True)
+def to_tlbr(tlwh):
+    tlwh = np.asarray(tlwh, np.float64)
+    tlwh = np.rint(tlwh)
+    tl, size = tlwh[:2], tlwh[2:]
+    br = tl + size - 1
+    return np.append(tl, br)
+
+
+@nb.njit(cache=True)
+def contains(tlbr1, tlbr2):
+    tl1, br1 = tlbr1[:2], tlbr1[2:]
+    tl2, br2 = tlbr2[:2], tlbr2[2:]
+    return np.all((tl2 >= tl1) & (br2 <= br1))
+
+
+@nb.njit(cache=True)
+def intersection(tlbr1, tlbr2):
+    tl1, br1 = tlbr1[:2], tlbr1[2:]
+    tl2, br2 = tlbr2[:2], tlbr2[2:]
+    tl = np.maximum(tl1, tl2)
+    br = np.minimum(br1, br2)
+    tlbr = np.append(tl, br)
+    if np.any(get_size(tlbr) <= 0):
+        return None
+    return tlbr
+
+
+@nb.njit(cache=True)
+def union(tlbr1, tlbr2):
+    tl1, br1 = tlbr1[:2], tlbr1[2:]
+    tl2, br2 = tlbr2[:2], tlbr2[2:]
+    tl = np.minimum(tl1, tl2)
+    br = np.maximum(br1, br2)
+    tlbr = np.append(tl, br)
+    return tlbr
+
+
+@nb.njit(cache=True)
+def crop(img, tlbr):
+    xmin, ymin, xmax, ymax = tlbr.astype(np.int_)
+    return img[ymin:ymax + 1, xmin:xmax + 1]
+
+
+@nb.njit(cache=True)
+def multi_crop(img, tlbrs):
+    _tlbrs = tlbrs.astype(np.int_)
+    return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1] for i in range(len(_tlbrs))]
+
+
+@nb.njit(fastmath=True, cache=True)
+def warp(tlbr, m):
+    corners = get_corners(tlbr)
+    warped_corners = perspectiveTransform(corners, m)
+    xmin = min(warped_corners[:, 0])
+    ymin = min(warped_corners[:, 1])
+    xmax = max(warped_corners[:, 0])
+    ymax = max(warped_corners[:, 1])
+    return as_rect((xmin, ymin, xmax, ymax))
 
 
 @nb.njit(fastmath=True, cache=True)

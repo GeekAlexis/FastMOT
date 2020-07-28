@@ -3,7 +3,7 @@ import numpy as np
 import numba as nb
 import cv2
 
-from .utils import InferenceBackend
+from .utils import InferenceBackend, multi_crop, crop
 from .models import *
 
 
@@ -19,7 +19,8 @@ class FeatureExtractor:
         if len(detections) == 0:
             return np.empty((0, self.feature_dim))
 
-        imgs = [det.bbox.crop(frame) for det in detections]
+        # imgs = [crop(frame, det.tlbr) for det in detections]
+        imgs = multi_crop(frame, detections.tlbr)
         embeddings = []
         for offset in range(0, len(imgs), self.batch_size):
             cur_imgs = imgs[offset:offset + self.batch_size]
