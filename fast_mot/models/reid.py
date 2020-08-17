@@ -56,7 +56,7 @@ class ReID:
 
 
 class OSNetAIN(ReID):
-    PATH = Path(__file__).parent / 'TRT_osnet_ain_x1_0_msmt17.bin'
+    PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17.trt'
     ONNX_PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17' / 'osnet_ain_x1_0_32.onnx'
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
@@ -64,7 +64,7 @@ class OSNetAIN(ReID):
 
 
 class OSNet025(ReID):
-    PATH = Path(__file__).parent / 'TRT_osnet_x0_25_msmt17.bin'
+    PATH = Path(__file__).parent / 'osnet_x0_25_msmt17.trt'
     ONNX_PATH = Path(__file__).parent / 'osnet_x0_25_msmt17' / 'osnet_x0_25_dynamic.onnx'
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512

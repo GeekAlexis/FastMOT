@@ -1,7 +1,6 @@
 from pathlib import Path
 import itertools
 import json
-import math
 
 import numpy as np
 import numba as nb
@@ -24,7 +23,8 @@ class Flow:
         self.optflow_scale_factor = Flow.config['optflow_scale_factor']
         self.feature_density = Flow.config['feature_density']
         self.optflow_err_thresh = Flow.config['optflow_err_thresh']
-        self.min_bkg_inlier = Flow.config['min_bkg_inlier']
+        self.min_inlier = Flow.config['min_inlier']
+        # self.min_target_inlier = Flow.config['min_target_inlier']
         self.feature_dist_factor = Flow.config['feature_dist_factor']
         self.ransac_max_iter = Flow.config['ransac_max_iter']
         self.ransac_conf = Flow.config['ransac_conf']
@@ -101,7 +101,7 @@ class Flow:
                 # target_mask = inside_bbox.crop(self.bkg_mask)
                 img = crop(self.prev_frame_gray, inside_tlbr)
                 target_mask = crop(self.bkg_mask, inside_tlbr)
-                feature_dist = self._gftt_feature_dist(target_mask, self.feature_dist_factor)
+                feature_dist = self._get_feature_dist(target_mask, self.feature_dist_factor)
                 # feature_pre_time += (time.perf_counter() - tic2)
                 # tic2 = time.perf_counter()
                 keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask, minDistance=feature_dist, 
@@ -173,7 +173,7 @@ class Flow:
                 H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
                     maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
                 self.prev_bkg_keypoints, self.bkg_keypoints = self._get_inliers(prev_bkg_pts, matched_bkg_pts, inlier_mask)
-                if H_camera is None or len(self.bkg_keypoints) < self.min_bkg_inlier:
+                if H_camera is None or len(self.bkg_keypoints) < self.min_inlier:
                     self.bkg_keypoints = np.empty((0, 2), np.float32)
                     print('[Flow] Background registration failed')
                     return {}, None
@@ -217,13 +217,12 @@ class Flow:
             # delete track when it goes outside the frame
             # inside_bbox = est_bbox & self.frame_rect
             est_tlbr = self._estimate_bbox(track.tlbr, H_affine)
-            inside_tlbr = intersection(track.tlbr, self.frame_rect)
             # estimate_time += (time.perf_counter() - tic2)
-            if inside_tlbr is None:
-                track.keypoints = np.empty((0, 2), np.float32)
-                continue
             # tic2 = time.perf_counter()
             track.prev_keypoints, track.keypoints = self._get_inliers(prev_pts, matched_pts, inlier_mask)
+            if intersection(est_tlbr, self.frame_rect) is None or len(track.keypoints) < self.min_inlier:
+                track.keypoints = np.empty((0, 2), np.float32)
+                continue
             next_bboxes[track.trk_id] = est_tlbr
             # zero out current track in foreground mask
             crop(self.fg_mask, est_tlbr)[:] = 0
@@ -247,9 +246,9 @@ class Flow:
             
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _gftt_feature_dist(target_mask, feature_dist_factor):
+    def _get_feature_dist(target_mask, feature_dist_factor):
         target_area = np.count_nonzero(target_mask)
-        est_feat_dist = round(math.sqrt(target_area) * feature_dist_factor)
+        est_feat_dist = round(np.sqrt(target_area) * feature_dist_factor)
         return max(est_feat_dist, 1)
 
     # @staticmethod
@@ -282,7 +281,7 @@ class Flow:
     @nb.njit(fastmath=True, cache=True)
     def _estimate_bbox(tlbr, H_affine):
         tl = transform(tlbr[:2], H_affine).ravel()
-        scale = math.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
+        scale = np.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
         scale = 1. if scale < 0.9 or scale > 1.1 else scale
         size = scale * get_size(tlbr)
         return to_tlbr(np.append(tl, size))
@@ -290,8 +289,8 @@ class Flow:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _rect_filter(pts, tlbr):
-        if len(pts) == 0:
-            return pts
+        if len(pts) == 0 or tlbr is None:
+            return np.empty((0, 2), np.float32)
         tl, br = tlbr[:2], tlbr[2:]
         ge_le = (pts >= tl) & (pts <= br)
         keep = np.where(ge_le[:, 0] & ge_le[:, 1])

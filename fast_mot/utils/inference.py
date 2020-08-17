@@ -1,7 +1,6 @@
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
-import numpy as np
 
 
 class HostDeviceMem:
@@ -55,20 +54,12 @@ class InferenceBackend:
             if self.engine.binding_is_input(binding):
                 if not self.engine.has_implicit_batch_dimension:
                     assert self.batch_size == shape[0]
-                self.input_size = size // self.batch_size
                 self.input = HostDeviceMem(host_mem, device_mem)
             else:
                 self.outputs.append(HostDeviceMem(host_mem, device_mem))
         
         self.stream = cuda.Stream()
         self.context = self.engine.create_execution_context()
-
-    def memcpy(self, src, batch_num=0):
-        offset = batch_num * self.input_size
-        np.copyto(self.input.host[offset:offset + self.input_size], src)
-
-    def memcpy_batch(self, src):
-        np.copyto(self.input.host[:src.size], src)
 
     def infer(self):
         self.infer_async()

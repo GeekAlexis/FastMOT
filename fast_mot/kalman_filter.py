@@ -109,7 +109,7 @@ class KalmanFilter:
         return self._predict(mean, covariance, self.small_std_acc, self.std_acc_slope, 
             self.acc_cov, self.transition_mat)
 
-    def project(self, mean, covariance, meas_type):
+    def project(self, mean, covariance, meas_type, multiplier=1.):
         """Project state distribution to measurement space.
         Parameters
         ----------
@@ -132,9 +132,9 @@ class KalmanFilter:
         else:
             raise ValueError('Invalid measurement type')
 
-        return self._project(mean, covariance, std_factor, min_std, self.meas_mat)
+        return self._project(mean, covariance, std_factor, min_std, self.meas_mat, multiplier)
 
-    def update(self, mean, covariance, measurement, meas_type):
+    def update(self, mean, covariance, measurement, meas_type, multiplier=1.):
         """Run Kalman filter correction step.
         Parameters
         ----------
@@ -149,7 +149,7 @@ class KalmanFilter:
         (ndarray, ndarray)
             Returns the measurement-corrected state distribution.
         """
-        projected_mean, projected_cov = self.project(mean, covariance, meas_type)
+        projected_mean, projected_cov = self.project(mean, covariance, meas_type, multiplier)
 
         return self._update(mean, covariance, projected_mean, 
             projected_cov, measurement, self.meas_mat)
@@ -234,7 +234,7 @@ class KalmanFilter:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _project(mean, covariance, std_factor, min_std, meas_mat):
+    def _project(mean, covariance, std_factor, min_std, meas_mat, multiplier):
         w, h = mean[2:4] - mean[:2] + 1
         std = np.array([
             max(w * std_factor[0], min_std[0]),
@@ -242,7 +242,7 @@ class KalmanFilter:
             max(w * std_factor[0], min_std[0]),
             max(h * std_factor[1], min_std[1])
         ])
-        meas_cov = np.diag(np.square(std))
+        meas_cov = np.diag(np.square(std * multiplier))
 
         mean = meas_mat @ mean
         covariance = meas_mat @ covariance @ meas_mat.T

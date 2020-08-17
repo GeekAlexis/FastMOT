@@ -59,7 +59,7 @@ class SSD:
 
 
 class SSDMobileNetV1(SSD):
-    PATH = Path(__file__).parent / 'TRT_ssd_mobilenet_v1_coco.bin'
+    PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco.trt'
     TF_PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco_2018_01_28' / 'frozen_inference_graph.pb'
     NMS_THRESH = 0.5
     TOPK = 100
@@ -158,7 +158,7 @@ class SSDMobileNetV1(SSD):
 
 
 class SSDMobileNetV2(SSD):
-    PATH = Path(__file__).parent / 'TRT_ssd_mobilenet_v2_coco.bin'
+    PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco.trt'
     TF_PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco_2018_03_29' / 'frozen_inference_graph.pb'
     NMS_THRESH = 0.5
     TOPK = 100
@@ -256,7 +256,7 @@ class SSDMobileNetV2(SSD):
 
 
 class SSDInceptionV2(SSD):
-    PATH = Path(__file__).parent / 'TRT_ssd_inception_v2_coco.bin'
+    PATH = Path(__file__).parent / 'ssd_inception_v2_coco.trt'
     TF_PATH = Path(__file__).parent / 'ssd_inception_v2_coco_2017_11_17' / 'frozen_inference_graph.pb'
     NMS_THRESH = 0.5 # 0.6
     TOPK = 100

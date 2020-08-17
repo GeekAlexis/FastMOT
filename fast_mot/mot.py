@@ -4,7 +4,7 @@ import json
 import cv2
 import time
 
-from .detector import ObjectDetector
+from .detector import ObjectDetector, draw_det
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import ConfigDecoder
@@ -38,9 +38,9 @@ class Mot:
     
     def run(self, frame):
         detections = []
-        orig_dets = []
+        orig = []
         if self.frame_count == 0:
-            detections = self.detector(frame)
+            detections, orig = self.detector(frame)
             self.tracker.initiate(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
@@ -49,18 +49,21 @@ class Mot:
                 self.detector.detect_async(frame)
                 elapsed = time.perf_counter() - tic2
                 self.det_pre_time += elapsed
-                print('detector pre', elapsed)
+                print('detect pre', elapsed)
                 tic2 = time.perf_counter()
-                self.tracker.track(frame)
-                detections = self.detector.postprocess()
+                self.tracker.compute_flow(frame)
+                detections, orig = self.detector.postprocess()
                 elapsed = time.perf_counter() - tic2
                 self.det_time += elapsed
-                print('det / track + post', elapsed)
+                print('detect / flow', elapsed)
                 tic2 = time.perf_counter()
-                embeddings = self.extractor(frame, detections)
+                # embeddings = self.extractor(frame, detections)
+                self.extractor.extract_async(frame, detections)
+                self.tracker.step_kalman_filter()
+                embeddings = self.extractor.postprocess()
                 elapsed = time.perf_counter() - tic2
                 self.embedding_time += elapsed
-                print('embedding', elapsed)
+                print('embedding / kf', elapsed)
                 tic2 = time.perf_counter()
                 self.tracker.update(detections, embeddings)
                 elapsed = time.perf_counter() - tic2
@@ -89,9 +92,11 @@ class Mot:
             if track.confirmed and track.age < 3:
                 track.draw(frame, draw_feature_match=debug)
                 count += 1
-        # if debug:
+        if debug:
+            # [draw_det(frame, det) for det in detections]
+            [draw_det(frame, det, i) for i, det in enumerate(detections)]
             # [det.draw(frame) for det in detections]
             # self.tracker.flow.draw_bkg_feature_match(frame)
-            # if self.frame_count % self.detector_frame_skip == 0:
-            #     self.detector.draw_tile(frame)
-        cv2.putText(frame, f'visible count: {count}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
+            if self.frame_count % self.detector_frame_skip == 0:
+                self.detector.draw_tile(frame)
+        cv2.putText(frame, f'visible: {count}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

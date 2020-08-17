@@ -1,7 +1,6 @@
 from pathlib import Path
 import itertools
 import json
-import math
 
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
@@ -34,8 +33,8 @@ class MultiTracker:
         self.motion_weight = MultiTracker.config['motion_weight']
         self.max_feature_cost = MultiTracker.config['max_feature_cost']
         self.min_iou_cost = MultiTracker.config['min_iou_cost']
+        self.dup_iou_thresh = MultiTracker.config['dup_iou_thresh']
         self.max_feat_overlap = MultiTracker.config['max_feat_overlap']
-        self.feature_buf_size = MultiTracker.config['feature_buf_size']
         self.min_register_conf = MultiTracker.config['min_register_conf']
         self.n_init = MultiTracker.config['n_init']
         
@@ -46,25 +45,26 @@ class MultiTracker:
         # self.frame_rect = Rect(tlwh=(0, 0, *self.size))
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
-    def track(self, frame):
-        tic = time.perf_counter()
-        flow_bboxes, H_camera = self.flow.predict(frame, self.tracks)
-        if H_camera is None:
+        self.flow_bboxes = {}
+        self.H_camera = None
+
+    def compute_flow(self, frame):
+        self.flow_bboxes, self.H_camera = self.flow.predict(frame, self.tracks)
+        if self.H_camera is None:
             # clear tracks when camera motion estimation failed
             self.tracks.clear()
-        print('flow', time.perf_counter() - tic)
-        tic = time.perf_counter()
 
+    def step_kalman_filter(self):
         for trk_id, track in list(self.tracks.items()):
             track.frames_since_acquired += 1
-            flow_bbox = flow_bboxes.get(trk_id)
+            flow_bbox = self.flow_bboxes.get(trk_id)
             if track.frames_since_acquired <= self.n_init:
                 if flow_bbox is not None:
                     if track.frames_since_acquired == self.n_init:
                         # initialize kalman filter
                         track.state = self.kf.initiate(track.init_tlbr, flow_bbox)
                     else:
-                        track.init_tlbr = warp(track.init_tlbr, H_camera) 
+                        track.init_tlbr = warp(track.init_tlbr, self.H_camera) 
                         # track.init_bbox = track.init_tlbr.warp(H_camera)
                         track.tlbr = flow_bbox
                 else:
@@ -73,27 +73,29 @@ class MultiTracker:
             else:
                 mean, cov = track.state
                 # track using kalman filter and flow measurement
-                mean, cov = self.kf.warp(mean, cov, H_camera)
+                mean, cov = self.kf.warp(mean, cov, self.H_camera)
                 mean, cov = self.kf.predict(mean, cov)
-                if flow_bbox is not None:
+                if flow_bbox is not None and track.active:
                     # std_multiplier = 1
-                    # if track.bbox in self.detector_region:
-                    #     # give large flow uncertainty for occluded objects
-                    #     std_multiplier = max(self.age_factor * track.age, 1)
-                    if track.age == 0:
-                        mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW)
-                # check for out of frame case
+                    # give large flow uncertainty for occluded objects
+                    std_multiplier = max(self.age_factor * track.age, 1)
+                    mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
                 # next_bbox = Rect(tlbr=mean[:4])
                 # inside_bbox = next_bbox & self.frame_rect
                 next_tlbr = as_rect(mean[:4])
-                inside_tlbr = intersection(track.tlbr, self.frame_rect)
-                if inside_tlbr is not None:
+                if intersection(next_tlbr, self.frame_rect) is not None:
                     track.state = (mean, cov)
                     track.tlbr = next_tlbr
                 else:
                     print('[Tracker] Lost (outside frame) %s' % track)
                     del self.tracks[trk_id]
 
+    def track(self, frame):
+        tic = time.perf_counter()
+        self.compute_flow(frame)
+        print('flow', time.perf_counter() - tic)
+        tic = time.perf_counter()
+        self.step_kalman_filter()
         print('kalman filter', time.perf_counter() - tic)
 
     def initiate(self, frame, detections):
@@ -104,7 +106,7 @@ class MultiTracker:
             self.tracks.clear()
         self.flow.initiate(frame)
         for det in detections:
-            new_track = Track(det.tlbr, det.label, self.next_id, self.feature_buf_size)
+            new_track = Track(det.tlbr, det.label, self.next_id)
             self.tracks[self.next_id] = new_track
             print('[Tracker] Found %s' % new_track)
             self.next_id += 1
@@ -124,8 +126,8 @@ class MultiTracker:
         matches_a, u_trk_ids_a, u_det_ids = self._linear_assignment(cost, confirmed, det_ids)
 
         # 2nd association with iou
-        candidates = unconfirmed + [trk_id for trk_id in u_trk_ids_a if self.tracks[trk_id].age == 0]
-        u_trk_ids_a = [trk_id for trk_id in u_trk_ids_a if self.tracks[trk_id].age != 0]
+        candidates = unconfirmed + [trk_id for trk_id in u_trk_ids_a if self.tracks[trk_id].active]
+        u_trk_ids_a = [trk_id for trk_id in u_trk_ids_a if not self.tracks[trk_id].active]
 
         u_detections = detections[u_det_ids]
         # u_detections = [detections[det_id] for det_id in u_det_ids]
@@ -150,8 +152,7 @@ class MultiTracker:
             # inside_bbox = next_bbox & self.frame_rect
             mean, cov = self.kf.update(*track.state, det.tlbr, MeasType.DETECTOR)
             next_tlbr = as_rect(mean[:4])
-            inside_tlbr = intersection(track.tlbr, self.frame_rect)
-            if inside_tlbr is not None:
+            if intersection(next_tlbr, self.frame_rect) is not None:
                 track.state = (mean, cov)
                 track.tlbr = next_tlbr
                 if not track.confirmed or max_overlap <= self.max_feat_overlap:
@@ -180,7 +181,7 @@ class MultiTracker:
         for det_id in u_det_ids:
             det = detections[det_id]
             if det.conf > self.min_register_conf:
-                new_track = Track(det.tlbr, det.label, self.next_id, self.feature_buf_size)
+                new_track = Track(det.tlbr, det.label, self.next_id)
                 self.tracks[self.next_id] = new_track
                 print('[Tracker] Found %s' % new_track)
                 # if self.next_id == 32:
@@ -302,15 +303,13 @@ class MultiTracker:
         #     dtype=np.float
         # )
         matched_trk_ids, matched_det_ids = zip(*matches)
-        det_bboxes = detections.tlbr[list(matched_det_ids)]
+        det_bboxes = detections[list(matched_det_ids)].tlbr
         # det_bboxes = np.array([detections[det_id].tlbr for _, det_id in matches])
         trk_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
 
         ious = bbox_overlaps(det_bboxes, trk_bboxes)
-        trk_ids = np.asarray(trk_ids)
-        max_overlaps = [iou[trk_ids != matched_trk_id].max(initial=0) 
-            for iou, matched_trk_id in zip(ious, matched_trk_ids)]
-        # print(max_overlaps)
+        diff_id = np.asarray(matched_trk_ids).reshape(-1, 1) != trk_ids
+        max_overlaps = ious.max(axis=1, initial=0, where=diff_id)
         return max_overlaps
 
     def _remove_duplicate(self, active, inactive):
@@ -332,12 +331,14 @@ class MultiTracker:
         inactive_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in inactive])
 
         ious = bbox_overlaps(active_bboxes, inactive_bboxes)
-        idx = np.where(ious > 0.85)
+        idx = np.where(ious > self.dup_iou_thresh)
         for row, col in zip(*idx):
             active_id, inactive_id = active[row], inactive[col]
-            if self.tracks[active_id].frames_since_acquired > self.tracks[inactive_id].frames_since_acquired:
-                del self.tracks[inactive_id]
+            if self.tracks[active_id].frames_since_acquired >= self.tracks[inactive_id].frames_since_acquired:
+                print(f'{inactive_id} removed **************************')
+                del self.tracks[inactive_id] # bug here
             else:
+                print(f'{active_id} removed **************************')
                 del self.tracks[active_id]
 
     @staticmethod

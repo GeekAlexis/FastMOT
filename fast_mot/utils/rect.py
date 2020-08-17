@@ -204,6 +204,15 @@ def multi_crop(img, tlbrs):
 
 
 @nb.njit(fastmath=True, cache=True)
+def iou(tlbr1, tlbr2):
+    tlbr = intersection(tlbr1, tlbr2)
+    if tlbr is None:
+        return 0
+    area_intersection = area(tlbr)
+    return area_intersection / (area(tlbr1) + area(tlbr2) - area_intersection)
+    
+
+@nb.njit(fastmath=True, cache=True)
 def warp(tlbr, m):
     corners = get_corners(tlbr)
     warped_corners = perspectiveTransform(corners, m)

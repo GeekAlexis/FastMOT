@@ -20,15 +20,15 @@ COLORS = [
 
 
 class Track:
-    def __init__(self, tlbr, label, trk_id, feature_buf_size=10):
+    def __init__(self, tlbr, label, trk_id):
         self.tlbr = tlbr
         self.init_tlbr = tlbr
         self.label = label
         self.trk_id = trk_id
-        self.feature_buf_size = feature_buf_size
 
+        self.feature_buf_size = 10
         self.bin_height = 10
-        self.alpha = 0.5 # change this? dynamic?
+        self.alpha = 0.7 # change this? dynamic?
 
         self.age = 0
         self.frames_since_acquired = 0
@@ -41,16 +41,19 @@ class Track:
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
     def __repr__(self):
-        return "Track(tlbr=%r, trk_id=%r, label=%r, feature_buf_size=%r)" % (self.tlbr, self.label, 
-            self.trk_id, self.feature_buf_size)
+        return "Track(tlbr=%r, label=%r, trk_id=%r)" % (self.tlbr, self.label, self.trk_id)
 
     def __str__(self):
-        return "%s ID%d at %s" % (COCO_LABELS[self.label], self.trk_id, to_tlwh(self.tlbr))
+        return "%s ID %d at %s" % (COCO_LABELS[self.label], self.trk_id, to_tlwh(self.tlbr).astype(int))
 
     def __lt__(self, other):
         # ordered by approximate distance to the image plane, closer is greater
         return (self.tlbr[-1] // self.bin_height, -self.age) < (other.tlbr[-1] // self.bin_height, -other.age)
         # return (self.bbox.ymax // self.bin_height, self.bbox.area) < (other.bbox.ymax // self.bin_height, other.bbox.area)
+
+    @property
+    def active(self):
+        return self.age < 3
 
     def update_features(self, embedding):
         if self.smooth_feature is None:
