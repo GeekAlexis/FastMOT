@@ -74,7 +74,7 @@ class ObjectDetector:
         self.batch_size = int(np.prod(self.tiling_grid))
 
         self.model = SSDInceptionV2
-        self.input_size = int(np.prod(self.model.INPUT_SHAPE))
+        self.input_size = np.prod(self.model.INPUT_SHAPE)
         self.tiles, self.tiling_region_size = self._generate_tiles()
         self.scale_factor = np.asarray(self.size) / self.tiling_region_size
         self.backend = InferenceBackend(self.model, self.batch_size)

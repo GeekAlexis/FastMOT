@@ -38,3 +38,5 @@ sudo pip3 install numba==0.48
 
 # prepare INT8 calibration data
 source $BASEDIR/fast_mot/models/prepare_calib_data.sh $BASEDIR/fast_mot/models
+
+# sudo apt-get install libprotoc-dev protobuf-compiler
