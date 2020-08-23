@@ -26,6 +26,8 @@ Fast MOT has an input size of 1280 x 720. Note that larger videos will be resize
 - Make sure to have CUDA and TensorRT 7 installed
 - Build OpenCV from source with Gstreamer
 - `pip3 install -r requirements.txt`
+- `cd fast_mot/models`
+- 'sh prepare_calib_data.sh .'
 
 ### Run tracking
 - With camera: `python3 app.py --mot`
