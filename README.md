@@ -20,11 +20,12 @@ Fast MOT has an input size of 1280 x 720. Note that larger videos will be resize
 - cython-bbox
 
 #### Install for Jetson (TX2/Xavier NX/Xavier)
-- OpenCV, CUDA, and TensorRT can be installed from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack)    
-  ```$ sh install_jetson.sh```
+OpenCV, CUDA, and TensorRT can be installed from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack)    
+  ```
+  $ sh install_jetson.sh
+  ```
 #### Install for x86 (Not tested)
-- Make sure to have CUDA and TensorRT 7 installed
-- Build OpenCV from source with Gstreamer
+Make sure to have CUDA and TensorRT 7 installed and build OpenCV from source with Gstreamer
   ```
   $ pip3 install -r requirements.txt
   $ cd fast_mot/models
@@ -32,9 +33,7 @@ Fast MOT has an input size of 1280 x 720. Note that larger videos will be resize
   ```
 
 ### Run tracking
-- With camera: 
-  ```$ python3 app.py --mot```
-- Input video: 
-  ```$ python3 app.py --input your_video.mp4 --mot```
+- With camera (/dev/video0): `python3 app.py --mot`
+- Input video: `python3 app.py --input your_video.mp4 --mot`
 - Use `-h` to learn how to visualize and save output
 - For more flexibility, edit `fast_mot/configs/mot.json` to configure parameters and target classes (COCO)
