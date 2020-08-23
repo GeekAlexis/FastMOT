@@ -4,14 +4,11 @@
 
 - Real-time implementation of Deep Sort 
   - [x] Real-time SSD detector with frame tiling
-  - [x] Deploys a better REID model OSNet
+  - [x] Deploys OSNet, a better REID model
   - [x] Optical flow tracking and camera motion compensation
   - [ ] Replace SSD with YOLOV4
   
-- Input size: 1280 x 720
-- Assumes medium/small targets (struggles with up close targets due to tiling)
-- Currently only supports pedestrian tracking
-- Speed on Jetson Xavier NX: 15 - 35 FPS (depends on crowd density)
+Fast MOT has an input size of 1280 x 720. Larger videos will be resized, which will slow down frame rate a bit. It also assumes medium/small targets and struggles to detect up close targets properly due to frame tiling. Currently, only pedestrian tracking is supported. Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 35 FPS depending on crowd density.
 
 ### Dependencies
 - OpenCV (Built with Gstreamer)
@@ -31,4 +28,4 @@ https://developer.nvidia.com/embedded/jetpack
 - With camera: `python3 app.py --mot`
 - Input video: `python3 app.py --input video.mp4 --mot`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
-- Edit fast_mot/configs/mot.json to configure parameters and change object classes
+- For more flexibility, edit fast_mot/configs/mot.json to configure parameters and object classes
