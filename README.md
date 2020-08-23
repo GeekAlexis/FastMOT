@@ -2,11 +2,16 @@
   <img src="demo.gif" width="720" height="405" />
 </p>
 
-- [x] Real-time detection and tracking for embedded systems
-  - Support all classes in the COCO dataset
-  - Robust against moderate camera movement
-  - Work best on 1280 x 720 input resolution and medium/small objects
-  - Speed on Jetson Xavier NX: 25 FPS
+- Real-time implementation of Deep Sort 
+  - [x] Real-time SSD detector with frame tiling
+  - [x] Deploys a better REID model OSNet
+  - [x] Optical flow tracking and camera motion compensation
+  - [] Replace SSD with YOLOV4
+  
+- Input size: 1280 x 720
+- Assumes medium/small targets (struggles with up close targets due to tiling)
+- Currently only supports pedestrian tracking
+- Speed on Jetson Xavier NX: 15 - 35 FPS (depends on crowd density)
 
 ### Dependencies
 - OpenCV (Built with Gstreamer)
@@ -27,7 +32,3 @@ https://developer.nvidia.com/embedded/jetpack
 - Input video: `python3 app.py --input video.mp4 --mot`
 - Use `-h` for detailed descriptions about other flags like saving output and visualization
 - Edit fast_mot/configs/mot.json to configure parameters and change object classes
-
-### References
-- SORT: https://arxiv.org/abs/1602.00763  
-- Deep SORT: https://arxiv.org/pdf/1703.07402.pdf 
