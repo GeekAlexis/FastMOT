@@ -3,7 +3,7 @@
 </p>
 
 - Real-time implementation of Deep Sort 
-  - [x] Real-time SSD detector with frame tiling
+  - [x] SSD detector with frame tiling
   - [x] Deploy OSNet, a more accurate REID model
   - [x] Optical flow tracking and camera motion compensation
   - [ ] Replace SSD with YOLOV4
