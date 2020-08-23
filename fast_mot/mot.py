@@ -16,9 +16,10 @@ class Mot:
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['Mot']
 
-    def __init__(self, size, capture_dt, enable_drawing=False):
+    def __init__(self, size, capture_dt, enable_drawing=False, verbose=False):
         self.size = size
         self.enable_drawing = enable_drawing
+        self.verbose = verbose
         self.detector_frame_skip = Mot.config['detector_frame_skip']
         self.classes = Mot.config['classes']
 
@@ -80,7 +81,7 @@ class Mot:
                 logging.debug('TRACK %f', elapsed)
 
         if self.enable_drawing:
-            self._draw(frame, detections, debug=True)
+            self._draw(frame, detections, debug=self.verbose)
 
         self.frame_count += 1
 

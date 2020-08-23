@@ -77,7 +77,7 @@ def main():
     gui_time = 0
 
     if args['mot']:
-        mot = Mot(PROC_SIZE, stream.capture_dt, args['gui'] or args['output'])
+        mot = Mot(PROC_SIZE, stream.capture_dt, args['gui'] or args['output'], args['verbose'])
         enable_mot = True
     if args['socket']:
         assert args['mot'], 'Tracking must be turned on for socket transfer'

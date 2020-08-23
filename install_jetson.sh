@@ -37,4 +37,4 @@ sudo pip3 install llvmlite==0.31.0
 sudo pip3 install numba==0.48
 
 # prepare INT8 calibration data
-source $BASEDIR/analytics/models/prepare_calib_data.sh $BASEDIR/analytics/models
+source $BASEDIR/fast_mot/models/prepare_calib_data.sh $BASEDIR/fast_mot/models
