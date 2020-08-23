@@ -11,7 +11,7 @@
 Fast MOT has an input size of 1280 x 720. Note that larger videos will be resized, which results in a drop in frame rate. It also assumes medium/small targets and struggles to detect up close targets properly due to frame tiling. Currently, tracking targets other than pedestrians will work but retraining the REID model on other classes can improve accuracy. Please refer to [Torchreid](https://github.com/KaiyangZhou/deep-person-reid) for retraining. Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 35 FPS depending on crowd density.
 
 ### Dependencies
-- OpenCV (Built with Gstreamer)
+- OpenCV
 - Numpy
 - Numba
 - Scipy
@@ -19,9 +19,13 @@ Fast MOT has an input size of 1280 x 720. Note that larger videos will be resize
 - TensorRT  
 - cython-bbox
 
-#### Install dependencies for Jetson platforms
+#### Install for Jetson platforms
 - OpenCV, CUDA, and TensorRT can be installed from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack)    
-- `bash install_jetson.sh`
+- `sh install_jetson.sh`
+#### Install for x86 (Not tested)
+- Make sure to have CUDA and TensorRT installed
+- Build OpenCV from source to use Gstreamer
+- `pip3 install -r requirements.txt`
 
 ### Run tracking
 - With camera: `python3 app.py --mot`
