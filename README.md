@@ -20,7 +20,7 @@ Fast MOT has an input size of 1280 x 720. Note that larger videos will be resize
 - cython-bbox
 
 #### Install for Jetson (TX2/Xavier NX/Xavier)
-OpenCV, CUDA, and TensorRT can be installed from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack)    
+Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack)    
   ```
   $ sh install_jetson.sh
   ```
