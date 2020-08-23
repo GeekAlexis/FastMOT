@@ -11,7 +11,7 @@
 Fast MOT has an input size of 1280 x 720. Note that larger videos will be resized, which results in a drop in frame rate. It also assumes medium/small targets and struggles to detect up close targets properly due to frame tiling. Currently, tracking targets other than pedestrians will work but retraining the REID model on other classes can improve accuracy. Please refer to [Torchreid](https://github.com/KaiyangZhou/deep-person-reid) for retraining. Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 35 FPS depending on crowd density.
 
 ### Dependencies
-- OpenCV
+- OpenCV (With Gstreamer)
 - Numpy
 - Numba
 - Scipy
@@ -31,4 +31,4 @@ Fast MOT has an input size of 1280 x 720. Note that larger videos will be resize
 - With camera: `python3 app.py --mot`
 - Input video: `python3 app.py --input your_video.mp4 --mot`
 - Use `-h` to learn how to visualize and save output
-- For more flexibility, edit `fast_mot/configs/mot.json` to configure parameters and target classes
+- For more flexibility, edit `fast_mot/configs/mot.json` to configure parameters and target classes (COCO)
