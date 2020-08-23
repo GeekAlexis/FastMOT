@@ -88,10 +88,10 @@ class MultiTracker:
     def track(self, frame):
         tic = time.perf_counter()
         self.compute_flow(frame)
-        print('flow', time.perf_counter() - tic)
+        logging.debug('flow %f', time.perf_counter() - tic)
         tic = time.perf_counter()
         self.step_kalman_filter()
-        print('kalman filter', time.perf_counter() - tic)
+        logging.debug('kalman filter %f', time.perf_counter() - tic)
 
     def initiate(self, frame, detections):
         """

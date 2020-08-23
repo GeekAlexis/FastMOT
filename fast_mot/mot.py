@@ -50,13 +50,13 @@ class Mot:
                 self.detector.detect_async(frame)
                 elapsed = time.perf_counter() - tic2
                 self.det_pre_time += elapsed
-                print('detect pre', elapsed)
+                logging.debug('detect pre %f', elapsed)
                 tic2 = time.perf_counter()
                 self.tracker.compute_flow(frame)
                 detections, orig = self.detector.postprocess()
                 elapsed = time.perf_counter() - tic2
                 self.det_time += elapsed
-                print('detect / flow', elapsed)
+                logging.debug('detect / flow %f', elapsed)
                 tic2 = time.perf_counter()
                 # embeddings = self.extractor(frame, detections)
                 self.extractor.extract_async(frame, detections)
@@ -64,20 +64,20 @@ class Mot:
                 embeddings = self.extractor.postprocess()
                 elapsed = time.perf_counter() - tic2
                 self.embedding_time += elapsed
-                print('embedding / kf', elapsed)
+                logging.debug('embedding / kf %f', elapsed)
                 tic2 = time.perf_counter()
                 self.tracker.update(detections, embeddings)
                 elapsed = time.perf_counter() - tic2
                 self.match_time += elapsed
-                print('match', elapsed)
-                print('UPDATE', time.perf_counter() - tic)
+                logging.debug('match %f', elapsed)
+                logging.debug('UPDATE %f', time.perf_counter() - tic)
                 self.detector_frame_count += 1
             else:
                 tic = time.perf_counter()
                 self.tracker.track(frame)
                 elapsed = time.perf_counter() - tic
                 self.track_time += elapsed
-                print('TRACK', elapsed)
+                logging.debug('TRACK %f', elapsed)
 
         if self.enable_drawing:
             self._draw(frame, detections, debug=True)

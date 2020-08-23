@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 import json
 
 from cython_bbox import bbox_overlaps
@@ -85,10 +86,9 @@ class ObjectDetector:
     def detect_async(self, frame):
         tic = time.perf_counter()
         frame = cv2.resize(frame, self.tiling_region_size)
-        # imgs = multi_crop(frame, self.tiles)
         self._preprocess(frame, self.tiles, self.backend.input.host, self.input_size)
 
-        print('img pre', time.perf_counter() - tic)
+        logging.debug('img pre %f', time.perf_counter() - tic)
         self.backend.infer_async()
 
     def postprocess(self):
@@ -98,14 +98,14 @@ class ObjectDetector:
 
         detections = self._filter_dets(det_out, self.tiles, self.model.TOPK, 
             self.model.OUTPUT_LAYOUT, self.label_mask, self.max_area, self.conf_thresh, self.scale_factor)
-        print('loop over det out', time.perf_counter() - tic)
+        logging.debug('loop over det out %f', time.perf_counter() - tic)
 
         orig = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
         # orig = None
 
         tic = time.perf_counter()
         detections = self._merge_dets(detections)
-        print('merge det', time.perf_counter() - tic)
+        logging.debug('merge det %f', time.perf_counter() - tic)
         return detections, orig
 
     def draw_tile(self, frame):
@@ -218,5 +218,4 @@ class ObjectDetector:
                     dets[i].conf = max(dets[i].conf, dets[k].conf)
                     keep.discard(k)
         keep = np.asarray(list(keep))
-
         return dets[keep]
