@@ -41,5 +41,5 @@ Make sure to have CUDA and TensorRT installed and build OpenCV from source with 
   ```
   $ python3 app.py --input your_video.mp4 --mot
   ```
-- Use `--gui` and `--output out.mp4` to visualize and save output
+- Use `--gui` to visualize and `--output video_out.mp4` to save output
 - For more flexibility, edit `fast_mot/configs/mot.json` to configure parameters and target classes (COCO)
