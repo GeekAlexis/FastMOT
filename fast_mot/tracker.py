@@ -65,7 +65,7 @@ class MultiTracker:
                         track.init_tlbr = warp(track.init_tlbr, self.H_camera) 
                         track.tlbr = flow_bbox
                 else:
-                    logging.warning('Initialization failed: %s', track)
+                    logging.warning('Init failed: %s', track)
                     del self.tracks[trk_id]
             else:
                 mean, cov = track.state
