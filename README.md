@@ -8,7 +8,7 @@
   - [x] Optical flow tracking and camera motion compensation
   - [ ] Replace SSD with YOLOV4
   
-Fast MOT has an input size of 1280 x 720. Note that larger videos will be resized, which results in a drop in frame rate. It also assumes medium/small targets and struggles to detect up close targets properly due to frame tiling. Currently, tracking targets other than pedestrians will work but retraining the REID model on other classes can improve the accuracy. Please refer to [Torchreid](https://github.com/KaiyangZhou/deep-person-reid) for retraining. Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 35 FPS depending on crowd density.
+Fast MOT has an input size of 1280 x 720. Note that larger videos will be resized, which results in a drop in frame rate. It also assumes medium/small targets and struggles to detect up close targets properly due to frame tiling. Currently, tracking targets other than pedestrians will work but retraining the REID model on other classes can improve accuracy. Please refer to [Torchreid](https://github.com/KaiyangZhou/deep-person-reid) for retraining. Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 35 FPS depending on crowd density.
 
 ### Dependencies
 - OpenCV (Built with Gstreamer)
