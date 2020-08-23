@@ -35,11 +35,11 @@ Make sure to have CUDA and TensorRT installed and build OpenCV from source with 
 ### Run tracking
 - With camera (/dev/video0): 
   ```
-  python3 app.py --mot
+  $ python3 app.py --mot
   ```
 - Input video: 
   ```
-  python3 app.py --input your_video.mp4 --mot
+  $ python3 app.py --input your_video.mp4 --mot
   ```
 - Use `-h` to learn how to visualize and save output
 - For more flexibility, edit `fast_mot/configs/mot.json` to configure parameters and target classes (COCO)
