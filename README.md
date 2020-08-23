@@ -6,7 +6,7 @@
   - [x] Real-time SSD detector with frame tiling
   - [x] Deploys a better REID model OSNet
   - [x] Optical flow tracking and camera motion compensation
-  - [] Replace SSD with YOLOV4
+  - [-] Replace SSD with YOLOV4
   
 - Input size: 1280 x 720
 - Assumes medium/small targets (struggles with up close targets due to tiling)
