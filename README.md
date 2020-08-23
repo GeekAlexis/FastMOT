@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="demo.gif" width="720" height="405" />
+  <img src="assets/demo.gif" width="720" height="405" />
 </p>
 
 - Real-time implementation of Deep Sort 
