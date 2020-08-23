@@ -1,5 +1,6 @@
 from pathlib import Path
 import tensorrt as trt
+import logging
 
 
 class SSD:
@@ -36,8 +37,8 @@ class SSD:
         with trt.Builder(trt_logger) as builder, builder.create_network() as network, trt.UffParser() as parser:
             builder.max_workspace_size = 1 << 30
             builder.max_batch_size = round_up(batch_size)
-            print('Building engine with batch size:', builder.max_batch_size)
-            print('This may take a while...')
+            logging.info('Building engine with batch size: %d', builder.max_batch_size)
+            logging.info('This may take a while...')
             
             if builder.platform_has_fast_fp16:
                 builder.fp16_mode = True
@@ -52,7 +53,7 @@ class SSD:
             engine = builder.build_cuda_engine(network)
             if engine is None:
                 return None
-            print("Completed creating Engine")
+            logging.info("Completed creating Engine")
             with open(cls.PATH, 'wb') as f:
                 f.write(engine.serialize())
             return engine
@@ -257,6 +258,7 @@ class SSDMobileNetV2(SSD):
 
 class SSDInceptionV2(SSD):
     PATH = Path(__file__).parent / 'ssd_inception_v2_coco.trt'
+    # PATH = Path(__file__).parent / 'TRT_ssd_inception_v2_coco_old.bin'
     TF_PATH = Path(__file__).parent / 'ssd_inception_v2_coco_2017_11_17' / 'frozen_inference_graph.pb'
     NMS_THRESH = 0.5 # 0.6
     TOPK = 100

@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 import itertools
 import json
 
@@ -24,7 +25,6 @@ class Flow:
         self.feature_density = Flow.config['feature_density']
         self.optflow_err_thresh = Flow.config['optflow_err_thresh']
         self.min_inlier = Flow.config['min_inlier']
-        # self.min_target_inlier = Flow.config['min_target_inlier']
         self.feature_dist_factor = Flow.config['feature_dist_factor']
         self.ransac_max_iter = Flow.config['ransac_max_iter']
         self.ransac_conf = Flow.config['ransac_conf']
@@ -47,7 +47,6 @@ class Flow:
         self.ones = np.full(self.size[::-1], 255, np.uint8)
         self.bkg_mask = np.empty_like(self.ones)
         self.fg_mask = self.bkg_mask # alias
-        # self.frame_rect = Rect(tlwh=(0, 0, *self.size))
 
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
@@ -89,16 +88,12 @@ class Flow:
         np.copyto(self.bkg_mask, self.ones)
         for track in sorted_tracks:
             # tic2 = time.perf_counter()
-            # inside_bbox = track.bbox & self.frame_rect
-            # keypoints = self._rect_filter(track.keypoints, inside_bbox.tl, inside_bbox.br)
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
             keypoints = self._rect_filter(track.keypoints, inside_tlbr)
             # rect_filter_time += (time.perf_counter() - tic2)
             if len(keypoints) / area(inside_tlbr) < self.feature_density:
                 # only detect new keypoints when too few are propagated
                 # tic2 = time.perf_counter()
-                # img = inside_bbox.crop(self.prev_frame_gray)
-                # target_mask = inside_bbox.crop(self.bkg_mask)
                 img = crop(self.prev_frame_gray, inside_tlbr)
                 target_mask = crop(self.bkg_mask, inside_tlbr)
                 feature_dist = self._get_feature_dist(target_mask, self.feature_dist_factor)
@@ -110,13 +105,11 @@ class Flow:
                 if keypoints is None or len(keypoints) == 0:
                     keypoints = np.empty((0, 2), np.float32)
                 else:
-                    # keypoints = self._ellipse_filter(keypoints, track.bbox.center, track.bbox.size, inside_bbox.tl)
                     keypoints = self._ellipse_filter(keypoints, track.tlbr, inside_tlbr[:2])
                 # ellipse_filter_time += (time.perf_counter() - tic2)
             # batch target keypoints
             all_prev_pts.append(keypoints)
             # zero out track in background mask
-            # inside_bbox.crop(self.bkg_mask)[:] = 0
             crop(self.bkg_mask, inside_tlbr)[:] = 0
         target_ends = list(itertools.accumulate(len(pts) for pts in all_prev_pts))
         target_begins = [0] + target_ends[:-1]
@@ -175,12 +168,12 @@ class Flow:
                 self.prev_bkg_keypoints, self.bkg_keypoints = self._get_inliers(prev_bkg_pts, matched_bkg_pts, inlier_mask)
                 if H_camera is None or len(self.bkg_keypoints) < self.min_inlier:
                     self.bkg_keypoints = np.empty((0, 2), np.float32)
-                    print('[Flow] Background registration failed')
+                    logging.warning('Background registration failed')
                     return {}, None
                 # H_camera = np.vstack((H_camera, [0, 0, 1]))
             else:
                 self.bkg_keypoints = np.empty((0, 2), np.float32)
-                print('[Flow] Background registration failed')
+                logging.warning('Background registration failed')
                 return {}, None
         # print('camera homography:', time.perf_counter() - tic)
 
@@ -213,14 +206,13 @@ class Flow:
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
             # tic2 = time.perf_counter()
-            # est_bbox = Rect(tlwh=self._estimate_bbox(track.bbox.tl, track.bbox.size, H_affine))
             # delete track when it goes outside the frame
-            # inside_bbox = est_bbox & self.frame_rect
             est_tlbr = self._estimate_bbox(track.tlbr, H_affine)
             # estimate_time += (time.perf_counter() - tic2)
             # tic2 = time.perf_counter()
             track.prev_keypoints, track.keypoints = self._get_inliers(prev_pts, matched_pts, inlier_mask)
             if intersection(est_tlbr, self.frame_rect) is None or len(track.keypoints) < self.min_inlier:
+                # TODO: increase uncertainty for 5 frames when min inlier too small?
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
             next_bboxes[track.trk_id] = est_tlbr
@@ -250,32 +242,6 @@ class Flow:
         target_area = np.count_nonzero(target_mask)
         est_feat_dist = round(np.sqrt(target_area) * feature_dist_factor)
         return max(est_feat_dist, 1)
-
-    # @staticmethod
-    # @nb.njit(fastmath=True, cache=True)
-    # def _estimate_bbox(tl, size, H_affine):
-    #     xmin, ymin = transform(tl, H_affine).ravel()
-    #     scale = math.sqrt(H_affine[0, 0]**2 + H_affine[1, 0]**2)
-    #     scale = 1. if scale < 0.9 or scale > 1.1 else scale
-    #     return xmin, ymin, scale * size[0], scale * size[1]
-
-    # @staticmethod
-    # @nb.njit(fastmath=True, cache=True)
-    # def _rect_filter(pts, tl, br):
-    #     if len(pts) == 0:
-    #         return pts
-    #     ge_le = (pts >= tl) & (pts <= br)
-    #     keep = np.where(ge_le[:, 0] & ge_le[:, 1])
-    #     return pts[keep]
-
-    # @staticmethod
-    # @nb.njit(fastmath=True, cache=True)
-    # def _ellipse_filter(pts, center, axes, offset):
-    #     pts = pts.reshape(-1, 2)
-    #     pts = pts + offset
-    #     semi_axes = np.asarray(axes) * 0.5
-    #     keep = np.sum(((pts - center) / semi_axes)**2, axis=1) <= 1
-    #     return pts[keep]
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

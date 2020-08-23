@@ -28,7 +28,7 @@ class Track:
 
         self.feature_buf_size = 10
         self.bin_height = 10
-        self.alpha = 0.7 # change this? dynamic?
+        self.alpha = 0.7
 
         self.age = 0
         self.frames_since_acquired = 0

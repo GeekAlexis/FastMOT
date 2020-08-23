@@ -1,5 +1,6 @@
 from pathlib import Path
 import tensorrt as trt
+import logging
 
 
 class ReID:
@@ -24,8 +25,8 @@ class ReID:
             trt.OnnxParser(network, trt_logger) as parser:
 
             dynamic_batch_opts = [round_up(batch_size) for batch_size in dynamic_batch_opts]
-            print('Building engine with batch options:', dynamic_batch_opts)
-            print('This may take a while...')
+            logging.info('Building engine with batch options: %s', dynamic_batch_opts)
+            logging.info('This may take a while...')
 
             # Parse model file
             with open(cls.ONNX_PATH, 'rb') as model_file:
@@ -49,7 +50,7 @@ class ReID:
             engine = builder.build_engine(network, config)
             if engine is None:
                 return None
-            print("Completed creating Engine")
+            logging.info("Completed creating Engine")
             with open(cls.PATH, "wb") as f:
                 f.write(engine.serialize())
             return engine

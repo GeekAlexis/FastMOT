@@ -1,6 +1,7 @@
 from pathlib import Path
 from collections import deque
 import threading
+import logging
 import time
 import json
 import cv2
@@ -44,7 +45,7 @@ class VideoIO:
         if not ret:
             raise RuntimeError("Unable to read video stream")
         self.frame_queue.append(frame)
-        print('[Video] %dx%d @ %d FPS' % (*self.vid_size, self.fps))
+        logging.info('%dx%d stream @ %d FPS', *self.vid_size, self.fps)
         
         if self.output_path is not None:
             assert Path(self.output_path).suffix == '.mp4', 'Only mp4 format is supported'

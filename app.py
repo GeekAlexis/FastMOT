@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import logging
 import time
 import os
 import socket
@@ -41,9 +42,10 @@ def main():
     parser.add_argument('-o', '--output', help='Path to optional output video file')
     parser.add_argument('-m', '--mot', action='store_true', help='Turn on multi-object tracking')
     parser.add_argument('-s', '--socket', action='store_true', help='Turn on socket communication')
-    parser.add_argument('--addr', default='/tmp/fast_mot_socket', help='Socket address')
+    parser.add_argument('--addr', default='/tmp/fast_mot_socket', help='Socket path')
     parser.add_argument('-l', '--log', action='store_true', help='Output a MOT format tracking log')
     parser.add_argument('-g', '--gui', action='store_true', help='Turn on visiualization')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output for debugging')
     # parser.add_argument('-f', '--flip', type=int, default=0, choices=range(8), help=
     #     "0: none\n"          
     #     "1: counterclockwise\n"
@@ -55,12 +57,14 @@ def main():
     #     "7: upper-left-diagonal\n"
     #     )
     args = vars(parser.parse_args())
+    loglevel = logging.DEBUG if args['verbose'] else logging.INFO
+    logging.basicConfig(format='[%(levelname)s] %(message)s', level=loglevel)
 
     delay = 0
     # Hack: delay camera frame grabbing to reduce lag
     if args['input'] is None:
         if args['mot']:
-            delay = 1 / 30 # main processing loop time
+            delay = 1 / 25 # main processing loop time
         if args['gui']:
             delay += 0.025 if args['mot'] else 0.055 # gui time
     stream = VideoIO(PROC_SIZE, args['input'], args['output'], delay)
@@ -88,7 +92,7 @@ def main():
     if args['gui']:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
         
-    print('[INFO] Starting video capture...')
+    logging.info('Starting video capture...')
     stream.start_capture()
     try:
         while not args['gui'] or cv2.getWindowProperty("Video", 0) >= 0:
@@ -109,19 +113,16 @@ def main():
                         signal = parse_from_msg(buffer)
                         buffer = b''
                         if signal == MsgType.START:
-                            print('client: start')
                             if not enable_mot:
                                 mot.initiate()
                                 elapsed_time = 0
                                 enable_mot = True
                         elif signal == MsgType.STOP:
-                            print('client: stop')
                             if enable_mot:
                                 enable_mot = False
                                 avg_fps = round(mot.frame_count / elapsed_time)
-                                print('[INFO] Average FPS: %d' % avg_fps)
+                                logging.info('Average FPS: %d', avg_fps)
                         elif signal == MsgType.TERMINATE:
-                            print('client: terminate')
                             stream.stop_capture()
                             break
 
@@ -169,20 +170,21 @@ def main():
     
     if not args['socket'] and args['mot']:
         avg_fps = round(mot.frame_count / elapsed_time)
-        print('[INFO] Average FPS: %d' % avg_fps)
         avg_track_time = mot.track_time / (mot.frame_count - mot.detector_frame_count)
-        print('[INFO] Average track time: %f' % avg_track_time)
         avg_embedding_time = mot.embedding_time / mot.detector_frame_count
-        print('[INFO] Average embedding time: %f' % avg_embedding_time)
         avg_det_pre_time = mot.det_pre_time / mot.detector_frame_count
-        print('[INFO] Average det pre time: %f' % avg_det_pre_time)
         avg_det_time = mot.det_time / mot.detector_frame_count
-        print('[INFO] Average det time: %f' % avg_det_time)
         avg_match_time = mot.match_time / mot.detector_frame_count
-        print('[INFO] Average match time: %f' % avg_match_time)
+        
+        logging.info('Average FPS: %d', avg_fps)
+        logging.debug('Average track time: %f', avg_track_time)
+        logging.debug('Average embedding time: %f', avg_embedding_time)
+        logging.debug('Average det pre time: %f', avg_det_pre_time)
+        logging.debug('Average det time: %f', avg_det_time)
+        logging.debug('Average match time: %f', avg_match_time)
         if args['gui']:
             avg_time = gui_time / mot.frame_count
-            print('[INFO] Average GUI time: %f' % avg_time)
+            logging.debug('Average GUI time: %f', avg_time)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 from enum import Enum
 from pathlib import Path
+import logging
 import json
 import cv2
 import time
@@ -21,11 +22,11 @@ class Mot:
         self.detector_frame_skip = Mot.config['detector_frame_skip']
         self.classes = Mot.config['classes']
 
-        print('[INFO] Loading detector model...')
+        logging.info('Loading detector model...')
         self.detector = ObjectDetector(self.size, self.classes)
-        print('[INFO] Loading feature extractor model...')
+        logging.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor()
-        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric) #, self.detector.tiling_region)
+        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric)
         
         # reset flags
         self.frame_count = 0
@@ -95,7 +96,6 @@ class Mot:
         if debug:
             # [draw_det(frame, det) for det in detections]
             [draw_det(frame, det, i) for i, det in enumerate(detections)]
-            # [det.draw(frame) for det in detections]
             # self.tracker.flow.draw_bkg_feature_match(frame)
             if self.frame_count % self.detector_frame_skip == 0:
                 self.detector.draw_tile(frame)
