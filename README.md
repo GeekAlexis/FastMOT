@@ -2,7 +2,7 @@
   <img src="assets/demo.gif" width="720" height="405" />
 </p>
 
-- Real-time implementation of Deep Sort 
+Fast MOT is a real-time implementation of Deep Sort 
   - [x] SSD detector with frame tiling
   - [x] Deploy OSNet, a more accurate REID model
   - [x] Optical flow tracking and camera motion compensation
