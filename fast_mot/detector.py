@@ -6,12 +6,12 @@ from cython_bbox import bbox_overlaps
 import numpy as np
 import numba as nb
 from numba.typed import Dict
-import math
 import cv2
 import time
 
-from .utils import *
 from .models import *
+from .utils import ConfigDecoder, InferenceBackend
+from .utils.rect import *
 
 
 DET_DTYPE = np.dtype([
@@ -70,12 +70,6 @@ class ObjectDetector:
         detections = self._merge_dets(detections)
         logging.debug('merge det %f', time.perf_counter() - tic)
         return detections
-
-    def draw_tile(self, frame):
-        for tile in self.tiles:
-            tl = np.rint(tile[:2] * self.scale_factor).astype(int)
-            br = np.rint(tile[2:] * self.scale_factor).astype(int)
-            cv2.rectangle(frame, tuple(tl), tuple(br), 0, 1)
 
     def _generate_tiles(self):
         tile_size, tiling_grid = np.asarray(self.model.INPUT_SHAPE[:0:-1]), np.asarray(self.tiling_grid)

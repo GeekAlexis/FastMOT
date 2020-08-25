@@ -8,8 +8,8 @@ import numba as nb
 import cv2
 import time
 
-from .track import Track
-from .utils import *
+from .utils import ConfigDecoder
+from .utils.rect import *
 
 
 class Flow:
@@ -226,15 +226,6 @@ class Flow:
         # print('estimate bbox:', estimate_time)
         # print('post proc:', post_time)
         return next_bboxes, H_camera
-
-    def draw_bkg_feature_match(self, frame):
-        if len(self.bkg_keypoints) > 0:
-            cur_pts = np.rint(self.bkg_keypoints).astype(int)
-            [cv2.circle(frame, tuple(pt), 1, (0, 0, 255), -1) for pt in cur_pts]
-            if len(self.prev_bkg_keypoints) > 0:
-                prev_pts = np.rint(self.prev_bkg_keypoints).astype(int)
-                [cv2.line(frame, tuple(pt1), tuple(pt2), (0, 0, 255), 1, cv2.LINE_AA) for pt1, pt2 in 
-                    zip(prev_pts, cur_pts)]
             
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

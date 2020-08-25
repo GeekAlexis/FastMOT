@@ -3,8 +3,8 @@ import os
 
 import pycuda.driver as cuda
 import pycuda.autoinit
-import cv2
 import numpy as np
+import cv2
 
 
 class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):

@@ -1,4 +1,3 @@
-from enum import Enum
 from pathlib import Path
 import logging
 import json
@@ -8,7 +7,8 @@ import time
 from .detector import ObjectDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
-from .utils import ConfigDecoder, draw_trk, draw_det
+from .utils import ConfigDecoder
+from .utils.visualization import draw_trk, draw_det, draw_tile, draw_bkg_flow
 
 
 class Mot:
@@ -89,11 +89,11 @@ class Mot:
         count = 0
         for track in self.tracker.tracks.values():
             if track.confirmed and track.active:
-                draw_trk(frame, track, draw_feature_match=debug)
+                draw_trk(frame, track, draw_flow=debug)
                 count += 1
         if debug:
             [draw_det(frame, det) for det in detections]
-            # self.tracker.flow.draw_bkg_feature_match(frame)
+            # draw_bkg_flow(frame, self.tracker)
             if self.frame_count % self.detector_frame_skip == 0:
-                self.detector.draw_tile(frame)
+                draw_tile(frame, self.detector)
         cv2.putText(frame, f'visible: {count}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

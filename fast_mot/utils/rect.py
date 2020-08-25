@@ -101,7 +101,7 @@ def iou(tlbr1, tlbr2):
 @nb.njit(fastmath=True, cache=True)
 def warp(tlbr, m):
     corners = get_corners(tlbr)
-    warped_corners = perspectiveTransform(corners, m)
+    warped_corners = perspective_transform(corners, m)
     xmin = min(warped_corners[:, 0])
     ymin = min(warped_corners[:, 1])
     xmax = max(warped_corners[:, 0])
@@ -119,7 +119,7 @@ def transform(pts, m):
 
 
 @nb.njit(fastmath=True, cache=True)
-def perspectiveTransform(pts, m):
+def perspective_transform(pts, m):
     pts = np.asarray(pts)
     pts = np.atleast_2d(pts)
     augment = np.ones((len(pts), 1))

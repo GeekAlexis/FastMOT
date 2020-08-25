@@ -7,13 +7,13 @@ from scipy.spatial.distance import cdist
 from cython_bbox import bbox_overlaps
 import numpy as np
 import numba as nb
-import cv2
 import time
 
 from .track import Track
 from .flow import Flow
 from .kalman_filter import MeasType, KalmanFilter
-from .utils import *
+from .utils import ConfigDecoder
+from .utils.rect import as_rect, to_tlbr, intersection, warp
 
 
 CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution (4 DOF)
@@ -81,7 +81,7 @@ class MultiTracker:
                     track.state = (mean, cov)
                     track.tlbr = next_tlbr
                 else:
-                    logging.info('Outside: %s', track)
+                    logging.info('Out: %s', track)
                     del self.tracks[trk_id]
 
     def track(self, frame):
@@ -120,9 +120,7 @@ class MultiTracker:
         # 2nd association with iou
         candidates = unconfirmed + [trk_id for trk_id in u_trk_ids_a if self.tracks[trk_id].active]
         u_trk_ids_a = [trk_id for trk_id in u_trk_ids_a if not self.tracks[trk_id].active]
-
         u_detections = detections[u_det_ids]
-        
         ious = self._iou_cost(candidates, u_detections)
         matches_b, u_trk_ids_b, u_det_ids = self._linear_assignment(ious, candidates, u_det_ids, maximize=True)
 
@@ -150,7 +148,7 @@ class MultiTracker:
                     logging.info('Found: %s', track)
                 updated.append(trk_id)
             else:
-                logging.info('Outside: %s', track)
+                logging.info('Out: %s', track)
                 del self.tracks[trk_id]
 
         # clean up lost tracks
@@ -168,6 +166,7 @@ class MultiTracker:
                 aged.append(trk_id)
 
         # register new detections
+        # TODO: long term REID
         for det_id in u_det_ids:
             det = detections[det_id]
             if det.conf > self.min_register_conf:

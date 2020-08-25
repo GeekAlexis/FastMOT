@@ -1,9 +1,8 @@
 from collections import deque
 import numpy as np
-import cv2
 
 from .models import COCO_LABELS
-from .utils import *
+from .utils.rect import to_tlwh
 
 
 class Track:

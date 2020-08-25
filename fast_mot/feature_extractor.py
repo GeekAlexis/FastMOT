@@ -3,7 +3,8 @@ import numpy as np
 import numba as nb
 import cv2
 
-from .utils import InferenceBackend, multi_crop
+from .utils import InferenceBackend
+from .utils.rect import multi_crop
 from .models import *
 
 
