@@ -2,13 +2,20 @@
   <img src="assets/demo.gif" width="720" height="405" />
 </p>
 
-Fast MOT is a real-time implementation of Deep Sort 
-  - [x] SSD detector with frame tiling
-  - [x] Deploy OSNet, a more accurate REID model
+Fast MOT is a real-time implementation of Deep Sort. The original Deep Sort cannot run in real-time on edge devices. 
+  - [x] Efficient SSD detector
+  - [x] Improve small object detection with Tiling
+  - [x] OSNet for accurate REID
   - [x] Optical flow tracking and camera motion compensation
-  - [ ] Replace SSD with YOLOV4
+  - [ ] Replace SSD with YOLO V4
   
-Fast MOT has an input size of 1280 x 720. Note that larger videos will be resized, which results in a drop in frame rate. It also assumes medium/small targets and struggles to detect up close targets properly due to frame tiling. Currently, tracking targets other than pedestrians will work but retraining the REID model on other classes can improve accuracy. Please refer to [Torchreid](https://github.com/KaiyangZhou/deep-person-reid) for retraining. Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 35 FPS depending on crowd density.
+Fast MOT has an input size of 1280 x 720. Note that larger videos will be resized, which results in a drop in frame rate. It also assumes medium/small targets and cannot detect up close targets properly due to tiling. This repo uses a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but retraining OSNet on other classes can improve accuracy.  Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 35 FPS depending on crowd density.
+
+| # targets  | FPS |
+| ------------- | ------------- |
+| 0 - 20  | >=30  |
+| 20 - 30  | 23  |
+| 30 - 50  | 15  |
 
 ### Dependencies
 - OpenCV (With Gstreamer)
