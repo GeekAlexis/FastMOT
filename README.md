@@ -2,7 +2,7 @@
   <img src="assets/demo.gif" width="720" height="405" />
 </p>
 
-Real-time implementation of Deep Sort. 
+Real-time implementation of Deep Sort
   - [x] Efficient SSD detector
   - [x] Improve small object detection with tiling
   - [x] OSNet for accurate REID
