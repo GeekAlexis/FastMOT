@@ -6,6 +6,7 @@ import pycuda.autoinit
 import cv2
 import numpy as np
 
+
 class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
     def __init__(self, model_shape, data_dir, cache_file):
         # Whenever you specify a custom constructor for a TensorRT class,
@@ -51,7 +52,7 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
             # Normalize to [-1.0, 1.0] interval (expected by model)
             img = (2.0 / 255.0) * img - 1.0
             # add this image to the batch array
-            batch_imgs[i,:] = img.ravel()
+            batch_imgs[i, :] = img.ravel()
 
         # increase the counter for this batch
         self.counter += self.batch_size

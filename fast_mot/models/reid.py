@@ -71,13 +71,3 @@ class OSNet025(ReID):
     OUTPUT_LAYOUT = 512
     METRIC = 'euclidean'
 
-
-# trt_logger = trt.Logger(trt.Logger.VERBOSE)
-# trt.init_libnvinfer_plugins(trt_logger, '')
-# OSNet025.build_engine(trt_logger, 32)
-
-# runtime = trt.Runtime(trt_logger)
-# with open(OSNet025.PATH, 'rb') as engine_file:
-#     buf = engine_file.read()
-#     engine = runtime.deserialize_cuda_engine(buf)
-#     print(engine.max_batch_size)

@@ -16,7 +16,7 @@ from .kalman_filter import MeasType, KalmanFilter
 from .utils import *
 
 
-CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution with 4 dof
+CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution (4 DOF)
 INF_COST = 1e5
 
 
@@ -73,7 +73,6 @@ class MultiTracker:
                 mean, cov = self.kf.warp(mean, cov, self.H_camera)
                 mean, cov = self.kf.predict(mean, cov)
                 if flow_bbox is not None and track.active:
-                    # std_multiplier = 1
                     # give large flow uncertainty for occluded objects
                     std_multiplier = max(self.age_factor * track.age, 1)
                     mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
@@ -110,29 +109,11 @@ class MultiTracker:
         """
         Update tracks using detections
         """
-        # tic = time.perf_counter()
-
         det_ids = list(range(len(detections)))
         confirmed = [trk_id for trk_id, track in self.tracks.items() if track.confirmed]
         unconfirmed = [trk_id for trk_id, track in self.tracks.items() if not track.confirmed]
 
         # association with motion and embeddings
-        # matches_a = []
-        # u_trk_ids_a = []
-        # u_det_ids = det_ids
-        # # prioritize small age
-        # for depth in range(self.max_age + 1):
-        #     if len(u_det_ids) == 0:
-        #         break
-        #     trk_ids = [trk_id for trk_id in confirmed if self.tracks[trk_id].age == depth]
-        #     if len(trk_ids) == 0:
-        #         continue
-        #     u_detections, u_embeddings = detections[u_det_ids], embeddings[u_det_ids]
-        #     cost = self._matching_cost(trk_ids, u_detections, u_embeddings)
-        #     matches, u_trk_ids, u_det_ids = self._linear_assignment(cost, trk_ids, u_det_ids)
-        #     matches_a += matches
-        #     u_trk_ids_a += u_trk_ids
-
         cost = self._matching_cost(confirmed, detections, embeddings)
         matches_a, u_trk_ids_a, u_det_ids = self._linear_assignment(cost, confirmed, det_ids)
 
@@ -153,7 +134,6 @@ class MultiTracker:
 
         # update matched tracks
         for (trk_id, det_id), max_overlap in zip(matches, max_overlaps):
-        # for trk_id, det_id in matches:
             track = self.tracks[trk_id]
             det = detections[det_id]
             track.age = 0
@@ -163,8 +143,7 @@ class MultiTracker:
                 track.state = (mean, cov)
                 track.tlbr = next_tlbr
                 if not track.confirmed or max_overlap <= self.max_feat_overlap:
-                    # if trk_id == 1:
-                    #     cv2.imwrite(f'test/target_{trk_id}_{det_id}.jpg', det.bbox.crop(frame))
+                    # update when the overlap with other tracks is small
                     track.update_features(embeddings[det_id])
                 if not track.confirmed:
                     track.confirmed = True
@@ -173,7 +152,6 @@ class MultiTracker:
             else:
                 logging.info('Outside: %s', track)
                 del self.tracks[trk_id]
-        # print('MATCHING', time.perf_counter() - tic)
 
         # clean up lost tracks
         for trk_id in u_trk_ids:
@@ -196,45 +174,22 @@ class MultiTracker:
                 new_track = Track(det.tlbr, det.label, self.next_id)
                 self.tracks[self.next_id] = new_track
                 logging.debug('Detected: %s', new_track)
-                # if self.next_id == 32:
-                #     print('det id for 32:', det_id)
                 updated.append(self.next_id)
                 self.next_id += 1
 
         self._remove_duplicate(updated, aged)
 
     def _matching_cost(self, trk_ids, detections, embeddings):
-        # cost = np.empty((len(trk_ids), len(detections)))
-        # feature_cost = np.empty((len(trk_ids), len(detections)))
         if len(trk_ids) == 0 or len(detections) == 0:
-            return np.empty((len(trk_ids), len(detections))) #, np.empty((len(trk_ids), len(detections)))
-            # return cost, feature_cost
+            return np.empty((len(trk_ids), len(detections)))
 
         cost = self._feature_distance(trk_ids, embeddings)
-        # feature_cost = cost.copy()
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
-            # feature_cost[i] = self._feature_distance(trk_id, embeddings)
-            # motion_dist = self.kf.motion_distance(*track.state, measurements)
-            # print(motion_dist)
-            # if trk_id == 7:
-                # print('feature:', cost[i])
-                # print('motion:', motion_dist)
-            # cost[i] = self._fuse_motion(cost[i], motion_dist, self.max_feature_cost, 
-            #     track.label, det_labels, self.motion_weight)
-
             motion_dist = self.kf.motion_distance(*track.state, detections.tlbr)
             cost[i] = self._fuse_motion(cost[i], motion_dist, self.max_feature_cost, 
                 track.label, detections.label, self.motion_weight)
-            # gate = (cost[i] > self.max_feature_cost) | (motion_dist > self.max_motion_cost) | \
-            #     (track.label != det_labels)
-            # cost[i] = (1 - self.motion_weight) * cost[i] + self.motion_weight * motion_dist
-            # # gate = (feature_cost[i] > self.max_feature_cost) | (motion_dist > self.max_motion_cost) | \
-            # #     (track.label != det_labels)
-            # # cost[i] = (1 - self.motion_weight) * feature_cost[i] + self.motion_weight * motion_dist
-            # cost[i, gate] = INF_COST
-        # print(cost)
-        return cost #, feature_cost
+        return cost
 
     def _iou_cost(self, trk_ids, detections):
         if len(trk_ids) == 0 or len(detections) == 0:
@@ -245,14 +200,10 @@ class MultiTracker:
         trk_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
         det_bboxes = detections.tlbr
         ious = bbox_overlaps(trk_bboxes, det_bboxes)
-        # trk_ids = np.asarray(trk_ids)
-        # print('iou', ious[trk_ids == 7])
-        # print(ious)
-        # ious = self._gate_ious(ious, self.min_iou_cost, trk_labels, det_labels)
         ious = self._gate_ious(ious, self.min_iou_cost, trk_labels, detections.label)
         return ious
 
-    def _linear_assignment(self, cost, trk_ids, det_ids, maximize=False, feature_cost=None):
+    def _linear_assignment(self, cost, trk_ids, det_ids, maximize=False):
         rows, cols = linear_sum_assignment(cost, maximize)
         unmatched_rows = list(set(range(cost.shape[0])) - set(rows))
         unmatched_cols = list(set(range(cost.shape[1])) - set(cols))
@@ -279,7 +230,6 @@ class MultiTracker:
     def _feature_distance(self, trk_ids, embeddings):
         features = [self.tracks[trk_id].smooth_feature for trk_id in trk_ids]
         feature_dist = cdist(features, embeddings, self.metric)
-        # print(feature_dist)
         return feature_dist
 
     # def _feature_distance(self, trk_id, embeddings):
@@ -288,7 +238,6 @@ class MultiTracker:
     #     return feature_dist
 
     def _max_overlaps(self, matches, trk_ids, detections):
-        # return np.zeros(len(matches))
         if len(trk_ids) == 0 or len(matches) == 0:
             return np.zeros(len(matches))
             

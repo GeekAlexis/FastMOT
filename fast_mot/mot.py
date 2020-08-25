@@ -5,14 +5,13 @@ import json
 import cv2
 import time
 
-from .detector import ObjectDetector, draw_det
+from .detector import ObjectDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
-from .utils import ConfigDecoder
+from .utils import ConfigDecoder, draw_trk, draw_det
 
 
 class Mot:
-    
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['Mot']
 
@@ -40,9 +39,8 @@ class Mot:
     
     def run(self, frame):
         detections = []
-        orig = []
         if self.frame_count == 0:
-            detections, orig = self.detector(frame)
+            detections = self.detector(frame)
             self.tracker.initiate(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
@@ -54,12 +52,11 @@ class Mot:
                 logging.debug('detect pre %f', elapsed)
                 tic2 = time.perf_counter()
                 self.tracker.compute_flow(frame)
-                detections, orig = self.detector.postprocess()
+                detections = self.detector.postprocess()
                 elapsed = time.perf_counter() - tic2
                 self.det_time += elapsed
                 logging.debug('detect / flow %f', elapsed)
                 tic2 = time.perf_counter()
-                # embeddings = self.extractor(frame, detections)
                 self.extractor.extract_async(frame, detections)
                 self.tracker.step_kalman_filter()
                 embeddings = self.extractor.postprocess()
@@ -91,12 +88,11 @@ class Mot:
     def _draw(self, frame, detections, debug=False):
         count = 0
         for track in self.tracker.tracks.values():
-            if track.confirmed and track.age < 3:
-                track.draw(frame, draw_feature_match=debug)
+            if track.confirmed and track.active:
+                draw_trk(frame, track, draw_feature_match=debug)
                 count += 1
         if debug:
-            # [draw_det(frame, det) for det in detections]
-            [draw_det(frame, det, i) for i, det in enumerate(detections)]
+            [draw_det(frame, det) for det in detections]
             # self.tracker.flow.draw_bkg_feature_match(frame)
             if self.frame_count % self.detector_frame_skip == 0:
                 self.detector.draw_tile(frame)

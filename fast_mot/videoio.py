@@ -9,6 +9,17 @@ import cv2
 from .utils import ConfigDecoder
 
 class VideoIO:
+    """
+    flip method:
+        0: none          
+        1: counterclockwise
+        2: rotate-180    
+        3: clockwise 
+        4: horizontal-flip
+        5: upper-right-diagonal
+        6: vertical-flip
+        7: upper-left-diagonal
+    """
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['VideoIO']
 

@@ -14,7 +14,7 @@ from fast_mot import Mot
 """
 constants
 """
-MSG_LENGTH = 2  # 2 bytes
+MSG_LENGTH = 2  # 2-byte short
 PROC_SIZE = (1280, 720)
 
 
@@ -43,16 +43,7 @@ def main():
     parser.add_argument('-l', '--log', action='store_true', help='Output a MOT format log')
     parser.add_argument('-g', '--gui', action='store_true', help='Visiualization')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output for debugging')
-    # parser.add_argument('-f', '--flip', type=int, default=0, choices=range(8), help=
-    #     "0: none\n"          
-    #     "1: counterclockwise\n"
-    #     "2: rotate-180\n"    
-    #     "3: clockwise\n" 
-    #     "4: horizontal-flip\n"
-    #     "5: upper-right-diagonal\n"
-    #     "6: vertical-flip\n"
-    #     "7: upper-left-diagonal\n"
-    #     )
+
     args = parser.parse_args()
     loglevel = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(format='[%(levelname)s] %(message)s', level=loglevel)
@@ -61,9 +52,9 @@ def main():
     # Hack: delay camera frame grabbing to reduce lag
     if args.input is None:
         if args.mot:
-            delay = 1 / 25 # main processing loop time
+            delay = 1 / 30 # main processing loop time
         if args.gui:
-            delay += 0.025 if args.mot else 0.055 # gui time
+            delay += 0.025 if args.mot else 0.055 # gui latency
     stream = VideoIO(PROC_SIZE, args.input, args.output, delay)
 
     sock = None
