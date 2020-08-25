@@ -23,7 +23,7 @@ The tracker has an input size of 1280 x 720. Note that larger videos will be res
 - Numba
 - Scipy
 - PyCuda
-- TensorRT (>=6)
+- TensorRT (>=7)
 - cython-bbox
 
 #### Install for Jetson (TX2/Xavier NX/Xavier)
