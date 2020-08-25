@@ -9,11 +9,11 @@ Fast MOT is a real-time implementation of Deep Sort. The original Deep Sort cann
   - [x] Optical flow tracking and camera motion compensation
   - [ ] Replace SSD with YOLO V4
   
-Fast MOT has an input size of 1280 x 720. Note that larger videos will be resized, which results in a drop in frame rate. It also assumes medium/small targets and cannot detect up close targets properly due to tiling. This repo uses a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but retraining OSNet on other classes can improve accuracy.  Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 35 FPS depending on crowd density.
+Fast MOT has an input size of 1280 x 720. Note that larger videos will be resized, which results in a drop in frame rate. It also assumes medium/small targets and cannot detect up close targets properly due to tiling. This repo uses a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but retraining OSNet on other classes can improve accuracy.  Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The frame rate can reach 15 - 30 FPS depending on crowd density.
 
-| # targets  | FPS |
+| # targets  | FPS on Xavier NX |
 | ------------- | ------------- |
-| 0 - 20  | >=30  |
+| 0 - 20  | 30  |
 | 20 - 30  | 23  |
 | 30 - 50  | 15  |
 
