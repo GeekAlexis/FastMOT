@@ -3,8 +3,8 @@
 </p>
 
 Real-time implementation of Deep Sort
-  - [x] TensorRT optimized SSD detector
-  - [x] Improve small object detection with tiling
+  - [x] TensorRT optimized SSD
+  - [x] Tiling for small object detection
   - [x] OSNet for accurate REID
   - [x] Optical flow tracking and camera motion compensation
   - [ ] Replace SSD with YOLO V4
