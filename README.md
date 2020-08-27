@@ -3,7 +3,7 @@
 </p>
 
 Real-time implementation of Deep Sort
-  - [x] Efficient SSD detector
+  - [x] TensorRT optimized SSD detector
   - [x] Improve small object detection with tiling
   - [x] OSNet for accurate REID
   - [x] Optical flow tracking and camera motion compensation
