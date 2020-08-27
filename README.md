@@ -7,7 +7,7 @@ Real-time implementation of Deep Sort
   - [x] Tiling for small object detection
   - [x] OSNet for accurate REID
   - [x] Optical flow tracking & camera motion compensation
-  - [ ] Replace SSD with YOLO V4
+  - [ ] Add YOLO V4
   
 The tracker has an input size of 1280 x 720. Note that larger videos will be resized, which results in a slight drop in frame rate. Because of tiling, the tracker assumes medium/small targets and cannot detect up close targets properly. I used a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but it is not recommended without further training. Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The tracker can achieve up to 30 FPS depending on crowd density. The original Deep Sort cannot run in real-time on edge devices.
 
