@@ -1,8 +1,9 @@
+# Fast and accurate multiple object tracking
+
 <p align="center">
   <img src="assets/demo.gif" width="720" height="405" />
 </p>
 
-Fast and accurate multiple object tracking
   - [x] TensorRT optimized SSD
   - [x] Tiling for small object detection
   - [x] OSNet for accurate REID
