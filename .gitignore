@@ -130,7 +130,7 @@ dmypy.json
 ._.DS_Store
 
 # TensorRT stuff
-*.bin
+*.trt
 *calib_cache
 
 # video files

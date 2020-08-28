@@ -7,8 +7,8 @@ import errno
 import time
 import cv2
 
-from fast_mot import VideoIO
-from fast_mot import Mot
+from fastmot import VideoIO
+from fastmot import Mot
 
 
 """
