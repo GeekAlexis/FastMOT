@@ -1,4 +1,5 @@
-# Fast multiple object tracking (Fast MOT)
+# Fast MOT
+Fast and accurate multiple object tracking
 
 <p align="center">
   <img src="assets/demo.gif" width="720" height="405" />
