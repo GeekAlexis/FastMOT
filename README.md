@@ -1,16 +1,20 @@
-## Fast and accurate multiple object tracking
+# Fast multiple object tracking (Fast MOT)
 
 <p align="center">
   <img src="assets/demo.gif" width="720" height="405" />
 </p>
 
+## Description
   - [x] TensorRT optimized SSD
   - [x] Tiling for small object detection
   - [x] OSNet for accurate REID
   - [x] Optical flow tracking & camera motion compensation
   - [ ] Add YOLO V4
   
-The tracker follows an approach similiar to Deep Sort but runs a lot faster. It has an input size of 1280 x 720. Note that larger videos will be resized, which results in a slight drop in frame rate. Because of tiling, the tracker assumes medium/small targets and cannot detect up close targets properly. I used a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but it is not recommended without further training. Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The tracker can achieve up to 30 FPS depending on crowd density. Other Deep Sort trackers cannot run in real-time on edge devices.
+The tracker follows an approach similiar to Deep Sort but runs a lot faster. It has an input size of 1280 x 720. Note that larger videos will be resized, which results in a slight drop in frame rate. Because of tiling, the tracker assumes medium/small targets and cannot detect up close targets properly. I used a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but it is not recommended without further training. 
+
+## Performance
+Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The tracker can achieve up to 30 FPS depending on crowd density. Other Deep Sort trackers cannot run in real-time on edge devices.
 
 | # targets  | FPS on Xavier NX |
 | ------------- | ------------- |
@@ -18,7 +22,7 @@ The tracker follows an approach similiar to Deep Sort but runs a lot faster. It 
 | 20 - 30  | 23  |
 | 30 - 50  | 15  |
 
-### Dependencies
+## Dependencies
 - OpenCV (With Gstreamer)
 - Numpy
 - Numba
@@ -27,12 +31,12 @@ The tracker follows an approach similiar to Deep Sort but runs a lot faster. It 
 - TensorRT (>=7)
 - cython-bbox
 
-#### Install for Jetson (TX2/Xavier NX/Xavier)
+### Install for Jetson (TX2/Xavier NX/Xavier)
 Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack)    
   ```
   $ sh install_jetson.sh
   ```
-#### Install for x86 (Not tested)
+### Install for x86 (Not tested)
 Make sure to have CUDA and TensorRT installed and build OpenCV from source with Gstreamer
   ```
   $ pip3 install -r requirements.txt
@@ -40,7 +44,7 @@ Make sure to have CUDA and TensorRT installed and build OpenCV from source with 
   $ sh prepare_calib_data.sh
   ```
 
-### Run tracking
+## Usage
 - With camera (/dev/video0): 
   ```
   $ python3 app.py --mot
