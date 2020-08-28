@@ -4,11 +4,11 @@ Fast and accurate multiple object tracking
 <img src="assets/demo.gif" width="720" height="405" />
 
 ## Description
-  - [x] TensorRT optimized SSD
+  - [x] TensorRT SSD
   - [x] Tiling for small object detection
-  - [x] OSNet for accurate REID
+  - [x] OSNet ReID model
   - [x] Optical flow tracking & camera motion compensation
-  - [ ] TensorRT optimized YOLO V4
+  - [ ] TensorRT YOLO V4
   
 The tracker follows an approach similiar to Deep Sort but runs a lot faster. It has an input size of 1280 x 720. Note that larger videos will be resized, which results in a slight drop in frame rate. Because of tiling, the tracker assumes medium/small targets and cannot detect up close targets properly. I used a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but it is not recommended without training the OSNet model on these classes. 
 
