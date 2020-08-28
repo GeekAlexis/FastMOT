@@ -10,7 +10,7 @@ Fast and accurate multiple object tracking
   - [x] Optical flow tracking & camera motion compensation
   - [ ] Add YOLO V4
   
-The tracker follows an approach similiar to Deep Sort but runs a lot faster. It has an input size of 1280 x 720. Note that larger videos will be resized, which results in a slight drop in frame rate. Because of tiling, the tracker assumes medium/small targets and cannot detect up close targets properly. I used a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but it is not recommended without further training. 
+The tracker follows an approach similiar to Deep Sort but runs a lot faster. It has an input size of 1280 x 720. Note that larger videos will be resized, which results in a slight drop in frame rate. Because of tiling, the tracker assumes medium/small targets and cannot detect up close targets properly. I used a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but it is not recommended without training the OSNet model on these classes. 
 
 ## Performance
 Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The tracker can achieve up to 30 FPS depending on crowd density. Other Deep Sort trackers cannot run in real-time on edge devices. The frame rate on a Desktop GPU will be even higher.
