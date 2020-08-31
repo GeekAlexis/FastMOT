@@ -89,13 +89,13 @@ def multi_crop(img, tlbrs):
     return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1] for i in range(len(_tlbrs))]
 
 
-@nb.njit(fastmath=True, cache=True)
-def iou(tlbr1, tlbr2):
-    tlbr = intersection(tlbr1, tlbr2)
-    if tlbr is None:
-        return 0
-    area_intersection = area(tlbr)
-    return area_intersection / (area(tlbr1) + area(tlbr2) - area_intersection)
+# @nb.njit(fastmath=True, cache=True)
+# def iou(tlbr1, tlbr2):
+#     tlbr = intersection(tlbr1, tlbr2)
+#     if tlbr is None:
+#         return 0
+#     area_intersection = area(tlbr)
+#     return area_intersection / (area(tlbr1) + area(tlbr2) - area_intersection)
     
 
 @nb.njit(fastmath=True, cache=True)
@@ -162,3 +162,42 @@ def perspective_transform(pts, m):
 #     area_intersection = np.maximum(0, overlap_xmax - overlap_xmin + 1) * \
 #         np.maximum(0, overlap_ymax - overlap_ymin + 1)
 #     return area_intersection / (area_bbox + area_candidates - area_intersection)
+
+@nb.njit(fastmath=True, cache=True)
+def nms(bboxes, scores, nms_thresh):
+    """
+    Apply the Non-Maximum Suppression (NMS) algorithm on the bounding boxes (tlwh) with their
+    confidence scores and return an array with the indexes of the bounding boxes we want to
+    keep
+    """
+    areas = bboxes[:, 2] * bboxes[:, 3]
+    ordered = scores.argsort()[::-1]
+
+    tl = bboxes[:, :2]
+    br = bboxes[:, :2] + bboxes[:, 2:] - 1
+
+    keep = []
+    while ordered.size > 0:
+        # index of the current element
+        i = ordered[0]
+        keep.append(i)
+        
+        # compute IOU
+        candidate_tl = tl[ordered[1:]]
+        candidate_br = br[ordered[1:]]
+
+        overlap_xmin = np.maximum(tl[i, 0], candidate_tl[:, 0])
+        overlap_ymin = np.maximum(tl[i, 1], candidate_tl[:, 1])
+        overlap_xmax = np.minimum(br[i, 0], candidate_br[:, 0])
+        overlap_ymax = np.minimum(br[i, 1], candidate_br[:, 1])
+        
+        width = np.maximum(0, overlap_xmax - overlap_xmin + 1)
+        height = np.maximum(0, overlap_ymax - overlap_ymin + 1)
+        area_intersection = width * height
+        area_union = areas[i] + areas[ordered[1:]] - area_intersection
+        iou = area_intersection / area_union
+
+        idx = np.where(iou <= nms_thresh)[0]
+        ordered = ordered[idx + 1]
+    keep = np.asarray(keep)
+    return keep

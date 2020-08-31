@@ -4,7 +4,7 @@ import json
 import cv2
 import time
 
-from .detector import ObjectDetector
+from .detector import ObjectDetector, YoloDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import ConfigDecoder
@@ -20,10 +20,11 @@ class Mot:
         self.enable_drawing = enable_drawing
         self.verbose = verbose
         self.detector_frame_skip = Mot.config['detector_frame_skip']
-        self.classes = Mot.config['classes']
+        self.class_ids = Mot.config['class_ids']
 
         logging.info('Loading detector model...')
-        self.detector = ObjectDetector(self.size, self.classes)
+        # self.detector = ObjectDetector(self.size, self.class_ids)
+        self.detector = YoloDetector(self.size, self.class_ids)
         logging.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor()
         self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric)
@@ -94,6 +95,6 @@ class Mot:
         if debug:
             [draw_det(frame, det) for det in detections]
             # draw_bkg_flow(frame, self.tracker)
-            if self.frame_count % self.detector_frame_skip == 0:
-                draw_tile(frame, self.detector)
+            # if self.frame_count % self.detector_frame_skip == 0:
+            #     draw_tile(frame, self.detector)
         cv2.putText(frame, f'visible: {count}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

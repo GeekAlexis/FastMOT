@@ -7,8 +7,8 @@
     },
     "Mot": {
         "detector_frame_skip": 5,
-        "classes": [1],
-        "#classes": [1, 3, 6, 8]
+        "class_ids": [1],
+        "#class_ids": [1, 3, 6, 8]
     },
     "MultiTracker": {
         "max_age": 10,
@@ -18,7 +18,7 @@
         "min_iou_cost": 0.3,
         "dup_iou_thresh": 0.8,
         "max_feat_overlap": 0.15,
-        "min_register_conf": 0.6,
+        "min_register_conf": 0.4,
         "n_init": 3
     },
     "KalmanFilter": {
@@ -39,6 +39,11 @@
         "conf_thresh": 0.5,
         "max_area": 70000,
         "merge_iou_thresh": 0.3
+    },
+    "YoloDetector": {
+        "conf_thresh": 0.3,
+        "max_area": 70000,
+        "nms_thresh": 0.5
     },
     "Flow": {
         "bkg_feat_scale_factor": [0.1, 0.1],

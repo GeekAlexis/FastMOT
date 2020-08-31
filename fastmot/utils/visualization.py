@@ -22,7 +22,8 @@ def draw_trk(frame, trk, draw_flow=False):
 
 
 def draw_det(frame, det):
-    _draw_bbox(frame, det.tlbr, f'{det.conf:.2f}', COLORS[det.tile_id], 0)
+    # _draw_bbox(frame, det.tlbr, f'{det.conf:.2f}', COLORS[det.tile_id], 0)
+    _draw_bbox(frame, det.tlbr, f'{det.conf:.2f}', COLORS[det.label % len(COLORS)], 0)
 
 
 def draw_tile(frame, detector):

@@ -6,6 +6,7 @@ from cython_bbox import bbox_overlaps
 import numpy as np
 import numba as nb
 from numba.typed import Dict
+import ctypes
 import cv2
 import time
 
@@ -14,24 +15,24 @@ from .utils import ConfigDecoder, InferenceBackend
 from .utils.rect import *
 
 
-DET_DTYPE = np.dtype([
-    ('tlbr', float, 4), 
-    ('label', int), 
-    ('conf', float), 
-    ('tile_id', int)], 
-    align=True
-)
+# DET_DTYPE = np.dtype([
+#     ('tlbr', float, 4), 
+#     ('label', int), 
+#     ('conf', float), 
+#     ('tile_id', int)], 
+#     align=True
+# )
 
 
 class ObjectDetector:
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['ObjectDetector']
 
-    def __init__(self, size, classes):
+    def __init__(self, size, class_ids):
         # initialize parameters
         self.size = size
         self.label_mask = np.zeros(len(COCO_LABELS), dtype=bool)
-        self.label_mask[classes] = True
+        self.label_mask[class_ids] = True
 
         self.tile_overlap = ObjectDetector.config['tile_overlap']
         self.tiling_grid = ObjectDetector.config['tiling_grid']
@@ -64,11 +65,11 @@ class ObjectDetector:
         tic = time.perf_counter()
         detections = self._filter_dets(det_out, self.tiles, self.model.TOPK, 
             self.model.OUTPUT_LAYOUT, self.label_mask, self.max_area, self.conf_thresh, self.scale_factor)
-        logging.debug('loop over det out %f', time.perf_counter() - tic)
+        logging.debug('filter dets %f', time.perf_counter() - tic)
 
         tic = time.perf_counter()
         detections = self._merge_dets(detections)
-        logging.debug('merge det %f', time.perf_counter() - tic)
+        logging.debug('merge dets %f', time.perf_counter() - tic)
         return detections
 
     def _generate_tiles(self):
@@ -111,6 +112,7 @@ class ObjectDetector:
     @nb.njit(fastmath=True, cache=True)
     def _filter_dets(det_out, tiles, topk, layout, label_mask, max_area, thresh, scale_factor):
         detections = []
+        # tile_ids = []
         for tile_idx in range(len(tiles)):
             tile = tiles[tile_idx]
             size = get_size(tile)
@@ -127,6 +129,7 @@ class ObjectDetector:
                     tlbr = as_rect(np.append(tl, br))
                     if area(tlbr) <= max_area:
                         detections.append((tlbr, label, conf, tile_idx))
+                        # tile_ids.append(tile_idx)
         return detections
 
     @staticmethod
@@ -165,3 +168,108 @@ class ObjectDetector:
                     keep.discard(k)
         keep = np.asarray(list(keep))
         return dets[keep]
+
+
+DET_DTYPE = np.dtype([
+    ('tlbr', float, 4), 
+    ('label', int), 
+    ('conf', float)], 
+    align=True
+)
+
+
+class YoloDetector:
+    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
+        config = json.load(config_file, cls=ConfigDecoder)['YoloDetector']
+
+    try:
+        ctypes.cdll.LoadLibrary(Path(__file__).parent / 'plugins' / 'libyolo_layer.so')
+    except OSError as err:
+        raise RuntimeError('ERROR: failed to load libyolo_layer.so.  '
+                        'Did you forget to do a "make" in the "plugins" '
+                        'subdirectory?') from err
+
+    def __init__(self, size, class_ids):
+        # initialize parameters
+        self.size = size
+        self.class_ids = coco2yolo(class_ids)
+
+        self.conf_thresh = YoloDetector.config['conf_thresh']
+        self.max_area = YoloDetector.config['max_area']
+        self.nms_thresh = YoloDetector.config['nms_thresh']
+        
+        self.model = YoloV4
+        self.batch_size = 1
+        self.backend = InferenceBackend(self.model, self.batch_size)
+
+    def __call__(self, frame):
+        self.detect_async(frame)
+        return self.postprocess()
+
+    def detect_async(self, frame):
+        tic = time.perf_counter()
+        frame = cv2.resize(frame, self.model.INPUT_SHAPE[:0:-1])
+        self._preprocess(frame, self.backend.input.host)
+
+        logging.debug('img pre %f', time.perf_counter() - tic)
+        self.backend.infer_async()
+
+    def postprocess(self):
+        det_out = self.backend.synchronize()
+        det_out = np.concatenate(det_out).reshape(-1, 7)
+
+        tic = time.perf_counter()
+        detections = self._filter_dets(det_out, self.size, self.class_ids, self.conf_thresh, self.nms_thresh, self.max_area)
+        detections = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
+        logging.debug('filter dets %f', time.perf_counter() - tic)
+        return detections
+    
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _preprocess(frame, out):
+        # BGR to RGB
+        rgb = frame[..., ::-1]
+        # HWC -> CHW
+        chw = rgb.transpose(2, 0, 1)
+        # Normalize to [0, 1] interval
+        normalized = chw / 255.
+        out[:] = normalized.ravel()
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _filter_dets(det_out, size, class_ids, conf_thresh, nms_thresh, max_area):
+        """
+        det_out: a list of 3 tensors, where each tensor
+                    contains a multiple of 7 float32 numbers in
+                    the order of [x, y, w, h, box_confidence, class_id, class_prob]
+        """
+        size = np.asarray(size)
+
+        # drop detections with score lower than conf_thresh
+        scores = det_out[:, 4] * det_out[:, 6]
+        keep = np.where(scores >= conf_thresh)[0]
+        det_out = det_out[keep]
+
+        # scale to pixel values
+        det_out[:, :2] *= size
+        det_out[:, 2:4] *= size
+
+        keep = []
+        for class_id in class_ids:
+            class_idx = np.where(det_out[:, 5] == class_id)[0]
+            class_dets = det_out[class_idx]
+            class_keep = nms(class_dets[:, :4], class_dets[:, 4], nms_thresh)
+            keep.extend(class_idx[class_keep])
+        keep = np.asarray(keep)
+        nms_dets = det_out[keep]
+        
+        detections = []
+        for i in range(len(nms_dets)):
+            tlbr = to_tlbr(nms_dets[i, :4])
+            tlbr = np.maximum(tlbr, 0)
+            tlbr = np.minimum(tlbr, np.append(size, size))
+            label = YOLO2COCO[int(nms_dets[i, 5])]
+            conf = nms_dets[i, 4] * nms_dets[i, 6]
+            if area(tlbr) <= max_area:
+                detections.append((tlbr, label, conf))
+        return detections

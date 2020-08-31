@@ -1,6 +1,7 @@
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
+import ctypes
 
 
 class HostDeviceMem:
@@ -67,15 +68,6 @@ class InferenceBackend:
 
     def infer_async(self):
         cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
-        if self.engine.has_implicit_batch_dimension:
-            self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
-        else:
-            self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
-        for out in self.outputs:
-            cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
-
-    def infer_mixed(self):
-        cuda.memcpy_htod(self.input.device, self.input.host)
         if self.engine.has_implicit_batch_dimension:
             self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
         else:
