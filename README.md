@@ -13,7 +13,7 @@ Fast and accurate multiple object tracking
 The tracker combines Deep SORT with optical flow and runs in real-time due to TensorRT and Numba optimizations. It has an input size of 1280 x 720. Because of tiling, the tracker assumes medium/small targets and shouldn't be used to detect up close ones. I used a pretrained OSNet from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking targets other than pedestrians will work but it is not recommended without further training the OSNet model on these classes. 
 
 ## Performance
-Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The tracker can achieve up to 30 FPS depending on crowd density. Common Deep SORT trackers cannot run in real-time on edge devices. The frame rate on a Desktop GPU will be even higher.
+Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The tracker can achieve up to 30 FPS depending on crowd density. The frame rate on a Desktop GPU will be even higher. Plain Deep SORT cannot run in real-time on any edge device. 
 
 | # targets  | FPS on Xavier NX |
 | ------------- | ------------- |
