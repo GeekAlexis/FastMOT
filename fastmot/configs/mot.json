@@ -18,7 +18,8 @@
         "min_iou_cost": 0.3,
         "dup_iou_thresh": 0.8,
         "max_feat_overlap": 0.15,
-        "min_register_conf": 0.4,
+        "min_register_conf": 0.6,
+        "lost_buf_size": 50,
         "n_init": 3
     },
     "KalmanFilter": {

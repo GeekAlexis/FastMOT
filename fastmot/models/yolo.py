@@ -10,7 +10,11 @@ class Yolo:
     OUTPUT_LAYOUT = None
 
     @classmethod
-    def add_plugin(cls, graph):
+    def add_plugin(cls, network):
+        raise NotImplementedError
+
+    @classmethod
+    def build_engine(cls, trt_logger, batch_size):
         raise NotImplementedError
 
 

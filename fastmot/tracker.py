@@ -128,10 +128,10 @@ class MultiTracker:
         cost = self._iou_cost(candidates, u_detections)
         matches_b, u_trk_ids_b, u_det_ids = self._linear_assignment(cost, candidates, u_det_ids, maximize=True)
 
-        # 3rd association with lost tracks
-        lost_ids = list(self.lost.keys())
-        cost = self._feature_distance(lost_ids, embeddings[u_det_ids])
-        matches_c, _, u_det_ids = self._linear_assignment(cost, lost_ids, u_det_ids)
+        # TODO: 3rd association with lost tracks
+        # lost_ids = list(self.lost.keys())
+        # cost = self._feature_distance(lost_ids, embeddings[u_det_ids])
+        # matches_c, _, u_det_ids = self._linear_assignment(cost, lost_ids, u_det_ids)
 
         matches = matches_a + matches_b
         u_trk_ids = u_trk_ids_a + u_trk_ids_b
@@ -155,7 +155,6 @@ class MultiTracker:
                 if not track.confirmed:
                     track.confirmed = True
                     logging.info('Found: %s', track)
-                    # TODO: long term REID
                 updated.append(trk_id)
             else:
                 logging.info('Out: %s', track)
@@ -199,7 +198,7 @@ class MultiTracker:
         if len(trk_ids) == 0 or len(detections) == 0:
             return np.empty((len(trk_ids), len(detections)))
 
-        cost = self._feature_distance(embeddings, trk_ids)
+        cost = self._feature_distance(trk_ids, embeddings)
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
             motion_dist = self.kf.motion_distance(*track.state, detections.tlbr)
@@ -244,8 +243,7 @@ class MultiTracker:
         return matches, unmatched_trk_ids, unmatched_det_ids
 
     def _feature_distance(self, trk_ids, embeddings):
-        tracks = self.tracks if trk_ids[0] in self.tracks else self.lost
-        features = [tracks[trk_id].smooth_feature for trk_id in trk_ids]
+        features = [self.tracks[trk_id].smooth_feature for trk_id in trk_ids]
         feature_dist = cdist(features, embeddings, self.metric)
         return feature_dist
 
@@ -298,14 +296,6 @@ class MultiTracker:
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
     def _gate_ious(ious, min_iou, trk_labels, det_labels):
-        for i in nb.prange(len(ious)):
-            gate = (ious[i] < min_iou) | (trk_labels[i] != det_labels)
-            ious[i][gate] = 0
-        return ious
-
-    @staticmethod
-    @nb.njit(parallel=True, fastmath=True, cache=True)
-    def _gate_feature_cost(cost, max_cost, trk_labels, det_labels):
         for i in nb.prange(len(ious)):
             gate = (ious[i] < min_iou) | (trk_labels[i] != det_labels)
             ious[i][gate] = 0
