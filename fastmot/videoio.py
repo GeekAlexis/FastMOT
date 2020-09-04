@@ -57,6 +57,8 @@ class VideoIO:
             raise RuntimeError("Unable to read video stream")
         self.frame_queue.append(frame)
         logging.info('%dx%d stream @ %d FPS', *self.vid_size, self.fps)
+        if self.vid_size != self.size:
+            logging.warning('Expect %dx%d, resizing will lower frame rate', *self.size)
         
         if self.output_path is not None:
             assert Path(self.output_path).suffix == '.mp4', 'Only mp4 format is supported'

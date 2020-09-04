@@ -15,13 +15,13 @@ from .utils import ConfigDecoder, InferenceBackend
 from .utils.rect import *
 
 
-# DET_DTYPE = np.dtype([
-#     ('tlbr', float, 4), 
-#     ('label', int), 
-#     ('conf', float), 
-#     ('tile_id', int)], 
-#     align=True
-# )
+DET_DTYPE = np.dtype([
+    ('tlbr', float, 4), 
+    ('label', int), 
+    ('conf', float), 
+    ('tile_id', int)], 
+    align=True
+)
 
 
 class ObjectDetector:
@@ -170,12 +170,12 @@ class ObjectDetector:
         return dets[keep]
 
 
-DET_DTYPE = np.dtype([
-    ('tlbr', float, 4), 
-    ('label', int), 
-    ('conf', float)], 
-    align=True
-)
+# DET_DTYPE = np.dtype([
+#     ('tlbr', float, 4), 
+#     ('label', int), 
+#     ('conf', float)], 
+#     align=True
+# )
 
 
 class YoloDetector:

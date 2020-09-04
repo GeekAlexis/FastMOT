@@ -23,8 +23,8 @@ class Mot:
         self.class_ids = Mot.config['class_ids']
 
         logging.info('Loading detector model...')
-        # self.detector = ObjectDetector(self.size, self.class_ids)
-        self.detector = YoloDetector(self.size, self.class_ids)
+        self.detector = ObjectDetector(self.size, self.class_ids)
+        # self.detector = YoloDetector(self.size, self.class_ids)
         logging.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor()
         self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric)
@@ -37,6 +37,10 @@ class Mot:
         self.embedding_time = 0
         self.match_time = 0
         self.track_time = 0
+    
+    @property
+    def tracks(self):
+        return self.tracker.tracks
     
     def run(self, frame):
         detections = []
@@ -88,7 +92,7 @@ class Mot:
 
     def _draw(self, frame, detections, debug=False):
         count = 0
-        for track in self.tracker.tracks.values():
+        for track in self.tracks.values():
             if track.confirmed and track.active:
                 draw_trk(frame, track, draw_flow=debug)
                 count += 1

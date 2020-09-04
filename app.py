@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from enum import Enum
 import argparse
 import logging
 import socket
@@ -18,9 +19,9 @@ MSG_LENGTH = 2  # 2-byte short
 PROC_SIZE = (1280, 720)
 
 
-class MsgType:
+class MsgType(Enum):
     """
-    enumeration type and function for socket messages
+    enumeration type for socket messages
     """
     START, STOP, TERMINATE = (i for i in range(3))
 
@@ -30,7 +31,7 @@ def serialize_to_msg(frame_num, trk_id, tl, w, h):
 
 
 def parse_from_msg(msg):
-    return struct.unpack('!H', msg)[0]
+    return MsgType(struct.unpack('!H', msg)[0])
 
 
 def main():
@@ -40,8 +41,8 @@ def main():
     parser.add_argument('-m', '--mot', action='store_true', help='Multi-object tracking')
     parser.add_argument('-s', '--socket', action='store_true', help='Output to a unix socket')
     parser.add_argument('--addr', default='/tmp/fast_mot_socket', help='Path to unix socket')
-    parser.add_argument('-l', '--log', action='store_true', help='Output a MOT format log')
-    parser.add_argument('-g', '--gui', action='store_true', help='Visiualization')
+    parser.add_argument('-l', '--log', action='store_true', help='Output a MOT Challenge log')
+    parser.add_argument('-g', '--gui', action='store_true', help='Visualization')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output for debugging')
 
     args = parser.parse_args()
@@ -78,7 +79,7 @@ def main():
     if args.log:
         if not args.mot:
             raise RuntimeError('There is nothing to output')
-        mot_log = open('MOT_log.txt', 'w')
+        mot_log = open('mot_log.txt', 'w')
     if args.gui:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
         
@@ -118,7 +119,7 @@ def main():
             if enable_mot:
                 mot.run(frame)
                 if args.log or args.socket:
-                    for trk_id, track in mot.tracker.tracks.items():
+                    for trk_id, track in mot.tracks.items():
                         tl = track.bbox.tl / PROC_SIZE * stream.vid_size
                         br = track.bbox.br / PROC_SIZE * stream.vid_size
                         w, h = br - tl + 1

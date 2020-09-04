@@ -5,6 +5,7 @@ import json
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 from cython_bbox import bbox_overlaps
+from collections import OrderedDict
 import numpy as np
 import numba as nb
 import time
@@ -35,10 +36,12 @@ class MultiTracker:
         self.dup_iou_thresh = MultiTracker.config['dup_iou_thresh']
         self.max_feat_overlap = MultiTracker.config['max_feat_overlap']
         self.min_register_conf = MultiTracker.config['min_register_conf']
+        self.lost_buf_size = MultiTracker.config['lost_buf_size']
         self.n_init = MultiTracker.config['n_init']
         
         self.next_id = 1
         self.tracks = {}
+        self.lost = OrderedDict()
         self.kf = KalmanFilter(dt, self.n_init)
         self.flow = Flow(self.size, estimate_camera_motion=True)
         self.frame_rect = to_tlbr((0, 0, *self.size))
@@ -82,7 +85,8 @@ class MultiTracker:
                     track.tlbr = next_tlbr
                 else:
                     logging.info('Out: %s', track)
-                    del self.tracks[trk_id]
+                    self._mark_lost(trk_id)
+                    # del self.tracks[trk_id]
 
     def track(self, frame):
         tic = time.perf_counter()
@@ -121,8 +125,13 @@ class MultiTracker:
         candidates = unconfirmed + [trk_id for trk_id in u_trk_ids_a if self.tracks[trk_id].active]
         u_trk_ids_a = [trk_id for trk_id in u_trk_ids_a if not self.tracks[trk_id].active]
         u_detections = detections[u_det_ids]
-        ious = self._iou_cost(candidates, u_detections)
-        matches_b, u_trk_ids_b, u_det_ids = self._linear_assignment(ious, candidates, u_det_ids, maximize=True)
+        cost = self._iou_cost(candidates, u_detections)
+        matches_b, u_trk_ids_b, u_det_ids = self._linear_assignment(cost, candidates, u_det_ids, maximize=True)
+
+        # 3rd association with lost tracks
+        lost_ids = list(self.lost.keys())
+        cost = self._feature_distance(lost_ids, embeddings[u_det_ids])
+        matches_c, _, u_det_ids = self._linear_assignment(cost, lost_ids, u_det_ids)
 
         matches = matches_a + matches_b
         u_trk_ids = u_trk_ids_a + u_trk_ids_b
@@ -146,10 +155,12 @@ class MultiTracker:
                 if not track.confirmed:
                     track.confirmed = True
                     logging.info('Found: %s', track)
+                    # TODO: long term REID
                 updated.append(trk_id)
             else:
                 logging.info('Out: %s', track)
-                del self.tracks[trk_id]
+                self._mark_lost(trk_id)
+                # del self.tracks[trk_id]
 
         # clean up lost tracks
         for trk_id in u_trk_ids:
@@ -161,12 +172,12 @@ class MultiTracker:
             track.age += 1
             if track.age > self.max_age:
                 logging.info('Lost: %s', track)
-                del self.tracks[trk_id]
+                self._mark_lost(trk_id)
+                # del self.tracks[trk_id]
             else:
                 aged.append(trk_id)
 
         # register new detections
-        # TODO: long term REID
         for det_id in u_det_ids:
             det = detections[det_id]
             if det.conf > self.min_register_conf:
@@ -178,11 +189,17 @@ class MultiTracker:
 
         self._remove_duplicate(updated, aged)
 
+    def _mark_lost(self, trk_id):
+        self.lost[trk_id] = self.tracks[trk_id]
+        if len(self.lost) > self.lost_buf_size:
+            self.lost.popitem(last=False)
+        del self.tracks[trk_id]
+
     def _matching_cost(self, trk_ids, detections, embeddings):
         if len(trk_ids) == 0 or len(detections) == 0:
             return np.empty((len(trk_ids), len(detections)))
 
-        cost = self._feature_distance(trk_ids, embeddings)
+        cost = self._feature_distance(embeddings, trk_ids)
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
             motion_dist = self.kf.motion_distance(*track.state, detections.tlbr)
@@ -227,7 +244,8 @@ class MultiTracker:
         return matches, unmatched_trk_ids, unmatched_det_ids
 
     def _feature_distance(self, trk_ids, embeddings):
-        features = [self.tracks[trk_id].smooth_feature for trk_id in trk_ids]
+        tracks = self.tracks if trk_ids[0] in self.tracks else self.lost
+        features = [tracks[trk_id].smooth_feature for trk_id in trk_ids]
         feature_dist = cdist(features, embeddings, self.metric)
         return feature_dist
 
@@ -280,6 +298,14 @@ class MultiTracker:
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
     def _gate_ious(ious, min_iou, trk_labels, det_labels):
+        for i in nb.prange(len(ious)):
+            gate = (ious[i] < min_iou) | (trk_labels[i] != det_labels)
+            ious[i][gate] = 0
+        return ious
+
+    @staticmethod
+    @nb.njit(parallel=True, fastmath=True, cache=True)
+    def _gate_feature_cost(cost, max_cost, trk_labels, det_labels):
         for i in nb.prange(len(ious)):
             gate = (ious[i] < min_iou) | (trk_labels[i] != det_labels)
             ious[i][gate] = 0
