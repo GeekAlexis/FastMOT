@@ -1,5 +1,5 @@
 # Fast MOT
-Fast and accurate multiple object tracking
+High performance multiple object tracking in Python
 
 <img src="assets/demo.gif" width="720" height="405" />
 
