@@ -39,7 +39,7 @@ Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidi
 Make sure to have CUDA and TensorRT installed and build OpenCV from source with Gstreamer
   ```
   $ pip3 install -r requirements.txt
-  $ cd fast_mot/models
+  $ cd fastmot/models
   $ sh prepare_calib_data.sh
   ```
 
