@@ -16,9 +16,10 @@
         "motion_weight": 0.04,
         "max_feature_cost": 0.85,
         "min_iou_cost": 0.3,
+        "max_reid_cost": 0.6,
         "dup_iou_thresh": 0.8,
         "max_feat_overlap": 0.15,
-        "min_register_conf": 0.6,
+        "min_register_conf": 0.55,
         "lost_buf_size": 50,
         "n_init": 3
     },
@@ -27,7 +28,7 @@
         "large_std_acc": [256, 650],
         "min_std_det": [4, 4],
         "min_std_flow": [4, 4],
-        "std_factor_det": [0.11, 0.11],
+        "std_factor_det": [0.1, 0.1],
         "std_factor_flow": [0.13, 0.13],
         "init_std_pos_factor": 20,
         "init_std_vel_factor": 15,
@@ -43,7 +44,7 @@
     },
     "YoloDetector": {
         "conf_thresh": 0.3,
-        "max_area": 70000,
+        "max_area": 700000,
         "nms_thresh": 0.5
     },
     "Flow": {

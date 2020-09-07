@@ -63,7 +63,7 @@ int recv_msg(int socket, Message *msg) {
 }
 
 int main(int argc, char *argv[]) {
-    const char SOCKET_PATH[] = "/tmp/guardian_socket";
+    const char SOCKET_PATH[] = "/tmp/fastmot_socket";
     unlink(SOCKET_PATH);
 
     Message msg;

@@ -24,6 +24,14 @@ DET_DTYPE = np.dtype([
 )
 
 
+# DET_DTYPE = np.dtype([
+#     ('tlbr', float, 4), 
+#     ('label', int), 
+#     ('conf', float)], 
+#     align=True
+# )
+
+
 class ObjectDetector:
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['ObjectDetector']
@@ -170,14 +178,6 @@ class ObjectDetector:
         return dets[keep]
 
 
-# DET_DTYPE = np.dtype([
-#     ('tlbr', float, 4), 
-#     ('label', int), 
-#     ('conf', float)], 
-#     align=True
-# )
-
-
 class YoloDetector:
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=ConfigDecoder)['YoloDetector']
@@ -271,5 +271,5 @@ class YoloDetector:
             label = YOLO2COCO[int(nms_dets[i, 5])]
             conf = nms_dets[i, 4] * nms_dets[i, 6]
             if area(tlbr) <= max_area:
-                detections.append((tlbr, label, conf))
+                detections.append((tlbr, label, conf, -1))
         return detections

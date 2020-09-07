@@ -29,7 +29,7 @@ def parse_from_msg(msg):
 
 MSG_LENGTH = 2
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-sock.connect('/tmp/guardian_socket')
+sock.connect('/tmp/fastmot_socket')
 sock.setblocking(False)
 buffer = b''
 

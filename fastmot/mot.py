@@ -39,8 +39,8 @@ class Mot:
         self.track_time = 0
     
     @property
-    def tracks(self):
-        return self.tracker.tracks
+    def visible_tracks(self):
+        return [track for track in self.tracker.tracks.values() if track.confirmed and track.active]
     
     def run(self, frame):
         detections = []
@@ -63,13 +63,13 @@ class Mot:
                 logging.debug('detect / flow %f', elapsed)
                 tic2 = time.perf_counter()
                 self.extractor.extract_async(frame, detections)
-                self.tracker.step_kalman_filter()
+                self.tracker.step_kalman_filter(self.frame_count)
                 embeddings = self.extractor.postprocess()
                 elapsed = time.perf_counter() - tic2
                 self.embedding_time += elapsed
                 logging.debug('embedding / kf %f', elapsed)
                 tic2 = time.perf_counter()
-                self.tracker.update(detections, embeddings)
+                self.tracker.update(self.frame_count, detections, embeddings)
                 elapsed = time.perf_counter() - tic2
                 self.match_time += elapsed
                 logging.debug('match %f', elapsed)
@@ -77,7 +77,7 @@ class Mot:
                 self.detector_frame_count += 1
             else:
                 tic = time.perf_counter()
-                self.tracker.track(frame)
+                self.tracker.track(self.frame_count, frame)
                 elapsed = time.perf_counter() - tic
                 self.track_time += elapsed
                 logging.debug('TRACK %f', elapsed)
@@ -91,14 +91,10 @@ class Mot:
         self.frame_count = 0
 
     def _draw(self, frame, detections, debug=False):
-        count = 0
-        for track in self.tracks.values():
-            if track.confirmed and track.active:
-                draw_trk(frame, track, draw_flow=debug)
-                count += 1
+        [draw_trk(frame, track, draw_flow=debug) for track in self.visible_tracks]
         if debug:
             [draw_det(frame, det) for det in detections]
             # draw_bkg_flow(frame, self.tracker)
             # if self.frame_count % self.detector_frame_skip == 0:
             #     draw_tile(frame, self.detector)
-        cv2.putText(frame, f'visible: {count}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
+        cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

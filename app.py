@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 from enum import Enum
 import argparse
 import logging
@@ -36,14 +37,13 @@ def parse_from_msg(msg):
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-i', '--input', help='Path to optional input video file')
-    parser.add_argument('-o', '--output', help='Path to optional output video file')
-    parser.add_argument('-m', '--mot', action='store_true', help='Multi-object tracking')
-    parser.add_argument('-s', '--socket', action='store_true', help='Output to a unix socket')
-    parser.add_argument('--addr', default='/tmp/fast_mot_socket', help='Path to unix socket')
-    parser.add_argument('-l', '--log', action='store_true', help='Output a MOT Challenge log')
-    parser.add_argument('-g', '--gui', action='store_true', help='Visualization')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output for debugging')
+    parser.add_argument('-m', '--mot', action='store_true', help='enable tracking')
+    parser.add_argument('-i', '--input', help='path to optional input video file')
+    parser.add_argument('-o', '--output', help='path to optional output video file')
+    parser.add_argument('-l', '--log', help='path to optional MOT Challenge log for output')
+    parser.add_argument('-s', '--socket', help='path to optional unix socket for output')
+    parser.add_argument('-g', '--gui', action='store_true', help='enable visualization')
+    parser.add_argument('-v', '--verbose', action='store_true', help='enable verbose output for debugging')
 
     args = parser.parse_args()
     loglevel = logging.DEBUG if args.verbose else logging.INFO
@@ -58,30 +58,30 @@ def main():
             delay += 0.025 if args.mot else 0.055 # gui latency
     stream = VideoIO(PROC_SIZE, args.input, args.output, delay)
 
-    sock = None
-    mot_log = None
     mot = None
+    sock = None
+    log = None
     enable_mot = False
-    elapsed_time = 0    
+    elapsed_time = 0
     gui_time = 0
 
     if args.mot:
         mot = Mot(PROC_SIZE, stream.capture_dt, args.gui or args.output, args.verbose)
         enable_mot = True
-    if args.socket:
+    if args.gui:
+        cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
+    if args.socket is not None:
         if not args.mot:
             raise RuntimeError('There is nothing to output')
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(args.addr)
+        sock.connect(args.socket)
         sock.setblocking(False)
         enable_mot = False
         buffer = b''
-    if args.log:
+    if args.log is not None:
         if not args.mot:
             raise RuntimeError('There is nothing to output')
-        mot_log = open('mot_log.txt', 'w')
-    if args.gui:
-        cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
+        log = open(args.log, 'w')
         
     logging.info('Starting video capture...')
     stream.start_capture()
@@ -92,7 +92,7 @@ def main():
             if frame is None:
                 break
 
-            if args.socket:
+            if args.socket is not None:
                 try:
                     buffer += sock.recv(MSG_LENGTH - len(buffer))
                 except OSError as err:
@@ -118,15 +118,15 @@ def main():
 
             if enable_mot:
                 mot.run(frame)
-                if args.log or args.socket:
-                    for trk_id, track in mot.tracks.items():
-                        tl = track.bbox.tl / PROC_SIZE * stream.vid_size
-                        br = track.bbox.br / PROC_SIZE * stream.vid_size
+                if args.log is not None or args.socket is not None:
+                    for track in mot.visible_tracks:
+                        tl = track.tlbr[:2] / PROC_SIZE * stream.vid_size
+                        br = track.tlbr[2:] / PROC_SIZE * stream.vid_size
                         w, h = br - tl + 1
-                        if args.log:
-                            mot_log.write(f'{mot.frame_count}, {trk_id}, {tl[0]}, {tl[1]}, {w}, {h}, -1, -1, -1, -1\n')
-                        else:
-                            sock.sendall(serialize_to_msg(mot.frame_count, trk_id, tl, w, h))
+                        if args.log is not None:
+                            log.write(f'{mot.frame_count},{track.trk_id},{tl[0]:.2f},{tl[1]:.2f},{w:.2f},{h:.2f},-1,-1,-1\n')
+                        if args.socket is not None:
+                            sock.sendall(serialize_to_msg(mot.frame_count, track.trk_id, tl, w, h))
 
             if args.gui:
                 tic2 = time.perf_counter()
@@ -147,11 +147,11 @@ def main():
         stream.release()
         if sock is not None:
             sock.close()
-        if mot_log is not None:
-            mot_log.close()
+        if log is not None:
+            log.close()
         cv2.destroyAllWindows()
     
-    if not args.socket and args.mot:
+    if args.socket is None and args.mot:
         avg_fps = round(mot.frame_count / elapsed_time)
         avg_trk_time = mot.track_time / (mot.frame_count - mot.detector_frame_count)
         avg_embedding_time = mot.embedding_time / mot.detector_frame_count

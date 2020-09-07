@@ -19,7 +19,7 @@ def convert_bytes_to_bbox(byte_arr):
 
 
 # delete socket path if it exists
-address = Path('/tmp/guardian_socket')
+address = Path('/tmp/fastmot_socket')
 if address.exists():
     address.unlink()
 
