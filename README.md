@@ -13,7 +13,7 @@ High performance multiple object tracking in Python
 Fast MOT is an end-to-end tracker that includes both detection and tracking. The tracker combines Deep SORT with optical flow and is optimized with TensorRT and Numba to run in real-time. It has an input size of 1280 x 720. Because of tiling, the tracker assumes medium/small targets and shouldn't be used to detect up close ones. I used a pretrained pedestrian OSNet model from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking objects other than pedestrians will work but it is not recommended without further training the OSNet model on these classes. 
 
 ## Performance
-| Dataset | Density | MOTA(SSD) | MOTA(public) | FPS |
+| Dataset | Density | MOTA (SSD) | MOTA (public) | FPS |
 | ------------- | ------------- | ------------- | ------------- | ------------- |
 | MOT17-13 | 5 - 20  | 19.8% | 38.5%  | 30 |
 | MOT17-04 | 20 - 40  | 43.8% | 73.7% | 23 |
@@ -39,16 +39,19 @@ Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidi
 Make sure to have CUDA and TensorRT installed and build OpenCV from source with Gstreamer
   ```
   $ pip3 install -r requirements.txt
+  ```
+Download VOC dataset for INT8 calibration
+  ```
   $ cd fastmot/models
   $ sh prepare_calib_data.sh
   ```
 
 ## Usage
-- camera (/dev/video0): 
+- Camera (/dev/video0): 
   ```
   $ python3 app.py --mot
   ```
-- video: 
+- Video: 
   ```
   $ python3 app.py --input video.mp4 --mot
   ```
