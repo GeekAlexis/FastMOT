@@ -16,7 +16,7 @@ Fast MOT is an end-to-end tracker that includes both detection and tracking. The
 Tracking is evaluated on the MOT17 dataset with Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to state-of-the-art trackers. However, pretrained SSD models are not accurate enough for pedestrian detection and I will train a YOLOV4 model to replace SSD if I have time. The tracker can achieve up to 30 FPS depending on crowd density. The frame rate on a Desktop GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
 
 | Dataset | # targets  | MOTA (SSD) | MOTA (public) | FPS |
-| ------------- | ------------- | ------------- |
+| ------------- | ------------- | ------------- | ------------- | ------------- |
 | MOT17-13 | 5 - 20  | 19.8 | 38.5  | 30  |
 | MOT17-04 | 20 - 40  | 43.8 | 73.7 | 23  |
 | MOT17-03 | 30 - 60  | - | - | 15  |
