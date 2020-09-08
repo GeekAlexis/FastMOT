@@ -15,7 +15,7 @@ Fast MOT is an end-to-end tracker that includes both detection and tracking. The
 ## Performance
 | Dataset | Density | MOTA (SSD) | MOTA (public) | FPS |
 | ------------- | ------------- | ------------- | ------------- | ------------- |
-| MOT17-13 | 5 - 20  | 19.8% | 38.5%  | 30 |
+| MOT17-13 | 5 - 20  | 19.8% | 42.3%  | 30 |
 | MOT17-04 | 20 - 40  | 43.8% | 73.7% | 23 |
 | MOT17-03 | 30 - 60  | - | - | 15 |
 
