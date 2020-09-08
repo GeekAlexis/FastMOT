@@ -13,13 +13,13 @@ High performance multiple object tracking in Python
 Fast MOT is an end-to-end tracker that includes both detection and tracking. The tracker combines Deep SORT with optical flow and is optimized with TensorRT and Numba to run in real-time. It has an input size of 1280 x 720. Because of tiling, the tracker assumes medium/small targets and shouldn't be used to detect up close ones. I used a pretrained pedestrian OSNet model from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking objects other than pedestrians will work but it is not recommended without further training the OSNet model on these classes. 
 
 ## Performance
-Tracking is evaluated on the MOT17 dataset with Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to state-of-the-art trackers. However, pretrained SSD models are not accurate enough for pedestrian detection and I will train a YOLOV4 model to replace SSD if I have time. The tracker can achieve up to 30 FPS depending on crowd density. The frame rate on a Desktop GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
-
-| Dataset | # targets  | MOTA (SSD) | MOTA (public) | FPS |
+| Dataset | Density | MOTA(SSD) | MOTA(public) | FPS |
 | ------------- | ------------- | ------------- | ------------- | ------------- |
-| MOT17-13 | 5 - 20  | 19.8 | 38.5  | 30  |
-| MOT17-04 | 20 - 40  | 43.8 | 73.7 | 23  |
-| MOT17-03 | 30 - 60  | - | - | 15  |
+| MOT17-13 | 5 - 20  | 19.8% | 38.5%  | 30 |
+| MOT17-04 | 20 - 40  | 43.8% | 73.7% | 23 |
+| MOT17-03 | 30 - 60  | - | - | 15 |
+
+Tracking is evaluated on the MOT17 dataset with Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to state-of-the-art trackers. However, pretrained SSD models are not accurate enough for pedestrian detection and I will train a YOLOV4 model to replace SSD if I have time. The tracker can achieve up to 30 FPS depending on crowd density. The frame rate on a Desktop GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
 
 ## Dependencies
 - OpenCV (With Gstreamer)
