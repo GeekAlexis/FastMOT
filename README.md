@@ -10,12 +10,12 @@ High performance multiple object tracking in Python
   - [x] Optical flow tracking & camera motion compensation
   - [ ] TensorRT YOLO V4
   
-Fast MOT is an end-to-end tracker that includes both detection and tracking. The tracker combines Deep SORT with optical flow and is optimized with TensorRT and Numba to run in real-time. It has an input size of 1280 x 720. Because of tiling, the tracker assumes medium/small targets and shouldn't be used to detect up close ones. I used a pretrained pedestrian OSNet model from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking objects other than pedestrians will work but it is not recommended without further training the OSNet model on these classes. 
+Fast MOT is an end-to-end tracker that includes both detection and tracking. The tracker combines Deep SORT with optical flow and is optimized with TensorRT and Numba to run in real-time. It has an input size of 1280 x 720. Because of tiling, the tracker assumes medium/small targets and shouldn't be used to detect up close ones. I used a pretrained pedestrian OSNet model from [torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking objects other than pedestrians will work but it is not recommended without further training the OSNet model on these classes. 
 
 ## Performance
 | Dataset | Density | MOTA (SSD) | MOTA (public) | FPS |
-| ------------- | ------------- | ------------- | ------------- | ------------- |
-| MOT17-13 | 5 - 20  | 19.8% | 42.3%  | 30 |
+|:-------|:-------:|:-------:|:-------:|:-------:|:-----:|
+| MOT17-13 | 5 - 20  | 19.8% | 43.5%  | 30 |
 | MOT17-04 | 20 - 40  | 43.8% | 73.7% | 23 |
 | MOT17-03 | 30 - 60  | - | - | 15 |
 
@@ -23,11 +23,11 @@ Tracking is evaluated on the MOT17 dataset with Jetson Xavier NX using [py-motme
 
 ## Dependencies
 - OpenCV (With Gstreamer)
+- TensorRT (>=7)
+- PyCuda
 - Numpy
 - Numba
 - Scipy
-- PyCuda
-- TensorRT (>=7)
 - cython-bbox
 
 ### Install for Jetson (TX2/Xavier NX/Xavier)
@@ -36,7 +36,7 @@ Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidi
   $ sh install_jetson.sh
   ```
 ### Install for x86 Linux (Not tested)
-Make sure to have CUDA and TensorRT installed and build OpenCV from source with Gstreamer support
+Make sure to have CUDA and TensorRT installed and build OpenCV with Gstreamer first
   ```
   $ pip3 install -r requirements.txt
   ```
