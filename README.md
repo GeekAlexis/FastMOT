@@ -31,12 +31,12 @@ Tracking is evaluated on the MOT17 dataset with Jetson Xavier NX using [py-motme
 - cython-bbox
 
 ### Install for Jetson (TX2/Xavier NX/Xavier)
-Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack)    
+Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack) and run the script
   ```
   $ sh install_jetson.sh
   ```
 ### Install for x86 Linux (Not tested)
-Make sure to have CUDA and TensorRT installed and build OpenCV from source with Gstreamer
+Make sure to have CUDA and TensorRT installed and build OpenCV from source with Gstreamer support
   ```
   $ pip3 install -r requirements.txt
   ```
