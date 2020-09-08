@@ -13,13 +13,13 @@ High performance multiple object tracking in Python
 Fast MOT is an end-to-end tracker that includes both detection and tracking. The tracker combines Deep SORT with optical flow and is optimized with TensorRT and Numba to run in real-time. It has an input size of 1280 x 720. Because of tiling, the tracker assumes medium/small targets and shouldn't be used to detect up close ones. I used a pretrained pedestrian OSNet model from [Torchreid](https://github.com/KaiyangZhou/deep-person-reid). Currently, tracking objects other than pedestrians will work but it is not recommended without further training the OSNet model on these classes. 
 
 ## Performance
-Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The tracker can achieve up to 30 FPS depending on crowd density. The frame rate on a Desktop GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
+| Dataset | Density | MOTA (SSD) | MOTA (public) | FPS |
+| ------------- | ------------- | ------------- | ------------- | ------------- |
+| MOT17-13 | 5 - 20  | 19.8% | 42.3%  | 30 |
+| MOT17-04 | 20 - 40  | 43.8% | 73.7% | 23 |
+| MOT17-03 | 30 - 60  | - | - | 15 |
 
-| # targets  | FPS on Xavier NX |
-| ------------- | ------------- |
-| 0 - 20  | 30  |
-| 20 - 30  | 23  |
-| 30 - 50  | 15  |
+Tracking is evaluated on the MOT17 dataset with Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to state-of-the-art trackers. However, pretrained SSD models are not accurate enough for pedestrian detection and I will train a YOLOV4 model to replace SSD if I have time. The tracker can achieve up to 30 FPS depending on crowd density. The frame rate on a Desktop GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
 
 ## Dependencies
 - OpenCV (With Gstreamer)
@@ -31,26 +31,29 @@ Tracking is tested with the MOT17 dataset on Jetson Xavier NX. The tracker can a
 - cython-bbox
 
 ### Install for Jetson (TX2/Xavier NX/Xavier)
-Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack)    
+Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack) and run the script
   ```
   $ sh install_jetson.sh
   ```
 ### Install for x86 Linux (Not tested)
-Make sure to have CUDA and TensorRT installed and build OpenCV from source with Gstreamer
+Make sure to have CUDA and TensorRT installed and build OpenCV from source with Gstreamer support
   ```
   $ pip3 install -r requirements.txt
-  $ cd fast_mot/models
+  ```
+Download VOC dataset for INT8 calibration
+  ```
+  $ cd fastmot/models
   $ sh prepare_calib_data.sh
   ```
 
 ## Usage
-- With camera (/dev/video0): 
+- Camera (/dev/video0): 
   ```
   $ python3 app.py --mot
   ```
-- Input video: 
+- Video: 
   ```
-  $ python3 app.py --input your_video.mp4 --mot
+  $ python3 app.py --input video.mp4 --mot
   ```
-- Use `--gui` to visualize and `--output video_out.mp4` to save output
+- Use `--gui` to visualize and `--output` to save output
 - For more flexibility, edit `fastmot/configs/mot.json` to configure parameters and target classes (COCO)
