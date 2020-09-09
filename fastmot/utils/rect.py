@@ -23,6 +23,11 @@ def area(tlbr):
 
 
 @nb.njit(cache=True)
+def mask_area(mask):
+    return np.count_nonzero(mask)
+
+
+@nb.njit(cache=True)
 def get_center(tlbr):
     xmin, ymin, xmax, ymax = tlbr
     return np.array([(xmin + xmax) / 2, (ymin + ymax) / 2])

@@ -1,12 +1,15 @@
 from pathlib import Path
+import configparser
 import logging
 import json
 
 from cython_bbox import bbox_overlaps
+from collections import defaultdict
+from numba.typed import Dict
 import numpy as np
 import numba as nb
-from numba.typed import Dict
 import ctypes
+import csv
 import cv2
 import time
 
@@ -18,35 +21,40 @@ from .utils.rect import *
 DET_DTYPE = np.dtype([
     ('tlbr', float, 4), 
     ('label', int), 
-    ('conf', float), 
-    ('tile_id', int)], 
+    ('conf', float)], 
     align=True
 )
 
 
-# DET_DTYPE = np.dtype([
-#     ('tlbr', float, 4), 
-#     ('label', int), 
-#     ('conf', float)], 
-#     align=True
-# )
+class Detector:
+    def __init__(self, size):
+        self.size = size
+
+    def __call__(self, frame_id, frame):
+        self.detect_async(frame_id, frame)
+        return self.postprocess()
+
+    def detect_async(self, frame_id, frame):
+        raise NotImplementedError
+
+    def postprocess(self):
+        raise NotImplementedError
 
 
-class ObjectDetector:
+class SSD(Detector):
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['ObjectDetector']
+        config = json.load(config_file, cls=ConfigDecoder)['SSD']
 
     def __init__(self, size, class_ids):
-        # initialize parameters
-        self.size = size
+        super().__init__(size)
         self.label_mask = np.zeros(len(COCO_LABELS), dtype=bool)
         self.label_mask[class_ids] = True
 
-        self.tile_overlap = ObjectDetector.config['tile_overlap']
-        self.tiling_grid = ObjectDetector.config['tiling_grid']
-        self.conf_thresh = ObjectDetector.config['conf_thresh']
-        self.max_area = ObjectDetector.config['max_area']
-        self.merge_iou_thresh = ObjectDetector.config['merge_iou_thresh']
+        self.tile_overlap = SSD.config['tile_overlap']
+        self.tiling_grid = SSD.config['tiling_grid']
+        self.conf_thresh = SSD.config['conf_thresh']
+        self.max_area = SSD.config['max_area']
+        self.merge_iou_thresh = SSD.config['merge_iou_thresh']
         self.batch_size = int(np.prod(self.tiling_grid))
 
         self.model = SSDInceptionV2
@@ -55,11 +63,7 @@ class ObjectDetector:
         self.scale_factor = np.asarray(self.size) / self.tiling_region_size
         self.backend = InferenceBackend(self.model, self.batch_size)
 
-    def __call__(self, frame):
-        self.detect_async(frame)
-        return self.postprocess()
-
-    def detect_async(self, frame):
+    def detect_async(self, frame_id, frame):
         tic = time.perf_counter()
         frame = cv2.resize(frame, self.tiling_region_size)
         self._preprocess(frame, self.tiles, self.backend.input.host, self.input_size)
@@ -71,12 +75,12 @@ class ObjectDetector:
         det_out = self.backend.synchronize()[0]
 
         tic = time.perf_counter()
-        detections = self._filter_dets(det_out, self.tiles, self.model.TOPK, 
+        detections, tile_ids = self._filter_dets(det_out, self.tiles, self.model.TOPK, 
             self.model.OUTPUT_LAYOUT, self.label_mask, self.max_area, self.conf_thresh, self.scale_factor)
         logging.debug('filter dets %f', time.perf_counter() - tic)
 
         tic = time.perf_counter()
-        detections = self._merge_dets(detections)
+        detections = self._merge_dets(detections, tile_ids)
         logging.debug('merge dets %f', time.perf_counter() - tic)
         return detections
 
@@ -89,8 +93,9 @@ class ObjectDetector:
             for r in range(tiling_grid[1]) for c in range(tiling_grid[0])])
         return tiles, total_size
 
-    def _merge_dets(self, detections):
+    def _merge_dets(self, detections, tile_ids):
         detections = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
+        tile_ids = np.asarray(tile_ids)
         if len(detections) == 0:
             return detections
 
@@ -98,7 +103,7 @@ class ObjectDetector:
         bboxes = detections.tlbr
         ious = bbox_overlaps(bboxes, bboxes)
 
-        detections = self._merge(detections, ious, self.merge_iou_thresh)
+        detections = self._merge(detections, tile_ids, ious, self.merge_iou_thresh)
         return detections.view(np.recarray)
     
     @staticmethod
@@ -120,7 +125,7 @@ class ObjectDetector:
     @nb.njit(fastmath=True, cache=True)
     def _filter_dets(det_out, tiles, topk, layout, label_mask, max_area, thresh, scale_factor):
         detections = []
-        # tile_ids = []
+        tile_ids = []
         for tile_idx in range(len(tiles)):
             tile = tiles[tile_idx]
             size = get_size(tile)
@@ -136,38 +141,37 @@ class ObjectDetector:
                     br = (det_out[offset + 5:offset + 7] * size + tile[:2]) * scale_factor
                     tlbr = as_rect(np.append(tl, br))
                     if area(tlbr) <= max_area:
-                        detections.append((tlbr, label, conf, tile_idx))
-                        # tile_ids.append(tile_idx)
-        return detections
+                        detections.append((tlbr, label, conf))
+                        tile_ids.append(tile_idx)
+        return detections, tile_ids
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _merge(dets, ious, thresh):
+    def _merge(dets, tile_ids, ious, thresh):
         # find adjacent detections
         neighbors = [Dict.empty(nb.types.int64, nb.types.int64) for _ in range(len(dets))]
         for i in range(len(dets)):
-            det = dets[i]
+            cur_neighbors = neighbors[i]
             for j in range(len(dets)):
-                other = dets[j]
-                if other.tile_id != det.tile_id and other.label == det.label:
-                    if contains(det.tlbr, other.tlbr) or contains(other.tlbr, det.tlbr) or ious[i, j] >= thresh:
+                if tile_ids[j] != tile_ids[i] and dets[i].label == dets[j].label:
+                    if contains(dets[i].tlbr, dets[j].tlbr) or contains(dets[j].tlbr, dets[i].tlbr) or ious[i, j] >= thresh:
                         # pick the nearest detection from each tile
-                        if neighbors[i].get(other.tile_id) is None or ious[i, j] > ious[i, neighbors[i][other.tile_id]]:
-                            neighbors[i][other.tile_id] = j
+                        if cur_neighbors.get(tile_ids[j]) is None or ious[i, j] > ious[i, cur_neighbors[tile_ids[j]]]:
+                            cur_neighbors[tile_ids[j]] = j
         
         # merge detections using depth-first search
         keep = set(range(len(dets)))
         stack = []
         for i in range(len(dets)):
-            if len(neighbors[i]) > 0 and dets[i].tile_id != -1:
-                dets[i].tile_id = -1
+            if len(neighbors[i]) > 0 and tile_ids[i] != -1:
+                tile_ids[i] = -1
                 stack.append(i)
                 candidates = []
                 while len(stack) > 0:
                     for j in neighbors[stack.pop()].values():
-                        if dets[j].tile_id != -1:
+                        if tile_ids[j] != -1:
                             candidates.append(j)
-                            dets[j].tile_id = -1
+                            tile_ids[j] = -1
                             stack.append(j)
                 # merge candidates
                 for k in candidates:
@@ -178,10 +182,9 @@ class ObjectDetector:
         return dets[keep]
 
 
-class YoloDetector:
+class YOLO(Detector):
     with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['YoloDetector']
-
+        config = json.load(config_file, cls=ConfigDecoder)['YOLO']
     try:
         ctypes.cdll.LoadLibrary(Path(__file__).parent / 'plugins' / 'libyolo_layer.so')
     except OSError as err:
@@ -190,23 +193,17 @@ class YoloDetector:
                         'subdirectory?') from err
 
     def __init__(self, size, class_ids):
-        # initialize parameters
-        self.size = size
+        super().__init__(size)
         self.class_ids = coco2yolo(class_ids)
-
-        self.conf_thresh = YoloDetector.config['conf_thresh']
-        self.max_area = YoloDetector.config['max_area']
-        self.nms_thresh = YoloDetector.config['nms_thresh']
+        self.conf_thresh = YOLO.config['conf_thresh']
+        self.max_area = YOLO.config['max_area']
+        self.nms_thresh = YOLO.config['nms_thresh']
         
-        self.model = YoloV4
+        self.model = YOLOV4
         self.batch_size = 1
         self.backend = InferenceBackend(self.model, self.batch_size)
 
-    def __call__(self, frame):
-        self.detect_async(frame)
-        return self.postprocess()
-
-    def detect_async(self, frame):
+    def detect_async(self, frame_id, frame):
         tic = time.perf_counter()
         frame = cv2.resize(frame, self.model.INPUT_SHAPE[:0:-1])
         self._preprocess(frame, self.backend.input.host)
@@ -266,10 +263,50 @@ class YoloDetector:
         detections = []
         for i in range(len(nms_dets)):
             tlbr = to_tlbr(nms_dets[i, :4])
+            # clip inside frame
             tlbr = np.maximum(tlbr, 0)
             tlbr = np.minimum(tlbr, np.append(size, size))
+            # convert to COCO label
             label = YOLO2COCO[int(nms_dets[i, 5])]
             conf = nms_dets[i, 4] * nms_dets[i, 6]
             if area(tlbr) <= max_area:
-                detections.append((tlbr, label, conf, -1))
+                detections.append((tlbr, label, conf))
         return detections
+
+
+class Public(Detector):
+    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
+        config = json.load(config_file, cls=ConfigDecoder)['Public']
+
+    def __init__(self, size, seq_root):
+        super().__init__(size)
+        self.seq_root = Path(seq_root)
+        self.conf_thresh = Public.config['conf_thresh']
+        self.max_area = Public.config['max_area']
+
+        seqinfo = configparser.ConfigParser()
+        seqinfo.read(self.seq_root / 'seqinfo.ini')
+        self.seq_size = (int(seqinfo['Sequence']['imWidth']), int(seqinfo['Sequence']['imHeight']))
+
+        self.pub_detections = defaultdict(list)
+        with open(self.seq_root / 'det' / 'det.txt', newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',', quoting=csv.QUOTE_NONNUMERIC)
+            for row in reader:
+                frame_id = int(row[0])
+                tlbr = to_tlbr(tuple(row[2:6]))
+                # scale and clip inside frame
+                tlbr[:2] = tlbr[:2] / self.seq_size * self.size
+                tlbr[2:] = tlbr[2:] / self.seq_size * self.size
+                tlbr = np.maximum(tlbr, 0)
+                tlbr = np.minimum(tlbr, np.append(self.size, self.size))
+                tlbr = as_rect(tlbr)
+                conf = row[6]
+                if conf >= self.conf_thresh and area(tlbr) <= self.max_area:
+                    self.pub_detections[frame_id].append((tlbr, 1, conf))
+        self.query_frame = None
+
+    def detect_async(self, frame_id, frame):
+        self.query_frame = frame_id + 1
+
+    def postprocess(self):
+        return np.asarray(self.pub_detections[self.query_frame], dtype=DET_DTYPE).view(np.recarray)

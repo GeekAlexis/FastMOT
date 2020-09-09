@@ -1,6 +1,5 @@
 from .videoio import VideoIO
 from .mot import Mot
-from .detector import ObjectDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .kalman_filter import KalmanFilter

@@ -55,7 +55,7 @@ def main():
         if args.mot:
             delay = 1 / 30 # main processing loop time
         if args.gui:
-            delay += 0.025 if args.mot else 0.055 # gui latency
+            delay += 0.025 # gui latency
     stream = VideoIO(PROC_SIZE, args.input, args.output, delay)
 
     mot = None
@@ -120,8 +120,8 @@ def main():
                 mot.run(frame)
                 if args.log is not None or args.socket is not None:
                     for track in mot.visible_tracks:
-                        tl = track.tlbr[:2] / PROC_SIZE * stream.vid_size
-                        br = track.tlbr[2:] / PROC_SIZE * stream.vid_size
+                        tl = track.tlbr[:2] / PROC_SIZE * (1920, 1080) #stream.vid_size
+                        br = track.tlbr[2:] / PROC_SIZE * (1920, 1080) #stream.vid_size
                         w, h = br - tl + 1
                         if args.log is not None:
                             log.write(f'{mot.frame_count},{track.trk_id},{tl[0]:.2f},{tl[1]:.2f},{w:.2f},{h:.2f},-1,-1,-1\n')

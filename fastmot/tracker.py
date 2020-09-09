@@ -80,6 +80,8 @@ class MultiTracker:
                 if flow_bbox is not None and track.active:
                     # give large flow uncertainty for occluded objects
                     std_multiplier = max(self.age_factor * track.age, 1)
+                    # std_multiplier = max((track.age + 1) / track.flow_conf, 1)
+                    # std_multiplier = max(1 / track.flow_conf, 1)
                     mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
                 next_tlbr = as_rect(mean[:4])
                 track.state = (mean, cov)
@@ -163,7 +165,6 @@ class MultiTracker:
             else:
                 logging.info('Out: %s', track)
                 self._mark_lost(trk_id)
-                # del self.tracks[trk_id]
 
         for (trk_id, det_id) in reid_matches:
             track = self.lost[trk_id]
@@ -185,7 +186,6 @@ class MultiTracker:
             if track.age > self.max_age:
                 logging.info('Lost: %s', track)
                 self._mark_lost(trk_id)
-                # del self.tracks[trk_id]
             else:
                 aged.append(trk_id)
 
@@ -238,8 +238,6 @@ class MultiTracker:
             
         features = [track.smooth_feature for track in self.lost.values()]
         trk_labels = np.array([track.label for track in self.lost.values()])
-        # print(features)
-        # print(embeddings)
         cost = cdist(features, embeddings, self.metric)
         cost = self._gate_cost(cost, self.max_reid_cost, trk_labels, detections.label, False)
         return cost

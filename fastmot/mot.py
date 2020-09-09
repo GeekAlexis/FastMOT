@@ -4,7 +4,7 @@ import json
 import cv2
 import time
 
-from .detector import ObjectDetector, YoloDetector
+from .detector import SSD, YOLO, Public
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import ConfigDecoder
@@ -23,8 +23,9 @@ class Mot:
         self.class_ids = Mot.config['class_ids']
 
         logging.info('Loading detector model...')
-        self.detector = ObjectDetector(self.size, self.class_ids)
-        # self.detector = YoloDetector(self.size, self.class_ids)
+        self.detector = SSD(self.size, self.class_ids)
+        # self.detector = YOLO(self.size, self.class_ids)
+        # self.detector = Public(self.size, Path(__file__).parents[1] / 'eval' / 'data' / 'MOT17-04')
         logging.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor()
         self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric)
@@ -45,13 +46,13 @@ class Mot:
     def run(self, frame):
         detections = []
         if self.frame_count == 0:
-            detections = self.detector(frame)
+            detections = self.detector(self.frame_count, frame)
             self.tracker.initiate(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
                 tic = time.perf_counter()
                 tic2 = time.perf_counter()
-                self.detector.detect_async(frame)
+                self.detector.detect_async(self.frame_count, frame)
                 elapsed = time.perf_counter() - tic2
                 self.det_pre_time += elapsed
                 logging.debug('detect pre %f', elapsed)

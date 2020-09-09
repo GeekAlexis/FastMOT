@@ -13,16 +13,16 @@ class Track:
         self.trk_id = trk_id
         self.start_frame = frame_id
 
-        self.feature_buf_size = 10
         self.bin_height = 10
-        self.alpha = 0.7
+        self.alpha = 0.8
 
         self.age = 0
         self.confirmed = False
-        self.features = deque([], maxlen=self.feature_buf_size)
+        self.features = deque([], maxlen=10)
         self.smooth_feature = None
         self.state = None
-
+        
+        self.flow_conf = None
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
@@ -39,7 +39,7 @@ class Track:
 
     @property
     def active(self):
-        return self.age < 3
+        return self.age < 2
 
     def update_features(self, embedding):
         if self.smooth_feature is None:

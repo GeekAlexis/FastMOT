@@ -3,7 +3,7 @@ import tensorrt as trt
 import logging
 
 
-class Yolo:
+class YOLO:
     PATH = None
     INPUT_SHAPE = None
     OUTPUT_NAME = None
@@ -18,7 +18,7 @@ class Yolo:
         raise NotImplementedError
 
 
-class YoloV4(Yolo):
+class YOLOV4(YOLO):
     PATH = Path(__file__).parent / 'yolov4-512.trt'
     ONNX_PATH = None
     INPUT_SHAPE = (3, 512, 512)
