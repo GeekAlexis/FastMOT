@@ -1,11 +1,7 @@
 from enum import Enum
-from pathlib import Path
-import json
-
 import numpy as np
 import numba as nb
 
-from .utils import ConfigDecoder
 from .utils.rect import get_size, get_center, perspective_transform
 
 
@@ -21,26 +17,23 @@ class KalmanFilter:
         xmin, ymin, xmax, ymax, v_xmin, v_ymin, v_xmax, v_ymax
     contains the bounding box top left corner, bottom right corner,
     and their respective velocities.
-    Object motion follows a constant velocity model augmented with corner 
+    Object motion follows a constant velocity model augmented with corner
     coupling and decay for tracking stability.
     """
 
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['KalmanFilter']
-
-    def __init__(self, dt, n_init):
+    def __init__(self, dt, n_init, config):
         self.dt = dt
         self.n_init = n_init
-        self.small_std_acc = KalmanFilter.config['small_std_acc']
-        self.large_std_acc = KalmanFilter.config['large_std_acc']
-        self.min_std_det = KalmanFilter.config['min_std_det']
-        self.min_std_flow = KalmanFilter.config['min_std_flow']
-        self.std_factor_det = KalmanFilter.config['std_factor_det']
-        self.std_factor_flow = KalmanFilter.config['std_factor_flow']
-        self.init_std_pos_factor = KalmanFilter.config['init_std_pos_factor']
-        self.init_std_vel_factor = KalmanFilter.config['init_std_vel_factor']
-        self.vel_coupling = KalmanFilter.config['vel_coupling']
-        self.vel_half_life = KalmanFilter.config['vel_half_life']
+        self.small_std_acc = config['small_std_acc']
+        self.large_std_acc = config['large_std_acc']
+        self.min_std_det = config['min_std_det']
+        self.min_std_flow = config['min_std_flow']
+        self.std_factor_det = config['std_factor_det']
+        self.std_factor_flow = config['std_factor_flow']
+        self.init_std_pos_factor = config['init_std_pos_factor']
+        self.init_std_vel_factor = config['init_std_vel_factor']
+        self.vel_coupling = config['vel_coupling']
+        self.vel_half_life = config['vel_half_life']
 
         self.std_acc_slope = (self.large_std_acc[1] - self.small_std_acc[1]) / \
                             (self.large_std_acc[0] - self.small_std_acc[0])

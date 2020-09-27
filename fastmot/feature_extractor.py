@@ -3,15 +3,16 @@ import numpy as np
 import numba as nb
 import cv2
 
+from . import models
 from .utils import InferenceBackend
 from .utils.rect import multi_crop
-from .models import *
 
 
 class FeatureExtractor:
-    def __init__(self):
-        self.model = OSNet025
-        self.batch_size = 32
+    def __init__(self, config):
+        self.model = getattr(models, config['model'])
+        self.batch_size = config['batch_size']
+        
         self.input_size = np.prod(self.model.INPUT_SHAPE)
         self.feature_dim = self.model.OUTPUT_LAYOUT
         self.backend = InferenceBackend(self.model, self.batch_size)

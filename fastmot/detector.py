@@ -1,20 +1,18 @@
 from pathlib import Path
 import configparser
 import logging
-import json
 
 from cython_bbox import bbox_overlaps
 from collections import defaultdict
 from numba.typed import Dict
 import numpy as np
 import numba as nb
-import ctypes
 import csv
 import cv2
 import time
 
-from .models import *
-from .utils import ConfigDecoder, InferenceBackend
+from . import models
+from .utils import InferenceBackend
 from .utils.rect import *
 
 
@@ -41,23 +39,20 @@ class Detector:
         raise NotImplementedError
 
 
-class SSD(Detector):
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['SSD']
-
-    def __init__(self, size, class_ids):
+class SSDDetector(Detector):
+    def __init__(self, size, config):
         super().__init__(size)
-        self.label_mask = np.zeros(len(COCO_LABELS), dtype=bool)
-        self.label_mask[class_ids] = True
+        self.label_mask = np.zeros(len(models.COCO_LABELS), dtype=bool)
+        self.label_mask[config['class_ids']] = True
 
-        self.tile_overlap = SSD.config['tile_overlap']
-        self.tiling_grid = SSD.config['tiling_grid']
-        self.conf_thresh = SSD.config['conf_thresh']
-        self.max_area = SSD.config['max_area']
-        self.merge_iou_thresh = SSD.config['merge_iou_thresh']
+        self.model = getattr(models, config['model'])
+        self.tile_overlap = config['tile_overlap']
+        self.tiling_grid = config['tiling_grid']
+        self.conf_thresh = config['conf_thresh']
+        self.max_area = config['max_area']
+        self.merge_iou_thresh = config['merge_iou_thresh']
+
         self.batch_size = int(np.prod(self.tiling_grid))
-
-        self.model = SSDInceptionV2
         self.input_size = np.prod(self.model.INPUT_SHAPE)
         self.tiles, self.tiling_region_size = self._generate_tiles()
         self.scale_factor = np.asarray(self.size) / self.tiling_region_size
@@ -182,24 +177,15 @@ class SSD(Detector):
         return dets[keep]
 
 
-class YOLO(Detector):
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['YOLO']
-    try:
-        ctypes.cdll.LoadLibrary(Path(__file__).parent / 'plugins' / 'libyolo_layer.so')
-    except OSError as err:
-        raise RuntimeError('ERROR: failed to load libyolo_layer.so.  '
-                        'Did you forget to do a "make" in the "plugins" '
-                        'subdirectory?') from err
-
-    def __init__(self, size, class_ids):
+class YoloDetector(Detector):
+    def __init__(self, size, config):
         super().__init__(size)
-        self.class_ids = coco2yolo(class_ids)
-        self.conf_thresh = YOLO.config['conf_thresh']
-        self.max_area = YOLO.config['max_area']
-        self.nms_thresh = YOLO.config['nms_thresh']
+        self.model = getattr(models, config['model'])
+        self.class_ids = models.coco2yolo(config['class_ids'])
+        self.conf_thresh = config['conf_thresh']
+        self.max_area = config['max_area']
+        self.nms_thresh = config['nms_thresh']
         
-        self.model = YOLOV4
         self.batch_size = 1
         self.backend = InferenceBackend(self.model, self.batch_size)
 
@@ -267,22 +253,19 @@ class YOLO(Detector):
             tlbr = np.maximum(tlbr, 0)
             tlbr = np.minimum(tlbr, np.append(size, size))
             # convert to COCO label
-            label = YOLO2COCO[int(nms_dets[i, 5])]
+            label = models.YOLO2COCO[int(nms_dets[i, 5])]
             conf = nms_dets[i, 4] * nms_dets[i, 6]
             if area(tlbr) <= max_area:
                 detections.append((tlbr, label, conf))
         return detections
 
 
-class Public(Detector):
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['Public']
-
-    def __init__(self, size, seq_root):
+class PublicDetector(Detector):
+    def __init__(self, size, config):
         super().__init__(size)
-        self.seq_root = Path(seq_root)
-        self.conf_thresh = Public.config['conf_thresh']
-        self.max_area = Public.config['max_area']
+        self.seq_root = Path(__file__).parents[1] / config['sequence']
+        self.conf_thresh = config['conf_thresh']
+        self.max_area = config['max_area']
 
         seqinfo = configparser.ConfigParser()
         seqinfo.read(self.seq_root / 'seqinfo.ini')

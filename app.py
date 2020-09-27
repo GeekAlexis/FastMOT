@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from pathlib import Path
 from enum import Enum
 import argparse
 import logging
@@ -7,10 +8,10 @@ import socket
 import struct
 import errno
 import time
+import json
 import cv2
 
-from fastmot import VideoIO
-from fastmot import Mot
+import fastmot
 
 
 """
@@ -49,6 +50,9 @@ def main():
     loglevel = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(format='[%(levelname)s] %(message)s', level=loglevel)
 
+    with open(Path('fastmot/configs/mot.json').resolve()) as config_file:
+        config = json.load(config_file, cls=fastmot.utils.ConfigDecoder)
+
     delay = 0
     # Hack: delay camera frame grabbing to reduce lag
     if args.input is None:
@@ -56,7 +60,7 @@ def main():
             delay = 1 / 30 # main processing loop time
         if args.gui:
             delay += 0.025 # gui latency
-    stream = VideoIO(PROC_SIZE, args.input, args.output, delay)
+    stream = fastmot.VideoIO(PROC_SIZE, config['video_io'], args.input, args.output, delay)
 
     mot = None
     sock = None
@@ -66,7 +70,8 @@ def main():
     gui_time = 0
 
     if args.mot:
-        mot = Mot(PROC_SIZE, stream.capture_dt, args.gui or args.output, args.verbose)
+        enable_drawing = args.gui or args.output
+        mot = fastmot.Mot(PROC_SIZE, stream.capture_dt, config['mot'], enable_drawing, args.verbose)
         enable_mot = True
     if args.gui:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)

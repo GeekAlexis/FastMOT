@@ -1,7 +1,6 @@
 numpy >= 1.15
 scipy >= 1.5
-opencv >= 4.0
 pycuda
-tensorflow < 2.0
+tensorflow == 1.15.2 
 numba >= 0.48
 cython-bbox

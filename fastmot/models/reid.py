@@ -1,11 +1,11 @@
 from pathlib import Path
-import tensorrt as trt
 import logging
+import tensorrt as trt
 
 
 class ReID:
-    PATH = None
-    ONNX_PATH = None
+    ENGINE_PATH = None
+    MODEL_PATH = None
     INPUT_SHAPE = None
     OUTPUT_LAYOUT = None
     METRIC = None
@@ -29,7 +29,7 @@ class ReID:
             logging.info('This may take a while...')
 
             # Parse model file
-            with open(cls.ONNX_PATH, 'rb') as model_file:
+            with open(cls.MODEL_PATH, 'rb') as model_file:
                 parser.parse(model_file.read())
 
             # Create optimization profiles for the batch options
@@ -51,22 +51,22 @@ class ReID:
             if engine is None:
                 return None
             logging.info("Completed creating Engine")
-            with open(cls.PATH, "wb") as f:
+            with open(cls.ENGINE_PATH, "wb") as f:
                 f.write(engine.serialize())
             return engine
 
 
 class OSNetAIN(ReID):
-    PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17.trt'
-    ONNX_PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17' / 'osnet_ain_x1_0_32.onnx'
+    ENGINE_PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17.trt'
+    MODEL_PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17' / 'osnet_ain_x1_0_32.onnx'
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
     METRIC = 'cosine'
 
 
 class OSNet025(ReID):
-    PATH = Path(__file__).parent / 'osnet_x0_25_msmt17.trt'
-    ONNX_PATH = Path(__file__).parent / 'osnet_x0_25_msmt17' / 'osnet_x0_25_dynamic.onnx'
+    ENGINE_PATH = Path(__file__).parent / 'osnet_x0_25_msmt17.trt'
+    MODEL_PATH = Path(__file__).parent / 'osnet_x0_25_msmt17' / 'osnet_x0_25_dynamic.onnx'
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
     METRIC = 'euclidean'

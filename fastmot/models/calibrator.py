@@ -1,8 +1,7 @@
-import tensorrt as trt
 import os
-
 import pycuda.driver as cuda
 import pycuda.autoinit
+import tensorrt as trt
 import numpy as np
 import cv2
 
@@ -38,10 +37,6 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         if self.counter == self.num_calib_imgs:
             return None
 
-        # debugging
-        if self.counter % 10 == 0:
-            print('Running Batch:', self.counter)
-
         batch_imgs = np.zeros((self.batch_size, trt.volume(self.model_shape)))
         for i in range(self.batch_size):
             img = cv2.imread(self.calib_imgs[self.counter + i])
@@ -68,6 +63,5 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
                 return f.read()
 
     def write_calibration_cache(self, cache):
-        print('writing calibration file')
         with open(self.cache_file, "wb") as f:
             f.write(cache)

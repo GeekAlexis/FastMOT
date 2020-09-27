@@ -1,11 +1,11 @@
 from pathlib import Path
-import tensorrt as trt
 import logging
+import tensorrt as trt
 
 
 class SSD:
-    PATH = None
-    TF_PATH = None
+    ENGINE_PATH = None
+    MODEL_PATH = None
     NMS_THRESH = None
     TOPK = None
     INPUT_SHAPE = None
@@ -17,13 +17,13 @@ class SSD:
         raise NotImplementedError
 
     @classmethod
-    def build_engine(cls, trt_logger, batch_size, calib_dataset=Path(__file__).parent / 'VOCdevkit' / 'VOC2007' / 'JPEGImages'):
+    def build_engine(cls, trt_logger, batch_size, calib_dataset=Path.home() / 'VOCdevkit' / 'VOC2007' / 'JPEGImages'):
         import graphsurgeon as gs
         import uff
         from . import calibrator
         
         # compile model into TensorRT
-        dynamic_graph = gs.DynamicGraph(str(cls.TF_PATH))
+        dynamic_graph = gs.DynamicGraph(str(cls.MODEL_PATH))
         # print([n.name for n in dynamic_graph.as_graph_def().node])
         dynamic_graph = cls.add_plugin(dynamic_graph)
         uff_model = uff.from_tensorflow(dynamic_graph.as_graph_def(), cls.OUTPUT_NAME)
@@ -54,14 +54,14 @@ class SSD:
             if engine is None:
                 return None
             logging.info("Completed creating Engine")
-            with open(cls.PATH, 'wb') as f:
+            with open(cls.ENGINE_PATH, 'wb') as f:
                 f.write(engine.serialize())
             return engine
 
 
 class SSDMobileNetV1(SSD):
-    PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco.trt'
-    TF_PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco_2018_01_28' / 'frozen_inference_graph.pb'
+    ENGINE_PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco.trt'
+    MODEL_PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco_2018_01_28' / 'frozen_inference_graph.pb'
     NMS_THRESH = 0.5
     TOPK = 100
     INPUT_SHAPE = (3, 300, 300)
@@ -159,8 +159,8 @@ class SSDMobileNetV1(SSD):
 
 
 class SSDMobileNetV2(SSD):
-    PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco.trt'
-    TF_PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco_2018_03_29' / 'frozen_inference_graph.pb'
+    ENGINE_PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco.trt'
+    MODEL_PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco_2018_03_29' / 'frozen_inference_graph.pb'
     NMS_THRESH = 0.5
     TOPK = 100
     INPUT_SHAPE = (3, 300, 300)
@@ -257,9 +257,8 @@ class SSDMobileNetV2(SSD):
 
 
 class SSDInceptionV2(SSD):
-    PATH = Path(__file__).parent / 'ssd_inception_v2_coco.trt'
-    # PATH = Path(__file__).parent / 'TRT_ssd_inception_v2_coco_old.bin'
-    TF_PATH = Path(__file__).parent / 'ssd_inception_v2_coco_2017_11_17' / 'frozen_inference_graph.pb'
+    ENGINE_PATH = Path(__file__).parent / 'ssd_inception_v2_coco.trt'
+    MODEL_PATH = Path(__file__).parent / 'ssd_inception_v2_coco_2017_11_17' / 'frozen_inference_graph.pb'
     NMS_THRESH = 0.5 # 0.6
     TOPK = 100
     INPUT_SHAPE = (3, 300, 300)

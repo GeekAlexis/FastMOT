@@ -1,19 +1,15 @@
-from pathlib import Path
-import logging
-import json
-
-from scipy.optimize import linear_sum_assignment
-from scipy.spatial.distance import cdist
-from cython_bbox import bbox_overlaps
 from collections import OrderedDict
 import numpy as np
 import numba as nb
+import logging
 import time
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cdist
+from cython_bbox import bbox_overlaps
 
 from .track import Track
 from .flow import Flow
 from .kalman_filter import MeasType, KalmanFilter
-from .utils import ConfigDecoder
 from .utils.rect import as_rect, to_tlbr, intersection, warp
 
 
@@ -22,29 +18,26 @@ INF_COST = 1e5
 
 
 class MultiTracker:
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['MultiTracker']
-
-    def __init__(self, size, dt, metric):
+    def __init__(self, size, dt, metric, config):
         self.size = size
         self.metric = metric
-        self.max_age = MultiTracker.config['max_age']
-        self.age_factor = MultiTracker.config['age_factor']
-        self.motion_weight = MultiTracker.config['motion_weight']
-        self.max_feature_cost = MultiTracker.config['max_feature_cost']
-        self.min_iou_cost = MultiTracker.config['min_iou_cost']
-        self.max_reid_cost = MultiTracker.config['max_reid_cost']
-        self.dup_iou_thresh = MultiTracker.config['dup_iou_thresh']
-        self.max_feat_overlap = MultiTracker.config['max_feat_overlap']
-        self.min_register_conf = MultiTracker.config['min_register_conf']
-        self.lost_buf_size = MultiTracker.config['lost_buf_size']
-        self.n_init = MultiTracker.config['n_init']
+        self.max_age = config['max_age']
+        self.age_factor = config['age_factor']
+        self.motion_weight = config['motion_weight']
+        self.max_feature_cost = config['max_feature_cost']
+        self.min_iou_cost = config['min_iou_cost']
+        self.max_reid_cost = config['max_reid_cost']
+        self.dup_iou_thresh = config['dup_iou_thresh']
+        self.max_feat_overlap = config['max_feat_overlap']
+        self.min_register_conf = config['min_register_conf']
+        self.lost_buf_size = config['lost_buf_size']
+        self.n_init = config['n_init']
         
         self.next_id = 1
         self.tracks = {}
         self.lost = OrderedDict()
-        self.kf = KalmanFilter(dt, self.n_init)
-        self.flow = Flow(self.size, estimate_camera_motion=True)
+        self.kf = KalmanFilter(dt, self.n_init, config['kalman_filter'])
+        self.flow = Flow(self.size, config['optical_flow'])
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
         self.flow_bboxes = {}
@@ -154,6 +147,7 @@ class MultiTracker:
             track.age = 0
             track.state = (mean, cov)
             track.tlbr = next_tlbr
+            track.flow_conf = 1
             if not track.confirmed or max_overlap <= self.max_feat_overlap:
                 # update when the overlap with other tracks is small
                 track.update_features(embeddings[det_id])

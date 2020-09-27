@@ -2,7 +2,7 @@
 DIR=$HOME
 BASEDIR=$(dirname "$0")
 
-# export CUDA paths
+# add CUDA paths
 echo 'export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}' >> ~/.bashrc 
 echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}' >> ~/.bashrc 
 source ~/.bashrc

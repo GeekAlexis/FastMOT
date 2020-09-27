@@ -1,37 +1,28 @@
-from pathlib import Path
 import logging
 import itertools
-import json
-
 import numpy as np
 import numba as nb
 import cv2
 import time
 
-from .utils import ConfigDecoder
 from .utils.rect import *
 
 
 class Flow:
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['Flow']
-
-    def __init__(self, size, estimate_camera_motion=False):
+    def __init__(self, size, config):
         self.size = size
-        self.track_targets = estimate_camera_motion
-        self.estimate_camera_motion = estimate_camera_motion
-        self.bkg_feat_scale_factor = Flow.config['bkg_feat_scale_factor']
-        self.optflow_scale_factor = Flow.config['optflow_scale_factor']
-        self.feature_density = Flow.config['feature_density']
-        self.optflow_err_thresh = Flow.config['optflow_err_thresh']
-        self.min_inlier = Flow.config['min_inlier']
-        self.feature_dist_factor = Flow.config['feature_dist_factor']
-        self.ransac_max_iter = Flow.config['ransac_max_iter']
-        self.ransac_conf = Flow.config['ransac_conf']
+        self.bkg_feat_scale_factor = config['bkg_feat_scale_factor']
+        self.optflow_scale_factor = config['optflow_scale_factor']
+        self.feature_density = config['feature_density']
+        self.optflow_err_thresh = config['optflow_err_thresh']
+        self.min_inlier = config['min_inlier']
+        self.feature_dist_factor = config['feature_dist_factor']
+        self.ransac_max_iter = config['ransac_max_iter']
+        self.ransac_conf = config['ransac_conf']
 
-        self.gftt_target_feat_params = Flow.config['gftt_target_feat_params']
-        self.fast_bkg_feat_thresh = Flow.config['fast_bkg_feat_thresh']
-        self.optflow_params = Flow.config['optflow_params']
+        self.gftt_target_feat_params = config['gftt_target_feat_params']
+        self.fast_bkg_feat_thresh = config['fast_bkg_feat_thresh']
+        self.optflow_params = config['optflow_params']
         
         self.bkg_feature_detector = cv2.FastFeatureDetector_create(threshold=self.fast_bkg_feat_thresh)
 
@@ -85,10 +76,9 @@ class Flow:
             keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.bkg_mask)
             target_mask = crop(self.bkg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
-            if target_area == 0:
+            if target_area == 0 or track.flow_conf == 0:
                 keypoints = np.empty((0, 2), np.float32)
             elif len(keypoints) / target_area < self.feature_density:
-                logging.debug("not propagate")
                 # only detect new keypoints when too few are propagated
                 img = crop(self.prev_frame_gray, inside_tlbr)
                 # target_mask = crop(self.bkg_mask, inside_tlbr)
@@ -107,21 +97,20 @@ class Flow:
         target_begins = [0] + target_ends[:-1]
 
         # detect background feature points
-        if self.estimate_camera_motion:
-            prev_frame_small_bkg = cv2.resize(self.prev_frame_gray, None, fx=self.bkg_feat_scale_factor[0], 
-                fy=self.bkg_feat_scale_factor[1])
-            bkg_mask_small = cv2.resize(self.bkg_mask, None, fx=self.bkg_feat_scale_factor[0],
-                fy=self.bkg_feat_scale_factor[1], interpolation=cv2.INTER_NEAREST)
-            keypoints = self.bkg_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask_small)
-            if keypoints is None or len(keypoints) == 0:
-                keypoints = np.empty((0, 2), np.float32)
-            else:
-                keypoints = np.float32([kp.pt for kp in keypoints])
-                # term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
-                # keypoints = cv2.cornerSubPix(prev_frame_small_bkg, keypoints, (5, 5), (-1, -1), term)
-                keypoints = self._unscale_pts(keypoints, self.bkg_feat_scale_factor, None)
-            bkg_begin = target_ends[-1]
-            all_prev_pts.append(keypoints)
+        prev_frame_small_bkg = cv2.resize(self.prev_frame_gray, None, fx=self.bkg_feat_scale_factor[0], 
+            fy=self.bkg_feat_scale_factor[1])
+        bkg_mask_small = cv2.resize(self.bkg_mask, None, fx=self.bkg_feat_scale_factor[0],
+            fy=self.bkg_feat_scale_factor[1], interpolation=cv2.INTER_NEAREST)
+        keypoints = self.bkg_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask_small)
+        if keypoints is None or len(keypoints) == 0:
+            keypoints = np.empty((0, 2), np.float32)
+        else:
+            keypoints = np.float32([kp.pt for kp in keypoints])
+            # term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
+            # keypoints = cv2.cornerSubPix(prev_frame_small_bkg, keypoints, (5, 5), (-1, -1), term)
+            keypoints = self._unscale_pts(keypoints, self.bkg_feat_scale_factor, None)
+        bkg_begin = target_ends[-1]
+        all_prev_pts.append(keypoints)
 
         # match features using optical flow
         all_prev_pts = np.concatenate(all_prev_pts)
@@ -137,23 +126,22 @@ class Flow:
 
         # estimate camera motion
         H_camera = None
-        if self.estimate_camera_motion:
-            prev_bkg_pts, matched_bkg_pts = self._get_good_match(all_prev_pts, all_cur_pts, status, bkg_begin, -1)
-            if len(matched_bkg_pts) >= 4:
-                # H_camera, inlier_mask = cv2.estimateAffinePartial2D(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
-                #   maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
-                H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
-                    maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
-                self.prev_bkg_keypoints, self.bkg_keypoints = self._get_inliers(prev_bkg_pts, matched_bkg_pts, inlier_mask)
-                if H_camera is None or len(self.bkg_keypoints) < self.min_inlier:
-                    self.bkg_keypoints = np.empty((0, 2), np.float32)
-                    logging.warning('Background registration failed')
-                    return {}, None
-                # H_camera = np.vstack((H_camera, [0, 0, 1]))
-            else:
+        prev_bkg_pts, matched_bkg_pts = self._get_good_match(all_prev_pts, all_cur_pts, status, bkg_begin, -1)
+        if len(matched_bkg_pts) >= 4:
+            # H_camera, inlier_mask = cv2.estimateAffinePartial2D(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
+            #   maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+            H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
+                maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
+            self.prev_bkg_keypoints, self.bkg_keypoints = self._get_inliers(prev_bkg_pts, matched_bkg_pts, inlier_mask)
+            if H_camera is None or len(self.bkg_keypoints) < self.min_inlier:
                 self.bkg_keypoints = np.empty((0, 2), np.float32)
                 logging.warning('Background registration failed')
                 return {}, None
+            # H_camera = np.vstack((H_camera, [0, 0, 1]))
+        else:
+            self.bkg_keypoints = np.empty((0, 2), np.float32)
+            logging.warning('Background registration failed')
+            return {}, None
 
         # estimate target bounding boxes
         next_bboxes = {}
@@ -173,11 +161,17 @@ class Flow:
             est_tlbr = self._estimate_bbox(track.tlbr, H_affine)
             track.prev_keypoints, track.keypoints = self._get_inliers(prev_pts, matched_pts, inlier_mask)
             if intersection(est_tlbr, self.frame_rect) is None or len(track.keypoints) < self.min_inlier:
+                if len(track.keypoints) < self.min_inlier:
+                    track.flow_conf = 0
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
             # TODO: increase uncertainty for 5 frames when min inlier too small? get ratio over desired density
             target_mask = crop(self.fg_mask, est_tlbr)
-            track.flow_conf = self._estimate_conf(track.keypoints, target_mask, self.feature_density)
+            # track.flow_conf = self._estimate_conf(track.keypoints, target_mask, self.feature_density)
+            # if track.flow_conf == 0:
+            #     logging.debug("Zero flow conf: ID %d", track.trk_id)
+            #     track.keypoints = np.empty((0, 2), np.float32)
+            #     continue
             logging.debug("flow confidence: %f", track.flow_conf)
             next_bboxes[track.trk_id] = est_tlbr
             # zero out current track in foreground mask
@@ -196,7 +190,7 @@ class Flow:
     def _estimate_conf(inliers, target_mask, feature_density):
         target_area = mask_area(target_mask)
         if target_area == 0:
-            return 0.01
+            return 0
         return len(inliers) / (target_area * feature_density)
 
     @staticmethod

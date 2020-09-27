@@ -3,10 +3,8 @@ from collections import deque
 import threading
 import logging
 import time
-import json
 import cv2
 
-from .utils import ConfigDecoder
 
 class VideoIO:
     """
@@ -20,18 +18,16 @@ class VideoIO:
         6: vertical-flip
         7: upper-left-diagonal
     """
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['VideoIO']
 
-    def __init__(self, size, input_path=None, output_path=None, delay=0):
+    def __init__(self, size, config, input_path=None, output_path=None, delay=0):
         self.size = size
         self.input_path = input_path
         self.output_path = output_path
         self.delay = delay
-        self.capture_size = VideoIO.config['capture_size']
-        self.camera_fps = VideoIO.config['camera_fps']
-        self.flip_method = VideoIO.config['flip_method']
-        self.max_queue_size = VideoIO.config['max_queue_size']
+        self.capture_size = config['capture_size']
+        self.camera_fps = config['camera_fps']
+        self.flip_method = config['flip_method']
+        self.max_queue_size = config['max_queue_size']
 
         if self.input_path is None:
             # use camera when no input path is provided
@@ -117,10 +113,26 @@ class VideoIO:
                 self.flip_method,
                 *self.size
             )
-    )
+        )
+        # "v4l2src device=/dev/video0 ! "
+        # "video/x-raw, "
+        # "width=(int)%d, height=(int)%d, "
+        # "framerate=(fraction)%d/1 ! "
+        # "videoflip method=%d ! "
+        # "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx !"
+        # "videoconvert ! appsink"
+        # % (
+        #     *self.capture_size,
+        #     self.camera_fps,
+        #     self.flip_method,
+        #     *self.size
+        # )
+    # 'filesrc location=%s ! qtdemux ! queue ! h264parse ! omxh264dec ! nvvidconv ! video/x-raw, format=BGRx, width=%d, height=%d ! videoconvert ! appsink' % (*self.size, self.input_path)
+    #decodebin
+    # "rtspsrc location=rtsp://<user>:<pass>@<ip>:<port> ! rtph264depay ! h264parse ! omxh264dec ! video/x-raw, format=BGRx, width=%d, height=%d ! videoconvert ! appsink"
 
     def _gst_write_str(self):
-        return 'appsrc ! autovideoconvert ! omxh265enc ! mp4mux ! filesink location = %s ' % self.output_path
+        return 'appsrc ! autovideoconvert ! omxh264enc ! mp4mux ! filesink location=%s' % self.output_path
 
     def _capture_frames(self):
         tic = time.time()

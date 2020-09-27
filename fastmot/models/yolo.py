@@ -1,10 +1,12 @@
+import logging
 from pathlib import Path
 import tensorrt as trt
-import logging
 
 
 class YOLO:
-    PATH = None
+    PLUGIN_PATH = Path(__file__).parents[1] / 'plugins' / 'libyolo_layer.so'
+    ENGINE_PATH = None
+    MODEL_PATH = None
     INPUT_SHAPE = None
     OUTPUT_NAME = None
     OUTPUT_LAYOUT = None
@@ -19,8 +21,8 @@ class YOLO:
 
 
 class YOLOV4(YOLO):
-    PATH = Path(__file__).parent / 'yolov4-512.trt'
-    ONNX_PATH = None
+    ENGINE_PATH = Path(__file__).parent / 'yolov4-512.trt'
+    MODEL_PATH = None
     INPUT_SHAPE = (3, 512, 512)
     OUTPUT_NAME = None
     OUTPUT_LAYOUT = None

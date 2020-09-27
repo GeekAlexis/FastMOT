@@ -96,6 +96,12 @@ COCO_LABELS = (
 )
 
 
+CROWDHUMAN_LABELS = (
+    'head',
+    'person',
+)
+
+
 # translate YOLO class ids (0-79) to COCO class ids (0-90)
 YOLO2COCO = (
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20,

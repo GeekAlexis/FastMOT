@@ -1,34 +1,38 @@
-from pathlib import Path
+from enum import Enum
 import logging
-import json
 import cv2
 import time
 
-from .detector import SSD, YOLO, Public
+from .detector import SSDDetector, YoloDetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
-from .utils import ConfigDecoder
 from .utils.visualization import draw_trk, draw_det, draw_tile, draw_bkg_flow
 
 
-class Mot:
-    with open(Path(__file__).parent / 'configs' / 'mot.json') as config_file:
-        config = json.load(config_file, cls=ConfigDecoder)['Mot']
+class DetectorType(Enum):
+    SSD = 0
+    YOLO = 1
+    PUBLIC = 2
 
-    def __init__(self, size, capture_dt, enable_drawing=False, verbose=False):
+
+class Mot:
+    def __init__(self, size, capture_dt, config, enable_drawing=False, verbose=False):
         self.size = size
         self.enable_drawing = enable_drawing
         self.verbose = verbose
-        self.detector_frame_skip = Mot.config['detector_frame_skip']
-        self.class_ids = Mot.config['class_ids']
+        self.detector_type = DetectorType[config['detector_type']]
+        self.detector_frame_skip = config['detector_frame_skip']
 
         logging.info('Loading detector model...')
-        self.detector = SSD(self.size, self.class_ids)
-        # self.detector = YOLO(self.size, self.class_ids)
-        # self.detector = Public(self.size, Path(__file__).parents[1] / 'eval' / 'data' / 'MOT17-04')
+        if self.detector_type == DetectorType.SSD:
+            self.detector = SSDDetector(self.size, config['ssd_detector'])
+        elif self.detector_type == DetectorType.YOLO:
+            self.detector = YoloDetector(self.size, config['yolo_detector'])
+        elif self.detector_type == DetectorType.PUBLIC:
+            self.detector = PublicDetector(self.size, config['public_detector'])
         logging.info('Loading feature extractor model...')
-        self.extractor = FeatureExtractor()
-        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric)
+        self.extractor = FeatureExtractor(config['feature_extractor'])
+        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric, config['multi_tracker'])
         
         # reset flags
         self.frame_count = 0

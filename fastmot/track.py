@@ -22,7 +22,7 @@ class Track:
         self.smooth_feature = None
         self.state = None
         
-        self.flow_conf = None
+        self.flow_conf = 1
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
@@ -35,11 +35,10 @@ class Track:
     def __lt__(self, other):
         # ordered by approximate distance to the image plane, closer is greater
         return (self.tlbr[-1] // self.bin_height, -self.age) < (other.tlbr[-1] // self.bin_height, -other.age)
-        # return (self.tlbr[-1], -self.age) < (other.tlbr[-1], -other.age)
 
     @property
     def active(self):
-        return self.age < 2
+        return self.age < 3
 
     def update_features(self, embedding):
         if self.smooth_feature is None:
@@ -55,6 +54,7 @@ class Track:
         self.start_frame = frame_id
         self.update_features(embedding)
         self.age = 0
+        self.flow_conf = 1
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
            
