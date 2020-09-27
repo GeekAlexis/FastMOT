@@ -4,13 +4,11 @@ import tensorrt as trt
 
 
 class SSD:
+    PLUGIN_PATH = None
     ENGINE_PATH = None
     MODEL_PATH = None
-    NMS_THRESH = None
-    TOPK = None
-    INPUT_SHAPE = None
-    OUTPUT_NAME = None
-    OUTPUT_LAYOUT = None
+    INPUT_SHAPE = ()
+    OUTPUT_NAME = ''
 
     @classmethod
     def add_plugin(cls, graph):
@@ -24,20 +22,13 @@ class SSD:
         
         # compile model into TensorRT
         dynamic_graph = gs.DynamicGraph(str(cls.MODEL_PATH))
-        # print([n.name for n in dynamic_graph.as_graph_def().node])
         dynamic_graph = cls.add_plugin(dynamic_graph)
-        uff_model = uff.from_tensorflow(dynamic_graph.as_graph_def(), cls.OUTPUT_NAME)
-        
-        # uff_model = uff.from_tensorflow(dynamic_graph.as_graph_def(), model.OUTPUT_NAME, output_filename='ssd.uff')
-        # /usr/src/tensorrt/bin/trtexec --uff=ssd.uff --output=MarkOutput_0 --uffInput=Input,3,300,300 --workspace=1024 --maxBatch=8 --best --calib=INT8CacheFile --verbose --saveEngine=TRT_ssd_test.bin
-
-        def round_up(n):
-            return n if n & (n - 1) == 0 else 1 << int.bit_length(n)
+        uff_model = uff.from_tensorflow(dynamic_graph.as_graph_def(), [cls.OUTPUT_NAME])
 
         with trt.Builder(trt_logger) as builder, builder.create_network() as network, trt.UffParser() as parser:
             builder.max_workspace_size = 1 << 30
-            builder.max_batch_size = round_up(batch_size)
-            logging.info('Building engine with batch size: %d', builder.max_batch_size)
+            builder.max_batch_size = batch_size
+            logging.info('Building engine with batch size: %d', batch_size)
             logging.info('This may take a while...')
             
             if builder.platform_has_fast_fp16:
@@ -54,19 +45,18 @@ class SSD:
             if engine is None:
                 return None
             logging.info("Completed creating Engine")
-            with open(cls.ENGINE_PATH, 'wb') as f:
-                f.write(engine.serialize())
+            with open(cls.ENGINE_PATH, 'wb') as engine_file:
+                engine_file.write(engine.serialize())
             return engine
 
 
 class SSDMobileNetV1(SSD):
     ENGINE_PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco.trt'
     MODEL_PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco_2018_01_28' / 'frozen_inference_graph.pb'
+    INPUT_SHAPE = (3, 300, 300)
+    OUTPUT_NAME = 'NMS'
     NMS_THRESH = 0.5
     TOPK = 100
-    INPUT_SHAPE = (3, 300, 300)
-    OUTPUT_NAME = ['NMS']
-    OUTPUT_LAYOUT = 7
 
     @classmethod
     def add_plugin(cls, graph):
@@ -161,11 +151,10 @@ class SSDMobileNetV1(SSD):
 class SSDMobileNetV2(SSD):
     ENGINE_PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco.trt'
     MODEL_PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco_2018_03_29' / 'frozen_inference_graph.pb'
+    INPUT_SHAPE = (3, 300, 300)
+    OUTPUT_NAME = 'NMS'
     NMS_THRESH = 0.5
     TOPK = 100
-    INPUT_SHAPE = (3, 300, 300)
-    OUTPUT_NAME = ['NMS']
-    OUTPUT_LAYOUT = 7
 
     @classmethod
     def add_plugin(cls, graph):
@@ -259,11 +248,10 @@ class SSDMobileNetV2(SSD):
 class SSDInceptionV2(SSD):
     ENGINE_PATH = Path(__file__).parent / 'ssd_inception_v2_coco.trt'
     MODEL_PATH = Path(__file__).parent / 'ssd_inception_v2_coco_2017_11_17' / 'frozen_inference_graph.pb'
-    NMS_THRESH = 0.5 # 0.6
-    TOPK = 100
     INPUT_SHAPE = (3, 300, 300)
-    OUTPUT_NAME = ['NMS']
-    OUTPUT_LAYOUT = 7
+    OUTPUT_NAME = 'NMS'
+    NMS_THRESH = 0.5
+    TOPK = 100
 
     @classmethod
     def add_plugin(cls, graph):

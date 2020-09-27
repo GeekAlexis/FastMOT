@@ -71,7 +71,7 @@ class SSDDetector(Detector):
 
         tic = time.perf_counter()
         detections, tile_ids = self._filter_dets(det_out, self.tiles, self.model.TOPK, 
-            self.model.OUTPUT_LAYOUT, self.label_mask, self.max_area, self.conf_thresh, self.scale_factor)
+            self.label_mask, self.max_area, self.conf_thresh, self.scale_factor)
         logging.debug('filter dets %f', time.perf_counter() - tic)
 
         tic = time.perf_counter()
@@ -118,7 +118,7 @@ class SSDDetector(Detector):
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _filter_dets(det_out, tiles, topk, layout, label_mask, max_area, thresh, scale_factor):
+    def _filter_dets(det_out, tiles, topk, label_mask, max_area, thresh, scale_factor):
         detections = []
         tile_ids = []
         for tile_idx in range(len(tiles)):
@@ -126,7 +126,7 @@ class SSDDetector(Detector):
             size = get_size(tile)
             tile_offset = tile_idx * topk
             for det_idx in range(topk):
-                offset = (tile_offset + det_idx) * layout
+                offset = (tile_offset + det_idx) * 7
                 label = int(det_out[offset + 1])
                 conf = det_out[offset + 2]
                 if conf < thresh:

@@ -3,8 +3,6 @@ import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 
-from .. import models
-
 
 class HostDeviceMem:
     def __init__(self, host_mem, device_mem):
@@ -26,15 +24,14 @@ class InferenceBackend:
     def __init__(self, model, batch_size):
         self.model = model
         self.batch_size = batch_size
-        if issubclass(self.model, models.YOLO):
-            try:
-                ctypes.cdll.LoadLibrary(models.YOLO.PLUGIN_PATH)
-            except OSError as err:
-                raise RuntimeError('ERROR: failed to load libyolo_layer.so.  '
-                                'Did you forget to build it in the "plugins" '
-                                'subdirectory?') from err
-
         self.runtime = trt.Runtime(InferenceBackend.TRT_LOGGER)
+        
+        # load plugin if the model requires one
+        if self.model.PLUGIN_PATH is not None:
+            try:
+                ctypes.cdll.LoadLibrary(self.model.PLUGIN_PATH)
+            except OSError as err:
+                raise RuntimeError('Plugin not built') from err
 
         # load cuda engine or build one if it doesn't exist
         if not self.model.ENGINE_PATH.exists():
