@@ -1,7 +1,7 @@
 from collections import deque
 import numpy as np
 
-from .models import COCO_LABELS
+from .models import LABEL_MAP
 from .utils.rect import to_tlwh
 
 
@@ -30,7 +30,7 @@ class Track:
         return "Track(tlbr=%r, label=%r, trk_id=%r, frame_id=%r)" % (self.tlbr, self.label, self.trk_id, self.start_frame)
 
     def __str__(self):
-        return "%s %d at %s" % (COCO_LABELS[self.label], self.trk_id, to_tlwh(self.tlbr).astype(int))
+        return "%s %d at %s" % (LABEL_MAP[self.label], self.trk_id, to_tlwh(self.tlbr).astype(int))
 
     def __lt__(self, other):
         # ordered by approximate distance to the image plane, closer is greater

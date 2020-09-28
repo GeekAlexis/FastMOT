@@ -1,5 +1,9 @@
+#!/bin/bash
+
 OPENCV_VERSION="4.1.1" 
 ARCH_BIN=7.5 # compute capabilities can be found here https://developer.nvidia.com/cuda-gpus#compute
+
+set -e
 
 # install dependencies:
 sudo apt-get -y update

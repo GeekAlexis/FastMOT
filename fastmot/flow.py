@@ -172,7 +172,7 @@ class Flow:
             #     logging.debug("Zero flow conf: ID %d", track.trk_id)
             #     track.keypoints = np.empty((0, 2), np.float32)
             #     continue
-            logging.debug("flow confidence: %f", track.flow_conf)
+            # logging.debug("flow confidence: %f", track.flow_conf)
             next_bboxes[track.trk_id] = est_tlbr
             # zero out current track in foreground mask
             target_mask[:] = 0

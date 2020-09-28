@@ -8,7 +8,7 @@
 
     "mot": {
         "detector_frame_skip": 5,
-        "detector_type": "SSD",
+        "detector_type": "YOLO",
 
         "ssd_detector": {
             "model": "SSDInceptionV2",
@@ -24,7 +24,7 @@
             "class_ids": [1],
             "conf_thresh": 0.3,
             "max_area": 700000,
-            "nms_thresh": 0.5
+            "nms_thresh": 0.6
         },
         "public_detector": {
             "sequence": "eval/data/MOT17-03",

@@ -42,7 +42,7 @@ class Detector:
 class SSDDetector(Detector):
     def __init__(self, size, config):
         super().__init__(size)
-        self.label_mask = np.zeros(len(models.COCO_LABELS), dtype=bool)
+        self.label_mask = np.zeros(len(models.LABEL_MAP), dtype=bool)
         self.label_mask[config['class_ids']] = True
 
         self.model = getattr(models, config['model'])
@@ -181,7 +181,7 @@ class YoloDetector(Detector):
     def __init__(self, size, config):
         super().__init__(size)
         self.model = getattr(models, config['model'])
-        self.class_ids = models.coco2yolo(config['class_ids'])
+        self.class_ids = config['class_ids']
         self.conf_thresh = config['conf_thresh']
         self.max_area = config['max_area']
         self.nms_thresh = config['nms_thresh']
@@ -252,8 +252,7 @@ class YoloDetector(Detector):
             # clip inside frame
             tlbr = np.maximum(tlbr, 0)
             tlbr = np.minimum(tlbr, np.append(size, size))
-            # convert to COCO label
-            label = models.YOLO2COCO[int(nms_dets[i, 5])]
+            label = int(nms_dets[i, 5])
             conf = nms_dets[i, 4] * nms_dets[i, 6]
             if area(tlbr) <= max_area:
                 detections.append((tlbr, label, conf))

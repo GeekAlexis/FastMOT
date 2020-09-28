@@ -1,6 +1,10 @@
+#!/bin/bash
+
 # Jetpack 4.4 (OpenCV, CUDA, TensorRT) is required before running this script
 DIR=$HOME
 BASEDIR=$(dirname "$0")
+
+set -e
 
 # add CUDA paths
 echo 'export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}' >> ~/.bashrc 

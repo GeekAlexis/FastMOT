@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # DIR=$HOME
 # BASEDIR=$(dirname "$0")
 
@@ -13,6 +15,8 @@
 CUDA_VERSION="10.2.89"
 TRT_VERSION="7.1.3-1+cuda10.2"
 OS="ubuntu1804"
+
+set -e
 
 # purge existing CUDA first
 if [ -e /usr/local/cuda ]; then

@@ -132,6 +132,10 @@ dmypy.json
 ._.DS_Store
 ._*
 
+# Model files
+*.pb
+*.onnx
+
 # TensorRT stuff
 *.trt
 *calib_cache
