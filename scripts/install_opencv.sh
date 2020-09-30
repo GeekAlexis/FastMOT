@@ -26,6 +26,10 @@ sudo apt-get install -y build-essential \
     python3-venv \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-libav \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
     libdc1394-22-dev \
     libavresample-dev
 

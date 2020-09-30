@@ -1,8 +1,9 @@
 {   
+    "size": [1280, 720],
+
     "video_io": {
-        "capture_size": [1920, 1080],
+        "camera_size": [1920, 1080],
         "camera_fps": 30,
-        "flip_method": 0,
         "max_queue_size": 50
     },
 
@@ -27,7 +28,7 @@
             "nms_thresh": 0.6
         },
         "public_detector": {
-            "sequence": "eval/data/MOT17-03",
+            "sequence": "eval/data/MOT17-04",
             "conf_thresh": 0.5,
             "max_area": 700000
         },
@@ -42,7 +43,7 @@
             "motion_weight": 0.04,
             "max_feature_cost": 0.85,
             "min_iou_cost": 0.3,
-            "max_reid_cost": 0.6,
+            "max_reid_cost": 0.65,
             "dup_iou_thresh": 0.8,
             "max_feat_overlap": 0.2,
             "min_register_conf": 0.5,

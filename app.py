@@ -14,11 +14,7 @@ import cv2
 import fastmot
 
 
-"""
-constants
-"""
-MSG_LENGTH = 2  # 2-byte short
-PROC_SIZE = (1280, 720)
+MSG_LENGTH = 2
 
 
 class MsgType(Enum):
@@ -38,29 +34,33 @@ def parse_from_msg(msg):
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-m', '--mot', action='store_true', help='enable tracking')
-    parser.add_argument('-i', '--input', help='path to optional input video file')
-    parser.add_argument('-o', '--output', help='path to optional output video file')
-    parser.add_argument('-l', '--log', help='path to optional MOT Challenge log for output')
-    parser.add_argument('-s', '--socket', help='path to optional unix socket for output')
-    parser.add_argument('-g', '--gui', action='store_true', help='enable visualization')
-    parser.add_argument('-v', '--verbose', action='store_true', help='enable verbose output for debugging')
+    parser.add_argument('-m', '--mot', action='store_true', help='multiple object tracking')
+    parser.add_argument('-i', '--input_uri', metavar="URI", required=True, help=
+        'URI to input stream\n'
+        '1) video file, e.g. input.mp4\n'
+        '2) MIPI CSI camera, e.g. csi://0\n'
+        '3) USB/V4L2 camera, e.g. /dev/video0\n'
+        '4) RTSP stream, e.g. rtsp://<user>:<password>@<ip>:<port>\n'
+        )
+    parser.add_argument('-o', '--output_uri', metavar="URI", help='URI to output stream, e.g. output.mp4')
+    parser.add_argument('-l', '--log', metavar="FILE", help='path to MOT Challenge log for evaluation, e.g. eval/results/mot17-04.txt')
+    parser.add_argument('-s', '--socket', metavar="PATH", help='path to UNIX socket for inter-process communication')
+    parser.add_argument('-g', '--gui', action='store_true', help='enable display')
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output for debugging')
 
     args = parser.parse_args()
     loglevel = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(format='[%(levelname)s] %(message)s', level=loglevel)
 
-    with open(Path('fastmot/configs/mot.json').resolve()) as config_file:
+    with open(Path(__file__).parent / 'fastmot' / 'configs' / 'mot.json') as config_file:
         config = json.load(config_file, cls=fastmot.utils.ConfigDecoder)
 
-    delay = 0
-    # Hack: delay camera frame grabbing to reduce lag
-    if args.input is None:
-        if args.mot:
-            delay = 1 / 30 # main processing loop time
-        if args.gui:
-            delay += 0.025 # gui latency
-    stream = fastmot.VideoIO(PROC_SIZE, config['video_io'], args.input, args.output, delay)
+    # # Hack: delay camera frame grabbing to reduce lag
+    # latency = 0
+    # if args.camera is not None and args.mot:
+    #     latency = 1 / 30 # main processing loop time
+
+    stream = fastmot.VideoIO(config['size'], config['video_io'], args.input_uri, args.output_uri)
 
     mot = None
     sock = None
@@ -70,23 +70,18 @@ def main():
     gui_time = 0
 
     if args.mot:
-        enable_drawing = args.gui or args.output
-        mot = fastmot.Mot(PROC_SIZE, stream.capture_dt, config['mot'], enable_drawing, args.verbose)
+        mot = fastmot.Mot(config['size'], stream.capture_dt, config['mot'], args.gui or args.output, args.verbose)
         enable_mot = True
+        if args.socket is not None:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(args.socket)
+            sock.setblocking(False)
+            enable_mot = False
+            buffer = b''
+        if args.log is not None:
+            log = open(args.log, 'w')
     if args.gui:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
-    if args.socket is not None:
-        if not args.mot:
-            raise RuntimeError('There is nothing to output')
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(args.socket)
-        sock.setblocking(False)
-        enable_mot = False
-        buffer = b''
-    if args.log is not None:
-        if not args.mot:
-            raise RuntimeError('There is nothing to output')
-        log = open(args.log, 'w')
         
     logging.info('Starting video capture...')
     stream.start_capture()
@@ -97,7 +92,7 @@ def main():
             if frame is None:
                 break
 
-            if args.socket is not None:
+            if sock is not None:
                 try:
                     buffer += sock.recv(MSG_LENGTH - len(buffer))
                 except OSError as err:
@@ -118,19 +113,20 @@ def main():
                                 avg_fps = round(mot.frame_count / elapsed_time)
                                 logging.info('Average FPS: %d', avg_fps)
                         elif signal == MsgType.TERMINATE:
-                            stream.stop_capture()
                             break
 
             if enable_mot:
                 mot.run(frame)
-                if args.log is not None or args.socket is not None:
+                if log is not None or sock is not None:
                     for track in mot.visible_tracks:
-                        tl = track.tlbr[:2] / PROC_SIZE * (1920, 1080) #stream.vid_size
-                        br = track.tlbr[2:] / PROC_SIZE * (1920, 1080) #stream.vid_size
+                        # MOT17 dataset is usually of size 1920x1080
+                        # change to the correct size otherwise
+                        tl = track.tlbr[:2] / config['size'] * (1920, 1080)
+                        br = track.tlbr[2:] / config['size'] * (1920, 1080)
                         w, h = br - tl + 1
-                        if args.log is not None:
+                        if log is not None:
                             log.write(f'{mot.frame_count},{track.trk_id},{tl[0]:.2f},{tl[1]:.2f},{w:.2f},{h:.2f},-1,-1,-1\n')
-                        if args.socket is not None:
+                        if sock is not None:
                             sock.sendall(serialize_to_msg(mot.frame_count, track.trk_id, tl, w, h))
 
             if args.gui:
@@ -138,25 +134,24 @@ def main():
                 # cv2.putText(frame, '%d FPS' % fps, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
                 cv2.imshow('Video', frame)
                 if cv2.waitKey(1) & 0xFF == 27:
-                    stream.stop_capture()
                     break
                 toc2 = time.perf_counter()
                 gui_time += toc2 - tic2
-            if args.output is not None:
+            if args.output_uri is not None:
                 stream.write(frame)
             
             toc = time.perf_counter()
             elapsed_time += toc - tic
     finally:
         # clean up resources
-        stream.release()
         if sock is not None:
             sock.close()
         if log is not None:
             log.close()
+        stream.release()
         cv2.destroyAllWindows()
     
-    if args.socket is None and args.mot:
+    if args.mot and args.socket is None:
         avg_fps = round(mot.frame_count / elapsed_time)
         avg_trk_time = mot.track_time / (mot.frame_count - mot.detector_frame_count)
         avg_embedding_time = mot.embedding_time / mot.detector_frame_count

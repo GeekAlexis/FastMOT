@@ -8,7 +8,7 @@ class SSD:
     ENGINE_PATH = None
     MODEL_PATH = None
     INPUT_SHAPE = ()
-    OUTPUT_NAME = ''
+    OUTPUT_NAME = None
 
     @classmethod
     def add_plugin(cls, graph):

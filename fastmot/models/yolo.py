@@ -10,7 +10,7 @@ class YOLO:
     MODEL_PATH = None
     NUM_CLASSES = None
     INPUT_SHAPE = ()
-    SCALING_FACTORS = []
+    LAYER_FACTORS = []
     ANCHORS = []
 
     @classmethod
@@ -32,8 +32,8 @@ class YOLO:
         old_tensors = [network.get_output(i) for i in range(network.num_outputs)]
         new_tensors = []
         for i, old_tensor in enumerate(old_tensors):
-            yolo_width = cls.INPUT_SHAPE[2] // cls.SCALING_FACTORS[i]
-            yolo_height = cls.INPUT_SHAPE[1] // cls.SCALING_FACTORS[i]
+            yolo_width = cls.INPUT_SHAPE[2] // cls.LAYER_FACTORS[i]
+            yolo_height = cls.INPUT_SHAPE[1] // cls.LAYER_FACTORS[i]
             num_anchors = len(cls.ANCHORS[i]) // 2
             plugin = network.add_plugin_v2(
                 [old_tensor],
@@ -69,12 +69,12 @@ class YOLO:
             if builder.platform_has_fast_fp16:
                 builder.fp16_mode = True
 
-            # Parse model file
+            # parse model file
             with open(cls.MODEL_PATH, 'rb') as model_file:
                 parser.parse(model_file.read())
 
             # yolo*.onnx is generated with batch size 64
-            # Reshape input to the right batch size
+            # reshape input to the right batch size
             network.get_input(0).shape = [batch_size, *cls.INPUT_SHAPE]
 
             network = cls.add_plugin(network)
@@ -92,5 +92,5 @@ class YOLOV4(YOLO):
     MODEL_PATH = Path(__file__).parent /  'yolov4_crowdhuman.onnx'
     NUM_CLASSES = 2
     INPUT_SHAPE = (3, 512, 512)
-    SCALING_FACTORS = [8, 16, 32]
+    LAYER_FACTORS = [8, 16, 32]
     ANCHORS = [[11, 22, 24, 60, 37, 116], [54, 186, 69, 268, 89, 369], [126, 491, 194, 314, 278, 520]]

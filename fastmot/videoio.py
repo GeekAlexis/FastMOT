@@ -1,69 +1,58 @@
 from pathlib import Path
+from enum import Enum
 from collections import deque
+import subprocess
 import threading
 import logging
 import time
 import cv2
 
 
-class VideoIO:
-    """
-    flip method:
-        0: none          
-        1: counterclockwise
-        2: rotate-180    
-        3: clockwise 
-        4: horizontal-flip
-        5: upper-right-diagonal
-        6: vertical-flip
-        7: upper-left-diagonal
-    """
+class Protocol(Enum):
+    FILE = 0
+    CSI = 1
+    V4L2 = 2
+    RTSP = 3
 
-    def __init__(self, size, config, input_path=None, output_path=None, delay=0):
+
+class VideoIO:
+    def __init__(self, size, config, input_uri, output_uri=None, latency=0):
         self.size = size
-        self.input_path = input_path
-        self.output_path = output_path
-        self.delay = delay
-        self.capture_size = config['capture_size']
+        self.input_uri = input_uri
+        self.output_uri = output_uri
+        self.latency = latency
+
+        self.camera_size = config['camera_size']
         self.camera_fps = config['camera_fps']
-        self.flip_method = config['flip_method']
         self.max_queue_size = config['max_queue_size']
 
-        if self.input_path is None:
-            # use camera when no input path is provided
-            self.cap = cv2.VideoCapture(self._gst_cap_str(), cv2.CAP_GSTREAMER)
-        else:
-            self.cap = cv2.VideoCapture(self.input_path)
-
-        self.frame_queue = deque()
+        self.protocol = self._parse_uri(self.input_uri)
+        self.cap = cv2.VideoCapture(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
+        self.frame_queue = deque([], maxlen=self.max_queue_size)
         self.cond = threading.Condition()
         self.exit_event = threading.Event()
         self.capture_thread = threading.Thread(target=self._capture_frames)
 
         ret, frame = self.cap.read()
         if not ret:
-            raise RuntimeError("Unable to read video stream")
+            raise RuntimeError('Unable to read video stream')
         self.frame_queue.append(frame)
 
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.vid_size = (self.cap.get(cv2.CAP_PROP_FRAME_WIDTH), self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.capture_dt = 1 / self.fps
-        if self.input_path is None:
+        logging.info('%dx%d stream @ %d FPS', *self.size, self.fps)
+
+        if self.protocol != Protocol.FILE:
             # delay for camera
-            self.delay = self.capture_dt = max(self.delay, self.capture_dt)
+            self.latency = self.capture_dt = max(self.latency, self.capture_dt)
             self.fps = 1 / self.capture_dt
-        if self.output_path is not None:
-            assert Path(self.output_path).suffix == '.mp4', 'Only mp4 format is supported'
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            self.writer = cv2.VideoWriter(self._gst_write_str(), 0, self.fps, self.size, True)
-        
-        logging.info('%dx%d stream @ %d FPS', *self.vid_size, self.fps)
-        if self.vid_size != self.size:
-            logging.warning('Expect %dx%d, resizing will lower frame rate', *self.size)
+        if self.output_uri is not None:
+            Path(self.output_uri).parent.mkdir(parents=True, exist_ok=True)
+            self.writer = cv2.VideoWriter(self._gst_write_pipeline(), 0, self.fps, self.size, True)
 
     def start_capture(self):
         if not self.cap.isOpened():
-            self.cap.open(self._gst_cap_str(), cv2.CAP_GSTREAMER)
+            self.cap.open(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
         if not self.capture_thread.is_alive():
             self.capture_thread.start()
 
@@ -83,9 +72,6 @@ class VideoIO:
                 return None
             frame = self.frame_queue.popleft()
             self.cond.notify()
-
-        if self.vid_size != self.size:
-            frame = cv2.resize(frame, self.size)
         return frame
 
     def write(self, frame):
@@ -93,60 +79,116 @@ class VideoIO:
         self.writer.write(frame)
 
     def release(self):
-        if self.input_path is not None:
-            self.cap.release()
         if hasattr(self, 'writer'):
             self.writer.release()
+        self.stop_capture()
+        self.cap.release()
+        # try:
+        #     self.cap.release()
+        # except Exception:
+        #     pass
 
-    def _gst_cap_str(self):
-        if self.input_path is None:
-            # use camera when no input path is provided
+    def _parse_uri(self, uri):
+        pos = uri.find('://')
+        if '/dev/video' in uri:
+            protocol = Protocol.V4L2
+        elif uri[:pos] == 'csi':
+            protocol = Protocol.CSI
+        elif uri[:pos] == 'rtsp':
+            protocol = Protocol.RTSP
+        else:
+            protocol = Protocol.FILE
+        return protocol
+        
+    def _gst_cap_pipeline(self):
+        gst_elements = str(subprocess.check_output('gst-inspect-1.0'))
+        scaling_pad = 'nvvidconv' if 'nvvidconv' in gst_elements else 'videoscale'
+        if self.protocol == Protocol.FILE:
             gst_pipeline = (
-                "nvarguscamerasrc ! "
-                "video/x-raw(memory:NVMM), "
-                "width=(int)%d, height=(int)%d, "
-                "format=(string)NV12, framerate=(fraction)%d/1 ! "
-                "nvvidconv flip-method=%d ! "
-                "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx !"
-                "videoconvert ! appsink"
+                'filesrc location=%s ! '
+                'decodebin ! '
+                '%s ! video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! '
+                'videoconvert ! appsink'
                 % (
-                    *self.capture_size,
-                    self.camera_fps,
-                    self.flip_method,
+                    self.input_uri,
+                    scaling_pad,
                     *self.size
                 )
             )
-        else:
+        elif self.protocol == Protocol.CSI:
+            if 'nvarguscamerasrc' in gst_elements:
+                gst_pipeline = (
+                    'nvarguscamerasrc sensor_id=%s ! '
+                    'video/x-raw(memory:NVMM), width=(int)%d, height=(int)%d, '
+                    'format=(string)NV12, framerate=(fraction)%d/1 ! '
+                    'nvvidconv flip-method=2 ! '
+                    'video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! '
+                    'videoconvert ! appsink'
+                    % (
+                        self.input_uri[6:],
+                        *self.camera_size,
+                        self.camera_fps,
+                        *self.size
+                    )
+                )
+            else:
+                raise RuntimeError('Gstreamer CSI plugin not found')
+        elif self.protocol == Protocol.V4L2:
+            if 'v4l2src' in gst_elements:
+                gst_pipeline = (
+                    'v4l2src device=%s ! '
+                    'video/x-raw, width=(int)%d, height=(int)%d ! '
+                    'videorate ! video/x-raw, framerate=(fraction)%d/1 ! '
+                    'videoconvert ! appsink'
+                    % (
+                        self.input_uri,
+                        *self.size,
+                        self.camera_fps
+                    )
+                )
+                # gst_pipeline = (
+                #     'v4l2src device=/dev/video%d ! '
+                #     'video/x-raw, width=(int)%d, height=(int)%d, framerate=(fraction)%d/1 ! '
+                #     'videoscale ! video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx !'
+                #     'videoconvert ! appsink'
+                #     % (
+                #         self.camera_id,
+                #         *self.camera_size,
+                #         self.camera_fps,
+                #         *self.size
+                #     )
+                # )
+            else:
+                raise RuntimeError('Gstreamer V4L2 plugin not found')
+        elif self.protocol == Protocol.RTSP:
             gst_pipeline = (
-                "filesrc location=%s ! "
-                "mp4mux ! queue ! h264parse ! omxh264dec ! "
-                "nvvidconv ! video/x-raw, format=BGRx, width=%d, height=%d ! "
-                "videoconvert ! appsink"
+                'rtspsrc location=%s ! '
+                'decodebin ! '
+                '%s ! video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! '
+                'videoconvert ! appsink'
                 % (
-                    self.input_path,
+                    self.input_uri,
+                    scaling_pad,
                     *self.size
                 )
             )
         return gst_pipeline
-        # "v4l2src device=/dev/video0 ! "
-        # "video/x-raw, "
-        # "width=(int)%d, height=(int)%d, "
-        # "framerate=(fraction)%d/1 ! "
-        # "videoflip method=%d ! "
-        # "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx !"
-        # "videoconvert ! appsink"
-        # % (
-        #     *self.capture_size,
-        #     self.camera_fps,
-        #     self.flip_method,
-        #     *self.size
-        # )
-    # 'filesrc location=%s ! qtdemux ! queue ! h264parse ! omxh264dec ! nvvidconv ! video/x-raw, format=BGRx, width=%d, height=%d ! videoconvert ! appsink' % (*self.size, self.input_path)
-    #decodebin
-    # "rtspsrc location=rtsp://<user>:<pass>@<ip>:<port> ! rtph264depay ! h264parse ! omxh264dec ! video/x-raw, format=BGRx, width=%d, height=%d ! videoconvert ! appsink"
+    # 'rtspsrc location=rtsp://<user>:<pass>@<ip>:<port> ! 'decodebin' ! nvvidconv ! video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! videoconvert ! appsink'
+    # 'rtph264depay ! h264parse ! omxh264dec'
 
-    def _gst_write_str(self):
-        return 'appsrc ! autovideoconvert ! omxh264enc ! mp4mux ! filesink location=%s ' % self.output_path
+    def _gst_write_pipeline(self):
+        gst_elements = str(subprocess.check_output('gst-inspect-1.0'))
+        # use hardware encoder if found
+        if 'omxh264enc' in gst_elements:
+            h264_encoder = 'omxh264enc'
+        elif 'avenc_h264_omx' in gst_elements:
+            h264_encoder = 'avenc_h264_omx'
+        elif 'x264enc' in gst_elements:
+            h264_encoder = 'x264enc'
+        else:
+            raise RuntimeError('Gstreamer H.264 encoder not found')
+        gst_pipeline = 'appsrc ! autovideoconvert ! %s ! qtmux ! filesink location=%s ' % (h264_encoder, self.output_uri)
+        return gst_pipeline
 
     def _capture_frames(self):
         tic = time.time()
@@ -159,10 +201,10 @@ class VideoIO:
                     self.cond.notify()
                     break
                 time_elapsed = time.time() - tic
-                if self.delay - time_elapsed <= 0.01:
+                if self.latency - time_elapsed <= 0.01:
                     # ret, frame = self.cap.retrieve()
                     tic = time.time()
-                    while len(self.frame_queue) >= self.max_queue_size and not self.exit_event.is_set():
+                    while len(self.frame_queue) == self.max_queue_size and not self.exit_event.is_set():
                         self.cond.wait()
                     self.frame_queue.append(frame)
                     self.cond.notify()
