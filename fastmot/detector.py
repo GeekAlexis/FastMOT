@@ -7,7 +7,6 @@ from collections import defaultdict
 from numba.typed import Dict
 import numpy as np
 import numba as nb
-import csv
 import cv2
 import time
 
@@ -270,25 +269,23 @@ class PublicDetector(Detector):
         seqinfo.read(self.seq_root / 'seqinfo.ini')
         self.seq_size = (int(seqinfo['Sequence']['imWidth']), int(seqinfo['Sequence']['imHeight']))
 
-        self.pub_detections = defaultdict(list)
-        with open(self.seq_root / 'det' / 'det.txt', newline='') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',', quoting=csv.QUOTE_NONNUMERIC)
-            for row in reader:
-                frame_id = int(row[0])
-                tlbr = to_tlbr(tuple(row[2:6]))
-                # scale and clip inside frame
-                tlbr[:2] = tlbr[:2] / self.seq_size * self.size
-                tlbr[2:] = tlbr[2:] / self.seq_size * self.size
-                tlbr = np.maximum(tlbr, 0)
-                tlbr = np.minimum(tlbr, np.append(self.size, self.size))
-                tlbr = as_rect(tlbr)
-                conf = row[6]
-                if conf >= self.conf_thresh and area(tlbr) <= self.max_area:
-                    self.pub_detections[frame_id].append((tlbr, 1, conf))
-        self.query_frame = None
+        self.detections = defaultdict(list)
+        self.query_fid = None
+        
+        det_txt = self.seq_root / 'det' / 'det.txt'
+        for frame_id, _, x, y, w, h, conf in np.loadtxt(det_txt, delimiter=','):
+            tlbr = to_tlbr((x, y, w, h))
+            # scale and clip inside frame
+            tlbr[:2] = tlbr[:2] / self.seq_size * self.size
+            tlbr[2:] = tlbr[2:] / self.seq_size * self.size
+            tlbr = np.maximum(tlbr, 0)
+            tlbr = np.minimum(tlbr, np.append(self.size, self.size))
+            tlbr = as_rect(tlbr)
+            if conf >= self.conf_thresh and area(tlbr) <= self.max_area:
+                self.detections[int(frame_id)].append((tlbr, 1, conf))
 
     def detect_async(self, frame_id, frame):
-        self.query_frame = frame_id + 1
+        self.query_fid = frame_id + 1
 
     def postprocess(self):
-        return np.asarray(self.pub_detections[self.query_frame], dtype=DET_DTYPE).view(np.recarray)
+        return np.asarray(self.detections[self.query_fid], dtype=DET_DTYPE).view(np.recarray)

@@ -4,12 +4,12 @@
     "video_io": {
         "camera_size": [1920, 1080],
         "camera_fps": 30,
-        "max_queue_size": 50
+        "buffer_size": 10
     },
 
     "mot": {
+        "detector_type": "PUBLIC",
         "detector_frame_skip": 5,
-        "detector_type": "YOLO",
 
         "ssd_detector": {
             "model": "SSDInceptionV2",
@@ -23,14 +23,14 @@
         "yolo_detector": {
             "model": "YOLOV4",
             "class_ids": [1],
-            "conf_thresh": 0.3,
-            "max_area": 700000,
-            "nms_thresh": 0.6
+            "conf_thresh": 0.25,
+            "max_area": 900000,
+            "nms_thresh": 0.5
         },
         "public_detector": {
             "sequence": "eval/data/MOT17-04",
             "conf_thresh": 0.5,
-            "max_area": 700000
+            "max_area": 900000
         },
         "feature_extractor": {
             "model": "OSNet025",
@@ -41,11 +41,11 @@
             "max_age": 10,
             "age_factor": 2,
             "motion_weight": 0.04,
-            "max_feature_cost": 0.85,
-            "min_iou_cost": 0.3,
-            "max_reid_cost": 0.65,
-            "dup_iou_thresh": 0.8,
-            "max_feat_overlap": 0.2,
+            "max_feature_cost": 0.9,
+            "min_iou_cost": 0.4,
+            "max_reid_cost": 0.6,
+            "duplicate_iou": 0.8,
+            "max_feat_overlap": 1,
             "min_register_conf": 0.5,
             "lost_buf_size": 50,
             "n_init": 3,
@@ -55,7 +55,7 @@
                 "large_std_acc": [256, 650],
                 "min_std_det": [4, 4],
                 "min_std_flow": [5, 5],
-                "std_factor_det": [0.11, 0.11],
+                "std_factor_det": [0.08, 0.08],
                 "std_factor_flow": [0.13, 0.13],
                 "init_std_pos_factor": 20,
                 "init_std_vel_factor": 15,

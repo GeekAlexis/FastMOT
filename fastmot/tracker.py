@@ -27,7 +27,7 @@ class MultiTracker:
         self.max_feature_cost = config['max_feature_cost']
         self.min_iou_cost = config['min_iou_cost']
         self.max_reid_cost = config['max_reid_cost']
-        self.dup_iou_thresh = config['dup_iou_thresh']
+        self.duplicate_iou = config['duplicate_iou']
         self.max_feat_overlap = config['max_feat_overlap']
         self.min_register_conf = config['min_register_conf']
         self.lost_buf_size = config['lost_buf_size']
@@ -51,7 +51,6 @@ class MultiTracker:
 
     def step_kalman_filter(self, frame_id):
         for trk_id, track in list(self.tracks.items()):
-            # track.frames_since_acquired += 1
             flow_bbox = self.flow_bboxes.get(trk_id)
             time_since_acquired = frame_id - track.start_frame
             if time_since_acquired <= self.n_init:
@@ -67,14 +66,13 @@ class MultiTracker:
                     del self.tracks[trk_id]
             else:
                 mean, cov = track.state
+                # print(cov)
                 # track using kalman filter and flow measurement
                 mean, cov = self.kf.warp(mean, cov, self.H_camera)
                 mean, cov = self.kf.predict(mean, cov)
                 if flow_bbox is not None and track.active:
                     # give large flow uncertainty for occluded objects
                     std_multiplier = max(self.age_factor * track.age, 1)
-                    # std_multiplier = max((track.age + 1) / track.flow_conf, 1)
-                    # std_multiplier = max(1 / track.flow_conf, 1)
                     mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
                 next_tlbr = as_rect(mean[:4])
                 track.state = (mean, cov)
@@ -147,7 +145,6 @@ class MultiTracker:
             track.age = 0
             track.state = (mean, cov)
             track.tlbr = next_tlbr
-            track.flow_conf = 1
             if not track.confirmed or max_overlap <= self.max_feat_overlap:
                 # update when the overlap with other tracks is small
                 track.update_features(embeddings[det_id])
@@ -163,7 +160,7 @@ class MultiTracker:
         for (trk_id, det_id) in reid_matches:
             track = self.lost[trk_id]
             det = detections[det_id]
-            track.reactivate(det.tlbr, embeddings[det_id], frame_id)
+            track.reactivate(frame_id, det.tlbr, embeddings[det_id])
             self.tracks[trk_id] = track
             logging.info('Re-identified: %s', track)
             updated.append(trk_id)
@@ -246,7 +243,6 @@ class MultiTracker:
         if not maximize:
             for row, col in zip(rows, cols):
                 if cost[row, col] < INF_COST:
-                    # print(f'matched feature_cost: {feature_cost[row][col]}')
                     matches.append((trk_ids[row], det_ids[col]))
                 else:
                     unmatched_trk_ids.append(trk_ids[row])
@@ -281,7 +277,7 @@ class MultiTracker:
         aged_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in aged])
 
         ious = bbox_overlaps(updated_bboxes, aged_bboxes)
-        idx = np.where(ious >= self.dup_iou_thresh)
+        idx = np.where(ious >= self.duplicate_iou)
         dup_ids = set()
         for row, col in zip(*idx):
             updated_id, aged_id = updated[row], aged[col]

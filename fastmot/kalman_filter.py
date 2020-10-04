@@ -168,7 +168,7 @@ class KalmanFilter:
         return self._maha_distance(projected_mean, projected_cov, measurements)
 
     @staticmethod
-    @nb.njit(parallel=True, fastmath=True, cache=True)
+    @nb.njit(fastmath=True, cache=True)
     def warp(mean, covariance, H_camera):
         """Transform kalman filter state based on camera motion.
         https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub
@@ -198,21 +198,11 @@ class KalmanFilter:
         tmp = np.dot(v, pos_br) + 1
         grad_br = (tmp * A - np.outer(A @ pos_br + t, v)) / tmp**2
 
-        # warp state TODO: only warp center velocity?
+        # warp state
         warped_pos = perspective_transform(np.stack((pos_tl, pos_br)), H_camera)
         mean[:4] = warped_pos.ravel()
         mean[4:6] = grad_tl @ vel_tl
         mean[6:] = grad_br @ vel_br
-
-        # warp covariance too
-        for i in nb.prange(0, 4):
-            k = 2 * i
-            for j in nb.prange(0, 4):
-                l = 2 * j
-                grad_left = grad_tl if i % 2 == 0 else grad_br
-                grad_right = grad_tl if j % 2 == 0 else grad_br
-                cov_blk = np.ascontiguousarray(covariance[k:k + 2, l:l + 2])
-                covariance[k:k + 2, l:l + 2] = grad_left @ cov_blk @ grad_right.T
         return mean, covariance
 
     @staticmethod
@@ -256,7 +246,7 @@ class KalmanFilter:
     @nb.njit(fastmath=True, cache=True)
     def _maha_distance(mean, covariance, measurements):
         diff = measurements - mean
+        # print(covariance)
         L = np.linalg.cholesky(covariance)
         y = np.linalg.solve(L, diff.T)
         return np.sum(y**2, axis=0)
-

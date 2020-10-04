@@ -6,7 +6,7 @@ import time
 from .detector import SSDDetector, YoloDetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
-from .utils.visualization import draw_trk, draw_det, draw_tile, draw_bkg_flow
+from .utils.visualization import draw_trk, draw_det, draw_bkg_flow
 
 
 class DetectorType(Enum):
@@ -16,9 +16,9 @@ class DetectorType(Enum):
 
 
 class Mot:
-    def __init__(self, size, capture_dt, config, enable_drawing=False, verbose=False):
+    def __init__(self, size, capture_dt, config, drawing=False, verbose=False):
         self.size = size
-        self.enable_drawing = enable_drawing
+        self.drawing = drawing
         self.verbose = verbose
         self.detector_type = DetectorType[config['detector_type']]
         self.detector_frame_skip = config['detector_frame_skip']
@@ -87,7 +87,7 @@ class Mot:
                 self.track_time += elapsed
                 logging.debug('TRACK %f', elapsed)
 
-        if self.enable_drawing:
+        if self.drawing:
             self._draw(frame, detections, debug=self.verbose)
 
         self.frame_count += 1
@@ -100,6 +100,4 @@ class Mot:
         if debug:
             [draw_det(frame, det) for det in detections]
             # draw_bkg_flow(frame, self.tracker)
-            # if self.frame_count % self.detector_frame_skip == 0:
-            #     draw_tile(frame, self.detector)
         cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

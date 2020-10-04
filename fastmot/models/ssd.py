@@ -132,7 +132,6 @@ class SSDMobileNetV1(SSD):
             "ToFloat": Input,
             "image_tensor": Input,
             "MultipleGridAnchorGenerator/Concatenate": concat_priorbox,
-            # "MultipleGridAnchorGenerator/Identity": concat_priorbox,
             "concat": concat_box_loc,
             "concat_1": concat_box_conf
         }
@@ -230,7 +229,6 @@ class SSDMobileNetV2(SSD):
             "ToFloat": Input,
             "image_tensor": Input,
             "Concatenate": concat_priorbox,
-            # "MultipleGridAnchorGenerator/Identity": concat_priorbox,
             "concat": concat_box_loc,
             "concat_1": concat_box_conf
         }
@@ -329,7 +327,6 @@ class SSDInceptionV2(SSD):
             "ToFloat": Input,
             "image_tensor": Input,
             "MultipleGridAnchorGenerator/Concatenate": concat_priorbox,
-            # "MultipleGridAnchorGenerator/Identity": concat_priorbox,
             "concat": concat_box_loc,
             "concat_1": concat_box_conf
         }

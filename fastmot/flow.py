@@ -3,7 +3,6 @@ import itertools
 import numpy as np
 import numba as nb
 import cv2
-import time
 
 from .utils.rect import *
 
@@ -73,10 +72,11 @@ class Flow:
         np.copyto(self.bkg_mask, self.ones)
         for track in sorted_tracks:
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
+            # TODO: keep keypoints outside rect?
             keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.bkg_mask)
             target_mask = crop(self.bkg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
-            if target_area == 0 or track.flow_conf == 0:
+            if target_area == 0:
                 keypoints = np.empty((0, 2), np.float32)
             elif len(keypoints) / target_area < self.feature_density:
                 # only detect new keypoints when too few are propagated
@@ -106,8 +106,6 @@ class Flow:
             keypoints = np.empty((0, 2), np.float32)
         else:
             keypoints = np.float32([kp.pt for kp in keypoints])
-            # term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
-            # keypoints = cv2.cornerSubPix(prev_frame_small_bkg, keypoints, (5, 5), (-1, -1), term)
             keypoints = self._unscale_pts(keypoints, self.bkg_feat_scale_factor, None)
         bkg_begin = target_ends[-1]
         all_prev_pts.append(keypoints)
@@ -128,8 +126,6 @@ class Flow:
         H_camera = None
         prev_bkg_pts, matched_bkg_pts = self._get_good_match(all_prev_pts, all_cur_pts, status, bkg_begin, -1)
         if len(matched_bkg_pts) >= 4:
-            # H_camera, inlier_mask = cv2.estimateAffinePartial2D(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
-            #   maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
             H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
                 maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
             self.prev_bkg_keypoints, self.bkg_keypoints = self._get_inliers(prev_bkg_pts, matched_bkg_pts, inlier_mask)
@@ -137,7 +133,6 @@ class Flow:
                 self.bkg_keypoints = np.empty((0, 2), np.float32)
                 logging.warning('Background registration failed')
                 return {}, None
-            # H_camera = np.vstack((H_camera, [0, 0, 1]))
         else:
             self.bkg_keypoints = np.empty((0, 2), np.float32)
             logging.warning('Background registration failed')
@@ -161,18 +156,9 @@ class Flow:
             est_tlbr = self._estimate_bbox(track.tlbr, H_affine)
             track.prev_keypoints, track.keypoints = self._get_inliers(prev_pts, matched_pts, inlier_mask)
             if intersection(est_tlbr, self.frame_rect) is None or len(track.keypoints) < self.min_inlier:
-                if len(track.keypoints) < self.min_inlier:
-                    track.flow_conf = 0
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
-            # TODO: increase uncertainty for 5 frames when min inlier too small? get ratio over desired density
             target_mask = crop(self.fg_mask, est_tlbr)
-            # track.flow_conf = self._estimate_conf(track.keypoints, target_mask, self.feature_density)
-            # if track.flow_conf == 0:
-            #     logging.debug("Zero flow conf: ID %d", track.trk_id)
-            #     track.keypoints = np.empty((0, 2), np.float32)
-            #     continue
-            # logging.debug("flow confidence: %f", track.flow_conf)
             next_bboxes[track.trk_id] = est_tlbr
             # zero out current track in foreground mask
             target_mask[:] = 0
@@ -181,17 +167,8 @@ class Flow:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _estimate_feature_dist(target_area, feature_dist_factor):
-        # target_area = np.count_nonzero(target_mask)
         est_feat_dist = round(np.sqrt(target_area) * feature_dist_factor)
         return max(est_feat_dist, 1)
-
-    @staticmethod
-    @nb.njit(fastmath=True, cache=True)
-    def _estimate_conf(inliers, target_mask, feature_density):
-        target_area = mask_area(target_mask)
-        if target_area == 0:
-            return 0
-        return len(inliers) / (target_area * feature_density)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
@@ -201,16 +178,6 @@ class Flow:
         scale = 1. if scale < 0.9 or scale > 1.1 else scale
         size = scale * get_size(tlbr)
         return to_tlbr(np.append(tl, size))
-
-    # @staticmethod
-    # @nb.njit(fastmath=True, cache=True)
-    # def _rect_filter(pts, tlbr):
-    #     if len(pts) == 0 or tlbr is None:
-    #         return np.empty((0, 2), np.float32)
-    #     tl, br = tlbr[:2], tlbr[2:]
-    #     ge_le = (pts >= tl) & (pts <= br)
-    #     keep = np.where(ge_le[:, 0] & ge_le[:, 1])
-    #     return pts[keep]
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

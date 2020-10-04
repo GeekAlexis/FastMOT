@@ -92,15 +92,6 @@ def crop(img, tlbr):
 def multi_crop(img, tlbrs):
     _tlbrs = tlbrs.astype(np.int_)
     return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1] for i in range(len(_tlbrs))]
-
-
-# @nb.njit(fastmath=True, cache=True)
-# def iou(tlbr1, tlbr2):
-#     tlbr = intersection(tlbr1, tlbr2)
-#     if tlbr is None:
-#         return 0
-#     area_intersection = area(tlbr)
-#     return area_intersection / (area(tlbr1) + area(tlbr2) - area_intersection)
     
 
 @nb.njit(fastmath=True, cache=True)
@@ -133,40 +124,6 @@ def perspective_transform(pts, m):
     pts = pts / pts[-1]
     return pts[:2].T
 
-
-# @nb.njit(parallel=True, fastmath=True, cache=True)
-# def iou(bbox, candidates):
-#     """Vectorized version of intersection over union.
-#     Parameters
-#     ----------
-#     bbox : ndarray
-#         A bounding box in format `(top left x, top left y, bottom right x, bottom right y)`.
-#     candidates : ndarray
-#         A matrix of candidate bounding boxes (one per row) in the same format
-#         as `bbox`.
-#     Returns
-#     -------
-#     ndarray
-#         The intersection over union in [0, 1] between the `bbox` and each
-#         candidate. A higher score means a larger fraction of the `bbox` is
-#         occluded by the candidate.
-#     """
-#     bbox, candidates = np.asarray(bbox), np.asarray(candidates)
-#     if len(candidates) == 0:
-#         return np.zeros(len(candidates))
-
-#     area_bbox = np.prod(bbox[2:] - bbox[:2] + 1)
-#     size_candidates = candidates[:, 2:] - candidates[:, :2] + 1
-#     area_candidates = size_candidates[:, 0] * size_candidates[:, 1]
-
-#     overlap_xmin = np.maximum(bbox[0], candidates[:, 0])
-#     overlap_ymin = np.maximum(bbox[1], candidates[:, 1])
-#     overlap_xmax = np.minimum(bbox[2], candidates[:, 2])
-#     overlap_ymax = np.minimum(bbox[3], candidates[:, 3])
-    
-#     area_intersection = np.maximum(0, overlap_xmax - overlap_xmin + 1) * \
-#         np.maximum(0, overlap_ymax - overlap_ymin + 1)
-#     return area_intersection / (area_bbox + area_candidates - area_intersection)
 
 @nb.njit(fastmath=True, cache=True)
 def nms(bboxes, scores, nms_thresh):

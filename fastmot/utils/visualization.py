@@ -36,18 +36,17 @@ LIGHT_COLORS = [
 
 
 def draw_trk(frame, trk, draw_flow=False):
-    # _draw_bbox(frame, trk.tlbr, str(trk.trk_id), (0, 165, 255), (143, 48, 0))
     _draw_bbox(frame, trk.tlbr, str(trk.trk_id), COLORS[trk.trk_id % len(COLORS)], 0)
     if draw_flow:
         _draw_feature_match(frame, trk.keypoints, trk.prev_keypoints, (0, 255, 255))
 
 
 def draw_det(frame, det):
-    # _draw_bbox(frame, det.tlbr, f'{det.conf:.2f}', COLORS[det.tile_id], 0)
     _draw_bbox(frame, det.tlbr, f'{det.conf:.2f}', LIGHT_COLORS[det.label % len(LIGHT_COLORS)], 0)
 
 
 def draw_tile(frame, detector):
+    assert hasattr(detector, 'tiles')
     for tile in detector.tiles:
         tl = np.rint(tile[:2] * detector.scale_factor).astype(int)
         br = np.rint(tile[2:] * detector.scale_factor).astype(int)

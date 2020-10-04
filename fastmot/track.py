@@ -1,4 +1,3 @@
-from collections import deque
 import numpy as np
 
 from .models import LABEL_MAP
@@ -14,15 +13,13 @@ class Track:
         self.start_frame = frame_id
 
         self.bin_height = 10
-        self.alpha = 0.8
+        self.alpha = 0.9
 
         self.age = 0
         self.confirmed = False
-        self.features = deque([], maxlen=10)
         self.smooth_feature = None
         self.state = None
         
-        self.flow_conf = 1
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
@@ -46,15 +43,13 @@ class Track:
         else:
             self.smooth_feature = self.alpha * self.smooth_feature + (1 - self.alpha) * embedding
             self.smooth_feature /= np.linalg.norm(self.smooth_feature)
-        # self.features.append(embedding)
 
-    def reactivate(self, tlbr, embedding, frame_id):
+    def reactivate(self, frame_id, tlbr, embedding):
         self.tlbr = tlbr
         self.init_tlbr = tlbr
         self.start_frame = frame_id
-        self.update_features(embedding)
         self.age = 0
-        self.flow_conf = 1
+        self.update_features(embedding)
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
            
