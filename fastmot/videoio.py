@@ -67,7 +67,6 @@ class VideoIO:
 
     def read(self):
         with self.cond:
-            # logging.debug('frame queue size: %d', len(self.frame_queue))
             while len(self.frame_queue) == 0 and not self.exit_event.is_set():
                 self.cond.wait()
             if len(self.frame_queue) == 0 and self.exit_event.is_set():
@@ -148,7 +147,6 @@ class VideoIO:
                 raise RuntimeError('Gstreamer V4L2 plugin not found')
         elif self.protocol == Protocol.RTSP:
             pipeline = 'rtspsrc location=%s latency=0 ! decodebin ! ' % self.input_uri
-            # 'rtph264depay ! h264parse ! omxh264dec'
         return pipeline + cvt_pipeline
 
     def _gst_write_pipeline(self):
@@ -162,7 +160,13 @@ class VideoIO:
             h264_encoder = 'x264enc'
         else:
             raise RuntimeError('Gstreamer H.264 encoder not found')
-        pipeline = 'appsrc ! autovideoconvert ! %s ! qtmux ! filesink location=%s ' % (h264_encoder, self.output_uri)
+        pipeline = (
+            'appsrc ! autovideoconvert ! %s ! qtmux ! filesink location=%s '
+            % (
+                h264_encoder, 
+                self.output_uri
+            )
+        )
         return pipeline
 
     def _capture_frames(self):
@@ -173,12 +177,7 @@ class VideoIO:
                     self.exit_event.set()
                     self.cond.notify()
                     break
-                # if self.protocol != Protocol.FILE:
-                #     # discard previous unprocessed frame for camera
-                #     try:
-                #         self.frame_queue.popleft()
-                #     except IndexError:
-                #         pass
+                # keep unprocessed frames in the buffer for video file
                 if self.protocol == Protocol.FILE:
                     while len(self.frame_queue) == self.buffer_size and not self.exit_event.is_set():
                         self.cond.wait()

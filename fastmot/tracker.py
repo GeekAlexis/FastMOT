@@ -66,7 +66,6 @@ class MultiTracker:
                     del self.tracks[trk_id]
             else:
                 mean, cov = track.state
-                # print(cov)
                 # track using kalman filter and flow measurement
                 mean, cov = self.kf.warp(mean, cov, self.H_camera)
                 mean, cov = self.kf.predict(mean, cov)

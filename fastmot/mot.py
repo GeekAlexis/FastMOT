@@ -16,9 +16,9 @@ class DetectorType(Enum):
 
 
 class Mot:
-    def __init__(self, size, capture_dt, config, drawing=False, verbose=False):
+    def __init__(self, size, capture_dt, config, draw=False, verbose=False):
         self.size = size
-        self.drawing = drawing
+        self.draw = draw
         self.verbose = verbose
         self.detector_type = DetectorType[config['detector_type']]
         self.detector_frame_skip = config['detector_frame_skip']
@@ -30,6 +30,7 @@ class Mot:
             self.detector = YoloDetector(self.size, config['yolo_detector'])
         elif self.detector_type == DetectorType.PUBLIC:
             self.detector = PublicDetector(self.size, config['public_detector'])
+            
         logging.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor(config['feature_extractor'])
         self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric, config['multi_tracker'])
@@ -87,17 +88,20 @@ class Mot:
                 self.track_time += elapsed
                 logging.debug('TRACK %f', elapsed)
 
-        if self.drawing:
-            self._draw(frame, detections, debug=self.verbose)
+        if self.draw:
+            self._draw(frame, detections, self.verbose)
 
         self.frame_count += 1
 
     def initiate(self):
         self.frame_count = 0
 
-    def _draw(self, frame, detections, debug=False):
-        [draw_trk(frame, track, draw_flow=debug) for track in self.visible_tracks]
-        if debug:
-            [draw_det(frame, det) for det in detections]
+    def _draw(self, frame, detections, verbose=False):
+        for track in self.visible_tracks:
+            draw_trk(frame, track, draw_flow=verbose)
+        if verbose:
+            for det in detections:
+                draw_det(frame, det)
             # draw_bkg_flow(frame, self.tracker)
-        cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
+        cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30), 
+            cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

@@ -30,13 +30,13 @@ class KalmanFilter:
         self.min_std_flow = config['min_std_flow']
         self.std_factor_det = config['std_factor_det']
         self.std_factor_flow = config['std_factor_flow']
-        self.init_std_pos_factor = config['init_std_pos_factor']
-        self.init_std_vel_factor = config['init_std_vel_factor']
+        self.init_pos_std_factor = config['init_pos_std_factor']
+        self.init_vel_std_factor = config['init_vel_std_factor']
         self.vel_coupling = config['vel_coupling']
         self.vel_half_life = config['vel_half_life']
 
-        self.std_acc_slope = (self.large_std_acc[1] - self.small_std_acc[1]) / \
-                            (self.large_std_acc[0] - self.small_std_acc[0])
+        self.std_acc_slope = (self.large_std_acc[1] - self.small_std_acc[1]) / (self.large_std_acc[0] - 
+            self.small_std_acc[0])
         self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4, dtype=np.float))
         self.acc_cov[4:, :4] = np.eye(4) * (0.5 * self.dt**3)
         self.acc_cov[:4, 4:] = np.eye(4) * (0.5 * self.dt**3)
@@ -72,14 +72,14 @@ class KalmanFilter:
 
         width, height = get_size(flow_meas)
         std = np.array([
-            self.init_std_pos_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
-            self.init_std_pos_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
-            self.init_std_pos_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
-            self.init_std_pos_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
-            self.init_std_vel_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
-            self.init_std_vel_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
-            self.init_std_vel_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
-            self.init_std_vel_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
+            self.init_pos_std_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
+            self.init_pos_std_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
+            self.init_pos_std_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
+            self.init_pos_std_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
+            self.init_vel_std_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
+            self.init_vel_std_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
+            self.init_vel_std_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
+            self.init_vel_std_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
         ], dtype=np.float)
         covariance = np.diag(np.square(std))
         return mean, covariance
@@ -193,16 +193,25 @@ class KalmanFilter:
         v = H_camera[2, :2] 
         # translation dof
         t = H_camera[:2, 2] 
+
         tmp = np.dot(v, pos_tl) + 1
-        grad_tl = (tmp * A - np.outer(A @ pos_tl + t, v)) / tmp**2
+        jacobian_tl = (tmp * A - np.outer(A @ pos_tl + t, v)) / tmp**2
         tmp = np.dot(v, pos_br) + 1
-        grad_br = (tmp * A - np.outer(A @ pos_br + t, v)) / tmp**2
+        jacobian_br = (tmp * A - np.outer(A @ pos_br + t, v)) / tmp**2
 
         # warp state
         warped_pos = perspective_transform(np.stack((pos_tl, pos_br)), H_camera)
         mean[:4] = warped_pos.ravel()
-        mean[4:6] = grad_tl @ vel_tl
-        mean[6:] = grad_br @ vel_br
+        mean[4:6] = jacobian_tl @ vel_tl
+        mean[6:] = jacobian_br @ vel_br
+        
+        # warp covariance
+        jacobian = np.zeros((8, 8))
+        jacobian[:2, :2] = jacobian_tl
+        jacobian[2:4, 2:4] = jacobian_br
+        jacobian[4:6, 4:6] = jacobian_tl.T
+        jacobian[6:, 6:] = jacobian_br.T
+        covariance = jacobian @ covariance @ jacobian.T
         return mean, covariance
 
     @staticmethod
@@ -246,7 +255,6 @@ class KalmanFilter:
     @nb.njit(fastmath=True, cache=True)
     def _maha_distance(mean, covariance, measurements):
         diff = measurements - mean
-        # print(covariance)
         L = np.linalg.cholesky(covariance)
         y = np.linalg.solve(L, diff.T)
         return np.sum(y**2, axis=0)

@@ -13,17 +13,17 @@ class Flow:
         self.bkg_feat_scale_factor = config['bkg_feat_scale_factor']
         self.optflow_scale_factor = config['optflow_scale_factor']
         self.feature_density = config['feature_density']
-        self.optflow_err_thresh = config['optflow_err_thresh']
+        self.max_error = config['max_error']
         self.min_inlier = config['min_inlier']
-        self.feature_dist_factor = config['feature_dist_factor']
+        self.feat_dist_factor = config['feat_dist_factor']
         self.ransac_max_iter = config['ransac_max_iter']
         self.ransac_conf = config['ransac_conf']
 
-        self.gftt_target_feat_params = config['gftt_target_feat_params']
-        self.fast_bkg_feat_thresh = config['fast_bkg_feat_thresh']
+        self.target_feat_params = config['target_feat_params']
+        self.bkg_feat_thresh = config['bkg_feat_thresh']
         self.optflow_params = config['optflow_params']
         
-        self.bkg_feature_detector = cv2.FastFeatureDetector_create(threshold=self.fast_bkg_feat_thresh)
+        self.bkg_feature_detector = cv2.FastFeatureDetector_create(threshold=self.bkg_feat_thresh)
 
         # background feature points for visualization
         self.bkg_keypoints = np.empty((0, 2), np.float32)
@@ -72,7 +72,6 @@ class Flow:
         np.copyto(self.bkg_mask, self.ones)
         for track in sorted_tracks:
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
-            # TODO: keep keypoints outside rect?
             keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.bkg_mask)
             target_mask = crop(self.bkg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
@@ -82,9 +81,9 @@ class Flow:
                 # only detect new keypoints when too few are propagated
                 img = crop(self.prev_frame_gray, inside_tlbr)
                 # target_mask = crop(self.bkg_mask, inside_tlbr)
-                feature_dist = self._estimate_feature_dist(target_area, self.feature_dist_factor)
+                feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
                 keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask, minDistance=feature_dist, 
-                    **self.gftt_target_feat_params)
+                    **self.target_feat_params)
                 if keypoints is None or len(keypoints) == 0:
                     keypoints = np.empty((0, 2), np.float32)
                 else:
@@ -115,7 +114,7 @@ class Flow:
         scaled_prev_pts = self._scale_pts(all_prev_pts, self.optflow_scale_factor)
         all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(self.prev_frame_small, frame_small, 
             scaled_prev_pts, None, **self.optflow_params)
-        status = self._get_status(status, err, self.optflow_err_thresh)
+        status = self._get_status(status, err, self.max_error)
         all_cur_pts = self._unscale_pts(all_cur_pts, self.optflow_scale_factor, status)
 
         # reuse preprocessed frame for next prediction
@@ -166,8 +165,8 @@ class Flow:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _estimate_feature_dist(target_area, feature_dist_factor):
-        est_feat_dist = round(np.sqrt(target_area) * feature_dist_factor)
+    def _estimate_feature_dist(target_area, feat_dist_factor):
+        est_feat_dist = round(np.sqrt(target_area) * feat_dist_factor)
         return max(est_feat_dist, 1)
 
     @staticmethod
@@ -241,8 +240,8 @@ class Flow:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _get_status(status, err, err_thresh):
-        return status.ravel().astype(np.bool_) & (err.ravel() < err_thresh)
+    def _get_status(status, err, max_err):
+        return status.ravel().astype(np.bool_) & (err.ravel() < max_err)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

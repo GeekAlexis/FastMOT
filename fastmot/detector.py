@@ -49,7 +49,7 @@ class SSDDetector(Detector):
         self.tiling_grid = config['tiling_grid']
         self.conf_thresh = config['conf_thresh']
         self.max_area = config['max_area']
-        self.merge_iou_thresh = config['merge_iou_thresh']
+        self.merge_thresh = config['merge_thresh']
 
         self.batch_size = int(np.prod(self.tiling_grid))
         self.input_size = np.prod(self.model.INPUT_SHAPE)
@@ -97,7 +97,7 @@ class SSDDetector(Detector):
         bboxes = detections.tlbr
         ious = bbox_overlaps(bboxes, bboxes)
 
-        detections = self._merge(detections, tile_ids, ious, self.merge_iou_thresh)
+        detections = self._merge(detections, tile_ids, ious, self.merge_thresh)
         return detections.view(np.recarray)
     
     @staticmethod
