@@ -14,13 +14,13 @@ class Flow:
         self.optflow_scale_factor = config['optflow_scale_factor']
         self.feature_density = config['feature_density']
         self.max_error = config['max_error']
-        self.min_inlier = config['min_inlier']
         self.feat_dist_factor = config['feat_dist_factor']
         self.ransac_max_iter = config['ransac_max_iter']
         self.ransac_conf = config['ransac_conf']
+        self.min_inlier = config['min_inlier']
 
-        self.target_feat_params = config['target_feat_params']
         self.bkg_feat_thresh = config['bkg_feat_thresh']
+        self.target_feat_params = config['target_feat_params']
         self.optflow_params = config['optflow_params']
         
         self.bkg_feature_detector = cv2.FastFeatureDetector_create(threshold=self.bkg_feat_thresh)

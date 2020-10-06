@@ -39,8 +39,8 @@ def main():
     elapsed_time = 0
 
     if args.mot:
-        drawing = args.gui or args.output_uri is not None
-        mot = fastmot.Mot(config['size'], stream.capture_dt, config['mot'], drawing, args.verbose)
+        draw = args.gui or args.output_uri is not None
+        mot = fastmot.Mot(config['size'], stream.capture_dt, config['mot'], draw=draw, verbose=args.verbose)
         if args.log is not None:
             Path(args.log).parent.mkdir(parents=True, exist_ok=True)
             log = open(args.log, 'w')

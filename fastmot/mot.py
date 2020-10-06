@@ -30,7 +30,7 @@ class Mot:
             self.detector = YoloDetector(self.size, config['yolo_detector'])
         elif self.detector_type == DetectorType.PUBLIC:
             self.detector = PublicDetector(self.size, config['public_detector'])
-            
+
         logging.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor(config['feature_extractor'])
         self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric, config['multi_tracker'])
@@ -103,5 +103,5 @@ class Mot:
             for det in detections:
                 draw_det(frame, det)
             # draw_bkg_flow(frame, self.tracker)
-        cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30), 
+        cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30),
             cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

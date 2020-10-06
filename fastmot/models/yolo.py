@@ -16,7 +16,7 @@ class YOLO:
     @classmethod
     def add_plugin(cls, network):
         """
-        Adapted from https://github.com/jkjung-avt/tensorrt_demos under MIT License
+        Adapted from https://github.com/jkjung-avt/tensorrt_demos
         """
         def get_plugin_creator(plugin_name):
             plugin_creators = trt.get_plugin_registry().plugin_creator_list

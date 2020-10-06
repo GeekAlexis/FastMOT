@@ -23,7 +23,7 @@ class SSD:
         # compile model into TensorRT
         dynamic_graph = gs.DynamicGraph(str(cls.MODEL_PATH))
         dynamic_graph = cls.add_plugin(dynamic_graph)
-        uff_model = uff.from_tensorflow(dynamic_graph.as_graph_def(), [cls.OUTPUT_NAME])
+        uff_model = uff.from_tensorflow(dynamic_graph.as_graph_def(), [cls.OUTPUT_NAME], quiet=True)
 
         with trt.Builder(trt_logger) as builder, builder.create_network() as network, trt.UffParser() as parser:
             builder.max_workspace_size = 1 << 30
@@ -81,7 +81,7 @@ class SSDMobileNetV1(SSD):
             minSize=0.2,
             maxSize=0.95,
             aspectRatios=[1.0, 2.0, 0.5, 3.0, 0.33],
-            variance=[0.1,0.1,0.2,0.2],
+            variance=[0.1, 0.1, 0.2, 0.2],
             featureMapShapes=[19, 10, 5, 3, 2, 1],
             numLayers=6
         )
@@ -178,7 +178,7 @@ class SSDMobileNetV2(SSD):
             minSize=0.2,
             maxSize=0.95,
             aspectRatios=[1.0, 2.0, 0.5, 3.0, 0.33],
-            variance=[0.1,0.1,0.2,0.2],
+            variance=[0.1, 0.1, 0.2, 0.2],
             featureMapShapes=[19, 10, 5, 3, 2, 1],
             numLayers=6
         )
@@ -275,7 +275,7 @@ class SSDInceptionV2(SSD):
             minSize=0.2,
             maxSize=0.95,
             aspectRatios=[1.0, 2.0, 0.5, 3.0, 0.33],
-            variance=[0.1,0.1,0.2,0.2],
+            variance=[0.1, 0.1, 0.2, 0.2],
             featureMapShapes=[19, 10, 5, 3, 2, 1],
             numLayers=6
         )

@@ -58,28 +58,20 @@ class SSDDetector(Detector):
         self.backend = InferenceBackend(self.model, self.batch_size)
 
     def detect_async(self, frame_id, frame):
-        tic = time.perf_counter()
         frame = cv2.resize(frame, self.tiling_region_size)
         self._preprocess(frame, self.tiles, self.backend.input.host, self.input_size)
-
-        logging.debug('img pre %f', time.perf_counter() - tic)
         self.backend.infer_async()
 
     def postprocess(self):
         det_out = self.backend.synchronize()[0]
-
-        tic = time.perf_counter()
         detections, tile_ids = self._filter_dets(det_out, self.tiles, self.model.TOPK, 
             self.label_mask, self.max_area, self.conf_thresh, self.scale_factor)
-        logging.debug('filter dets %f', time.perf_counter() - tic)
-
-        tic = time.perf_counter()
         detections = self._merge_dets(detections, tile_ids)
-        logging.debug('merge dets %f', time.perf_counter() - tic)
         return detections
 
     def _generate_tiles(self):
-        tile_size, tiling_grid = np.asarray(self.model.INPUT_SHAPE[:0:-1]), np.asarray(self.tiling_grid)
+        tile_size = np.asarray(self.model.INPUT_SHAPE[:0:-1])
+        tiling_grid = np.asarray(self.tiling_grid)
         step_size = (1 - self.tile_overlap) * tile_size
         total_size = (tiling_grid - 1) * step_size + tile_size
         total_size = tuple(total_size.astype(int))
@@ -96,7 +88,6 @@ class SSDDetector(Detector):
         # merge detections across different tiles
         bboxes = detections.tlbr
         ious = bbox_overlaps(bboxes, bboxes)
-
         detections = self._merge(detections, tile_ids, ious, self.merge_thresh)
         return detections.view(np.recarray)
     
@@ -148,7 +139,8 @@ class SSDDetector(Detector):
             cur_neighbors = neighbors[i]
             for j in range(len(dets)):
                 if tile_ids[j] != tile_ids[i] and dets[i].label == dets[j].label:
-                    if contains(dets[i].tlbr, dets[j].tlbr) or contains(dets[j].tlbr, dets[i].tlbr) or ious[i, j] >= thresh:
+                    if contains(dets[i].tlbr, dets[j].tlbr) or contains(dets[j].tlbr, dets[i].tlbr) or \
+                        ious[i, j] >= thresh:
                         # pick the nearest detection from each tile
                         if cur_neighbors.get(tile_ids[j]) is None or ious[i, j] > ious[i, cur_neighbors[tile_ids[j]]]:
                             cur_neighbors[tile_ids[j]] = j
@@ -189,21 +181,16 @@ class YoloDetector(Detector):
         self.backend = InferenceBackend(self.model, self.batch_size)
 
     def detect_async(self, frame_id, frame):
-        tic = time.perf_counter()
         frame = cv2.resize(frame, self.model.INPUT_SHAPE[:0:-1])
         self._preprocess(frame, self.backend.input.host)
-
-        logging.debug('img pre %f', time.perf_counter() - tic)
         self.backend.infer_async()
 
     def postprocess(self):
         det_out = self.backend.synchronize()
         det_out = np.concatenate(det_out).reshape(-1, 7)
-
-        tic = time.perf_counter()
-        detections = self._filter_dets(det_out, self.size, self.class_ids, self.conf_thresh, self.nms_thresh, self.max_area)
+        detections = self._filter_dets(det_out, self.size, self.class_ids, self.conf_thresh, 
+            self.nms_thresh, self.max_area)
         detections = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
-        logging.debug('filter dets %f', time.perf_counter() - tic)
         return detections
     
     @staticmethod
@@ -271,7 +258,7 @@ class PublicDetector(Detector):
 
         self.detections = defaultdict(list)
         self.query_fid = None
-        
+
         det_txt = self.seq_root / 'det' / 'det.txt'
         for frame_id, _, x, y, w, h, conf in np.loadtxt(det_txt, delimiter=','):
             tlbr = to_tlbr((x, y, w, h))

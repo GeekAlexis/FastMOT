@@ -28,7 +28,6 @@ class MultiTracker:
         self.min_iou_cost = config['min_iou_cost']
         self.max_reid_cost = config['max_reid_cost']
         self.duplicate_iou = config['duplicate_iou']
-        self.max_feat_overlap = config['max_feat_overlap']
         self.min_register_conf = config['min_register_conf']
         self.lost_buf_size = config['lost_buf_size']
         self.n_init = config['n_init']
@@ -132,21 +131,18 @@ class MultiTracker:
         cost = self._reid_cost(u_detections, u_embeddings)
         reid_matches, _, u_det_ids = self._linear_assignment(cost, lost_ids, u_det_ids)
 
-        max_overlaps = self._max_overlaps(matches, confirmed, detections)
         updated, aged = [], []
 
         # update matched tracks
-        for (trk_id, det_id), max_overlap in zip(matches, max_overlaps):
+        for trk_id, det_id in matches:
             track = self.tracks[trk_id]
             det = detections[det_id]
             mean, cov = self.kf.update(*track.state, det.tlbr, MeasType.DETECTOR)
             next_tlbr = as_rect(mean[:4])
-            track.age = 0
             track.state = (mean, cov)
             track.tlbr = next_tlbr
-            if not track.confirmed or max_overlap <= self.max_feat_overlap:
-                # update when the overlap with other tracks is small
-                track.update_features(embeddings[det_id])
+            track.update_features(embeddings[det_id])
+            track.age = 0
             if not track.confirmed:
                 track.confirmed = True
                 logging.info('Found: %s', track)
@@ -254,19 +250,6 @@ class MultiTracker:
                     unmatched_trk_ids.append(trk_ids[row])
                     unmatched_det_ids.append(det_ids[col])
         return matches, unmatched_trk_ids, unmatched_det_ids
-
-    def _max_overlaps(self, matches, trk_ids, detections):
-        if len(trk_ids) == 0 or len(matches) == 0:
-            return np.zeros(len(matches))
-            
-        matched_trk_ids, matched_det_ids = zip(*matches)
-        det_bboxes = detections[list(matched_det_ids)].tlbr
-        trk_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
-
-        ious = bbox_overlaps(det_bboxes, trk_bboxes)
-        diff_id = np.asarray(matched_trk_ids).reshape(-1, 1) != trk_ids
-        max_overlaps = ious.max(axis=1, initial=0, where=diff_id)
-        return max_overlaps
 
     def _remove_duplicate(self, updated, aged):
         if len(updated) == 0 or len(aged) == 0:
