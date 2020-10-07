@@ -25,7 +25,7 @@ Tracking is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motme
 ## Requirements
 - OpenCV (Gstreamer)
 - TensorFlow (SSD)
-- TensorRT 7
+- TensorRT 7+
 - PyCuda
 - Numpy
 - Numba
@@ -38,18 +38,18 @@ Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidi
   $ scripts/install_jetson.sh
   ```
 ### Install for Ubuntu 18.04
-Make sure to have CUDA and TensorRT installed. You can optionally use my script
+Make sure to have CUDA, TensorRT, and its Python API installed. You can optionally use my script
   ```
   $ scripts/install_tensorrt.sh
   ```
-Build OpenCV from source with Gstreamer. Modify `ARCH_BIN=7.5` to match your GPU compute capability. Then install python dependencies
+Build OpenCV from source with Gstreamer. Modify `ARCH_BIN=7.5` to match your GPU compute capability. Then install Python dependencies
 
   ```
   $ scripts/install_opencv.sh
   $ pip3 install -r requirements.txt
   ```
 ### Download models
-This includes both pretrained OSNet, SSD and my custom YOLOv4
+This includes both pretrained OSNet, SSD and my custom YOLOv4 ONNX model
   ```
   $ scripts/download_models.sh
   ```
