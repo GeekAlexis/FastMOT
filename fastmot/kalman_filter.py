@@ -195,11 +195,11 @@ class KalmanFilter:
         
         E1 = np.eye(8, 2) 
         E3 = np.eye(8, 2, -4)
+        M = E1 @ H1 @ E1.T + E3 @ H1 @ E3.T
+        M31 = E3 @ H1 @ E1.T
         w12 = E1 @ h2
         w13 = E1 @ h3
         w33 = E3 @ h3
-        M31 = E3 @ H1 @ E1.T
-        M = E1 @ H1 @ E1.T + E3 @ H1 @ E3.T
         u = M @ mean + w12
         v = M31 @ mean + E3 @ h2
         a = np.dot(w13, mean) + h4
@@ -212,11 +212,11 @@ class KalmanFilter:
 
         E2 = np.eye(8, 2, -2)
         E4 = np.eye(8, 2, -6)
+        M = E2 @ H1 @ E2.T + E4 @ H1 @ E4.T
+        M42 = E4 @ H1 @ E2.T
         w22 = E2 @ h2
         w23 = E2 @ h3
         w43 = E4 @ h3
-        M42 = E4 @ H1 @ E2.T
-        M = E2 @ H1 @ E2.T + E4 @ H1 @ E4.T
         u = M @ mean + w22
         v = M42 @ mean + E4 @ h2
         a = np.dot(w23, mean) + h4
@@ -227,11 +227,10 @@ class KalmanFilter:
         F_br = M / a - (np.outer(u, w23) + b * M42 + np.outer(v, w43)) / a**2 + \
             (2 * b * np.outer(v, w23)) / a**3
 
-        # add them up
+        # add them together
         mean = mean_tl + mean_br
         F = F_tl + F_br
-
-        # tranform covariance using the Jacobian
+        # tranform covariance with Jacobian
         covariance = F @ covariance @ F.T
         return mean, covariance
 

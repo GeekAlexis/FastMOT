@@ -35,14 +35,14 @@ class Mot:
         self.extractor = FeatureExtractor(config['feature_extractor'])
         self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric, config['multi_tracker'])
         
-        # reset flags
+        # reset counters
         self.frame_count = 0
         self.detector_frame_count = 0
-        self.det_pre_time = 0
-        self.det_time = 0
-        self.embedding_time = 0
-        self.match_time = 0
-        self.track_time = 0
+        self.preproc_time = 0
+        self.detector_time = 0
+        self.extractor_time = 0
+        self.association_time = 0
+        self.tracker_time = 0
     
     @property
     def visible_tracks(self):
@@ -56,37 +56,25 @@ class Mot:
         else:
             if self.frame_count % self.detector_frame_skip == 0:
                 tic = time.perf_counter()
-                tic2 = time.perf_counter()
                 self.detector.detect_async(self.frame_count, frame)
-                elapsed = time.perf_counter() - tic2
-                self.det_pre_time += elapsed
-                logging.debug('detect pre %f', elapsed)
-                tic2 = time.perf_counter()
+                self.preproc_time += time.perf_counter() - tic
+                tic = time.perf_counter()
                 self.tracker.compute_flow(frame)
                 detections = self.detector.postprocess()
-                elapsed = time.perf_counter() - tic2
-                self.det_time += elapsed
-                logging.debug('detect / flow %f', elapsed)
-                tic2 = time.perf_counter()
+                self.detector_time += time.perf_counter() - tic
+                tic = time.perf_counter()
                 self.extractor.extract_async(frame, detections)
                 self.tracker.step_kalman_filter(self.frame_count)
                 embeddings = self.extractor.postprocess()
-                elapsed = time.perf_counter() - tic2
-                self.embedding_time += elapsed
-                logging.debug('embedding / kf %f', elapsed)
-                tic2 = time.perf_counter()
+                self.extractor_time += time.perf_counter() - tic
+                tic = time.perf_counter()
                 self.tracker.update(self.frame_count, detections, embeddings)
-                elapsed = time.perf_counter() - tic2
-                self.match_time += elapsed
-                logging.debug('match %f', elapsed)
-                logging.debug('UPDATE %f', time.perf_counter() - tic)
+                self.association_time += time.perf_counter() - tic
                 self.detector_frame_count += 1
             else:
                 tic = time.perf_counter()
                 self.tracker.track(self.frame_count, frame)
-                elapsed = time.perf_counter() - tic
-                self.track_time += elapsed
-                logging.debug('TRACK %f', elapsed)
+                self.tracker_time += time.perf_counter() - tic
 
         if self.draw:
             self._draw(frame, detections, self.verbose)
@@ -102,6 +90,6 @@ class Mot:
         if verbose:
             for det in detections:
                 draw_det(frame, det)
-            # draw_bkg_flow(frame, self.tracker)
+            draw_bkg_flow(frame, self.tracker)
         cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30),
             cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

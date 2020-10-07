@@ -2,7 +2,6 @@ from collections import OrderedDict
 import numpy as np
 import numba as nb
 import logging
-import time
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 from cython_bbox import bbox_overlaps
@@ -83,12 +82,8 @@ class MultiTracker:
                         del self.tracks[trk_id]
 
     def track(self, frame_id, frame):
-        tic = time.perf_counter()
         self.compute_flow(frame)
-        logging.debug('flow %f', time.perf_counter() - tic)
-        tic = time.perf_counter()
         self.step_kalman_filter(frame_id)
-        logging.debug('kalman filter %f', time.perf_counter() - tic)
 
     def initiate(self, frame, detections):
         """
@@ -268,7 +263,7 @@ class MultiTracker:
             else:
                 dup_ids.add(updated_id)
         for trk_id in dup_ids:
-            logging.debug('Duplicate ID %d removed', trk_id)
+            logging.debug('Duplicate: %s', self.tracks[trk_id])
             del self.tracks[trk_id]
 
     @staticmethod

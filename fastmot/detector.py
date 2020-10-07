@@ -1,6 +1,5 @@
 from pathlib import Path
 import configparser
-import logging
 
 from cython_bbox import bbox_overlaps
 from collections import defaultdict
@@ -8,7 +7,6 @@ from numba.typed import Dict
 import numpy as np
 import numba as nb
 import cv2
-import time
 
 from . import models
 from .utils import InferenceBackend

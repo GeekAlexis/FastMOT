@@ -85,19 +85,20 @@ def main():
         cv2.destroyAllWindows()
     
     if args.mot:
+        # timing results
         avg_fps = round(mot.frame_count / elapsed_time)
-        avg_trk_time = mot.track_time / (mot.frame_count - mot.detector_frame_count)
-        avg_embedding_time = mot.embedding_time / mot.detector_frame_count
-        avg_det_pre_time = mot.det_pre_time / mot.detector_frame_count
-        avg_det_time = mot.det_time / mot.detector_frame_count
-        avg_match_time = mot.match_time / mot.detector_frame_count
+        avg_tracker_time = mot.tracker_time / (mot.frame_count - mot.detector_frame_count)
+        avg_extractor_time = mot.extractor_time / mot.detector_frame_count
+        avg_preproc_time = mot.preproc_time / mot.detector_frame_count
+        avg_detector_time = mot.detector_time / mot.detector_frame_count
+        avg_assoc_time = mot.association_time / mot.detector_frame_count
         
         logging.info('Average FPS: %d', avg_fps)
-        logging.debug('Average track time: %f', avg_trk_time)
-        logging.debug('Average embedding time: %f', avg_embedding_time)
-        logging.debug('Average preprocessing time: %f', avg_det_pre_time)
-        logging.debug('Average detection time: %f', avg_det_time)
-        logging.debug('Average match time: %f', avg_match_time)
+        logging.debug('Average tracker time: %f', avg_tracker_time)
+        logging.debug('Average feature extractor time: %f', avg_extractor_time)
+        logging.debug('Average preprocessing time: %f', avg_preproc_time)
+        logging.debug('Average detector time: %f', avg_detector_time)
+        logging.debug('Average association time: %f', avg_assoc_time)
 
 
 if __name__ == '__main__':
