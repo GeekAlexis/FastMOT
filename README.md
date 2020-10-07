@@ -4,14 +4,14 @@ High performance multiple object tracking in Python
 <img src="assets/demo.gif" width="720" height="405" />
 
 ## Description
-Fast MOT is a real-time tracker that includes both detection and tracking. The tracker implements:
+Fast MOT is a real-time tracker based on tracking by detection. The tracker implements:
   - YOLOv4 detector
   - SSD detector
   - Deep SORT + OSNet ReID
   - Optical flow tracking
   - Camera motion compensation
   
-Unlike Deep SORT, detector is not run at every frame to achieve faster processing. Also, the tracker is optimized with TensorRT and Numba. YOLOv4 is trained on CrowdHuman while SSD's are pretrained TensorFlow models. Note that when using SSD, the detector will split a frame into tiles and process them in batches for the best accuracy. ReID enables Deep SORT to identify previously lost targets. The tracker is currently designed for pedestrian tracking. To track custom classes, please refer to [torchreid](https://github.com/KaiyangZhou/deep-person-reid) and [darknet](https://github.com/AlexeyAB/darknet) to train OSNet and YOLOv4 on your own classes. 
+Unlike Deep SORT, detector is not run at every frame to achieve faster processing. Also, the tracker is optimized with TensorRT and Numba. YOLOv4 is trained on CrowdHuman while SSD's are pretrained TensorFlow models. Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. ReID enables Deep SORT to identify previously lost targets. The tracker is currently designed for pedestrian tracking. To track custom classes, please refer to [torchreid](https://github.com/KaiyangZhou/deep-person-reid) and [darknet](https://github.com/AlexeyAB/darknet) to train OSNet and YOLOv4 on your own classes. 
 
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
@@ -20,25 +20,27 @@ Unlike Deep SORT, detector is not run at every frame to achieve faster processin
 | MOT17-04 | 20 - 50  | 43.8% | 61.0% | 74.9% | 24 |
 | MOT17-03 | 40 - 80  | - | - | - | 16 |
 
-Tracking is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to state-of-the-art trackers. The tracker can achieve up to 30 FPS depending on crowd density. The speed on a Desktop CPU/GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
+Tracking is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve up to **30 FPS** depending on crowd density. The speed on a Desktop CPU/GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
 
 ## Requirements
-- OpenCV (Gstreamer)
-- TensorFlow (SSD)
-- TensorRT 7+
+- CUDA >= 10
+- CuDNN >= 7
+- TensorRT >= 7 (UFF converter also required for SSD)
+- OpenCV > 3 (with Gstreamer)
+- TensorFlow < 1.15.4 (for SSD support)
 - PyCuda
-- Numpy
+- Numpy >= 1.15
+- Scipy >= 1.5
 - Numba
-- Scipy
 - cython-bbox
 
 ### Install for Jetson (TX2/Xavier NX/Xavier)
-Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack](https://developer.nvidia.com/embedded/jetpack) and run the script
+Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack 4.4](https://developer.nvidia.com/embedded/jetpack) and run the script
   ```
   $ scripts/install_jetson.sh
   ```
 ### Install for Ubuntu 18.04
-Make sure to have CUDA, TensorRT, and its Python API installed. You can optionally use my script
+Make sure to have CUDA, TensorRT, and its Python API installed. You can optionally use my script to install from scratch
   ```
   $ scripts/install_tensorrt.sh
   ```
