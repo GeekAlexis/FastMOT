@@ -53,6 +53,11 @@ This includes both pretrained OSNet, SSD and my custom YOLOv4
   ```
   $ scripts/download_models.sh
   ```
+### Build YOLOv4 TensorRT plugin
+  ```
+  $ cd fastmot/plugins
+  $ make
+  ```
 ### Download VOC dataset for INT8 calibration
 Only if you want to use SSD
   ```
