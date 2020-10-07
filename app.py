@@ -29,7 +29,7 @@ def main():
     loglevel = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(format='[%(levelname)s] %(message)s', level=loglevel)
 
-    with open(Path(__file__).parent / 'fastmot' / 'configs' / 'mot.json') as config_file:
+    with open(Path(__file__).parent / 'cfg' / 'mot.json') as config_file:
         config = json.load(config_file, cls=fastmot.utils.ConfigDecoder)
 
     stream = fastmot.VideoIO(config['size'], config['video_io'], args.input_uri, args.output_uri)
