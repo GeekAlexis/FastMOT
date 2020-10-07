@@ -21,7 +21,7 @@ def main():
         '4) RTSP stream (rtsp://<user>:<password>@<ip>:<port>)\n'
     )
     parser.add_argument('-o', '--output_uri', metavar="URI", help='URI to output stream (e.g. output.mp4)')
-    parser.add_argument('-l', '--log', metavar="FILE", help='output a MOT Challenge log for evaluation (e.g. eval/results/mot17-04.txt)')
+    parser.add_argument('-l', '--log', metavar="FILE", help='output a MOT Challenge format log (e.g. eval/results/mot17-04.txt)')
     parser.add_argument('-g', '--gui', action='store_true', help='enable display')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output for debugging')
 

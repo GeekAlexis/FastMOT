@@ -27,8 +27,8 @@ NVCCFLAGS=-m64 -gencode arch=compute_$(compute),code=sm_$(compute) \
                -gencode arch=compute_$(compute),code=compute_$(compute)
 
 # These are the directories where I installed TensorRT on my x86_64 PC.
-TENSORRT_INCS=-I"/usr/local/TensorRT-7.1.3.4/include"
-TENSORRT_LIBS=-L"/usr/local/TensorRT-7.1.3.4/lib"
+TENSORRT_INCS=-I"/usr/include/x86_64-linux-gnu"
+TENSORRT_LIBS=-L"/usr/lib/x86_64-linux-gnu"
 
 # INCS and LIBS
 INCS=-I"/usr/local/cuda/include" $(TENSORRT_INCS) -I"/usr/local/include" -I"plugin"
