@@ -26,8 +26,8 @@ Tracking is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motme
 - CUDA >= 10
 - CuDNN >= 7
 - TensorRT >= 7 (UFF converter also required for SSD)
-- OpenCV > 3 (with Gstreamer)
-- TensorFlow < 1.15.4 (for SSD support)
+- OpenCV >= 3.3 (with Gstreamer)
+- TensorFlow <= 1.15.2 (for SSD support)
 - PyCuda
 - Numpy >= 1.15
 - Scipy >= 1.5
@@ -84,4 +84,4 @@ Only if you want to use SSD
   $ python3 app.py --input_uri video.mp4 --mot
   ```
 - Use `--gui` to visualize and `--output_uri` to save output
-- To change detector, tracker parameters, or target classes, etc., modify `fastmot/configs/mot.json`
+- To change detector, tracker parameters, or target classes, etc., modify `cfg/mot.json`
