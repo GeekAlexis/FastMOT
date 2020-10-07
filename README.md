@@ -17,10 +17,10 @@ Unlike Deep SORT, detector is not run at every frame to achieve faster processin
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
 |:-------|:-------:|:-------:|:-------:|:-------:|:-----:|
 | MOT17-13 | 5 - 20  | 19.8% | 41.3% | 45.6%  | 30 |
-| MOT17-04 | 20 - 50  | 43.8% | 61.0% | 74.9% | 23 |
-| MOT17-03 | 40 - 80  | - | - | - | 15 |
+| MOT17-04 | 20 - 50  | 43.8% | 61.0% | 74.9% | 24 |
+| MOT17-03 | 40 - 80  | - | - | - | 16 |
 
-Tracking is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to state-of-the-art trackers. The tracker can achieve up to 30 FPS depending on crowd density. The frame rate on a Desktop CPU/GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
+Tracking is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to state-of-the-art trackers. The tracker can achieve up to 30 FPS depending on crowd density. The speed on a Desktop CPU/GPU will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
 
 ## Requirements
 - OpenCV (Gstreamer)
