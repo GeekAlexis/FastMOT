@@ -2,7 +2,7 @@ from enum import Enum
 import numpy as np
 import numba as nb
 
-from .utils.rect import get_size, get_center, perspective_transform
+from .utils.rect import get_size, get_center
 
 
 class MeasType(Enum):
@@ -35,8 +35,11 @@ class KalmanFilter:
         self.vel_coupling = config['vel_coupling']
         self.vel_half_life = config['vel_half_life']
 
+        # acceleration std adjustment rate with respect to pixel width/height
         self.std_acc_slope = (self.large_std_acc[1] - self.small_std_acc[1]) / (self.large_std_acc[0] - 
             self.small_std_acc[0])
+
+        # acceleration-based process noise
         self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4, dtype=np.float))
         self.acc_cov[4:, :4] = np.eye(4) * (0.5 * self.dt**3)
         self.acc_cov[:4, 4:] = np.eye(4) * (0.5 * self.dt**3)
@@ -169,49 +172,67 @@ class KalmanFilter:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def warp(mean, covariance, H_camera):
-        """Transform kalman filter state based on camera motion.
+    def warp(mean, covariance, H):
+        """Warp kalman filter state using a homography transform.
         https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub
         ----------
         mean : ndarray
             The predicted state's mean vector (8 dimensional).
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
-        H_camera : ndarray
-            A 3x3 camera homography matrix.
+        H : ndarray
+            A 3x3 homography matrix.
         Returns
         -------
         (ndarray, ndarray)
             Returns the mean vector and covariance matrix of the transformed
             state.
         """
-        pos_tl, pos_br = mean[:2], mean[2:4]
-        vel_tl, vel_br = mean[4:6], mean[6:]
-        # affine dof
-        A = np.ascontiguousarray(H_camera[:2, :2])
-        # homography dof
-        v = H_camera[2, :2] 
-        # translation dof
-        t = H_camera[:2, 2] 
-
-        tmp = np.dot(v, pos_tl) + 1
-        jacobian_tl = (tmp * A - np.outer(A @ pos_tl + t, v)) / tmp**2
-        tmp = np.dot(v, pos_br) + 1
-        jacobian_br = (tmp * A - np.outer(A @ pos_br + t, v)) / tmp**2
-
-        # warp state
-        warped_pos = perspective_transform(np.stack((pos_tl, pos_br)), H_camera)
-        mean[:4] = warped_pos.ravel()
-        mean[4:6] = jacobian_tl @ vel_tl
-        mean[6:] = jacobian_br @ vel_br
+        H1 = np.ascontiguousarray(H[:2, :2])
+        h2 = np.ascontiguousarray(H[:2, 2])
+        h3 = np.ascontiguousarray(H[2, :2])
+        h4 = 1
         
-        # warp covariance
-        jacobian = np.zeros((8, 8))
-        jacobian[:2, :2] = jacobian_tl
-        jacobian[2:4, 2:4] = jacobian_br
-        jacobian[4:6, 4:6] = jacobian_tl.T
-        jacobian[6:, 6:] = jacobian_br.T
-        covariance = jacobian @ covariance @ jacobian.T
+        E1 = np.eye(8, 2) 
+        E3 = np.eye(8, 2, -4)
+        w12 = E1 @ h2
+        w13 = E1 @ h3
+        w33 = E3 @ h3
+        M31 = E3 @ H1 @ E1.T
+        M = E1 @ H1 @ E1.T + E3 @ H1 @ E3.T
+        u = M @ mean + w12
+        v = M31 @ mean + E3 @ h2
+        a = np.dot(w13, mean) + h4
+        b = np.dot(w33, mean)
+        # transform top left mean
+        mean_tl = u / a - b * v / a**2
+        # compute top left Jacobian
+        F_tl = M / a - (np.outer(u, w13) + b * M31 + np.outer(v, w33)) / a**2 + \
+            (2 * b * np.outer(v, w13)) / a**3
+
+        E2 = np.eye(8, 2, -2)
+        E4 = np.eye(8, 2, -6)
+        w22 = E2 @ h2
+        w23 = E2 @ h3
+        w43 = E4 @ h3
+        M42 = E4 @ H1 @ E2.T
+        M = E2 @ H1 @ E2.T + E4 @ H1 @ E4.T
+        u = M @ mean + w22
+        v = M42 @ mean + E4 @ h2
+        a = np.dot(w23, mean) + h4
+        b = np.dot(w43, mean)
+        # transform bottom right mean
+        mean_br = u / a - b * v / a**2
+        # compute bottom right Jacobian
+        F_br = M / a - (np.outer(u, w23) + b * M42 + np.outer(v, w43)) / a**2 + \
+            (2 * b * np.outer(v, w23)) / a**3
+
+        # add them up
+        mean = mean_tl + mean_br
+        F = F_tl + F_br
+
+        # tranform covariance using the Jacobian
+        covariance = F @ covariance @ F.T
         return mean, covariance
 
     @staticmethod
