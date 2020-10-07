@@ -2,7 +2,6 @@
 
 # Jetpack 4.4 (OpenCV, CUDA, TensorRT) is required before running this script
 DIR=$HOME
-BASEDIR=$(dirname "$0")
 
 set -e
 
@@ -39,6 +38,3 @@ sudo pip3 install llvmlite==0.31.0
 
 # install numba
 sudo pip3 install numba==0.48
-
-# prepare INT8 calibration data
-source $BASEDIR/fast_mot/models/prepare_calib_data.sh $BASEDIR/fast_mot/models
