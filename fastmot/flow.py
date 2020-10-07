@@ -33,11 +33,10 @@ class Flow:
         self.prev_frame_gray = None
         self.prev_frame_small = None
 
-        # preallocate masks
+        # preallocate
         self.ones = np.full(self.size[::-1], 255, np.uint8)
         self.bkg_mask = np.empty_like(self.ones)
         self.fg_mask = self.bkg_mask # alias
-
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
     def initiate(self, frame):
@@ -87,6 +86,7 @@ class Flow:
                 if keypoints is None or len(keypoints) == 0:
                     keypoints = np.empty((0, 2), np.float32)
                 else:
+                    # TODO: only keep points in front?
                     keypoints = self._ellipse_filter(keypoints, track.tlbr, inside_tlbr[:2])
             # batch target keypoints
             all_prev_pts.append(keypoints)

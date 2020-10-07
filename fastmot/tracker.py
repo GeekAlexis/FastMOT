@@ -120,7 +120,7 @@ class MultiTracker:
         matches = matches1 + matches2
         u_trk_ids = u_trk_ids1 + u_trk_ids2
 
-        # Re-id with lost tracks
+        # re-id with lost tracks
         lost_ids = list(self.lost.keys())
         u_detections, u_embeddings = detections[u_det_ids], embeddings[u_det_ids]
         cost = self._reid_cost(u_detections, u_embeddings)
