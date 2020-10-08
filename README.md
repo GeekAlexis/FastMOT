@@ -20,7 +20,7 @@ Unlike Deep SORT, the detector only runs at every Nth frame to achieve faster pr
 | MOT17-04 | 20 - 50  | 43.8% | 61.0% | 74.9% | 24 |
 | MOT17-03 | 40 - 80  | - | - | - | 16 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve up to **30 FPS** depending on crowd density. On a Desktop CPU/GPU FPS will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve up to **30 FPS** depending on crowd density. On a Desktop CPU/GPU, FPS will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
 
 ## Requirements
 - CUDA >= 10
@@ -87,7 +87,7 @@ Only if you want to use SSD
 - For more flexibility, modify `cfg/mot.json` 
   - Use `v4l2-ctl -d /dev/video0 --list-formats-ext` to view available settings for your camera, and set `camera_size` and `camera_fps` accordingly
   - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
-  - To change target classes, please refer to the labels in https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py, and set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
+  - To change target classes, please refer to the labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py), and set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
   - For SSD, a more lightweight backbone can be used by setting `model` to `SSDMobileNetV1` or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]` if a smaller batch size is preferred
   - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to reduce `n_init` and make sure it is set not more than `detector_frame_skip` but not less than `1`
