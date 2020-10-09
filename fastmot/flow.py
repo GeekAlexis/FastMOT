@@ -11,17 +11,17 @@ class Flow:
     def __init__(self, size, config):
         self.size = size
         self.bkg_feat_scale_factor = config['bkg_feat_scale_factor']
-        self.optflow_scale_factor = config['optflow_scale_factor']
+        self.opt_flow_scale_factor = config['opt_flow_scale_factor']
         self.feature_density = config['feature_density']
         self.max_error = config['max_error']
         self.feat_dist_factor = config['feat_dist_factor']
         self.ransac_max_iter = config['ransac_max_iter']
         self.ransac_conf = config['ransac_conf']
-        self.min_inlier = config['min_inlier']
+        self.inlier_thresh = config['inlier_thresh']
 
         self.bkg_feat_thresh = config['bkg_feat_thresh']
         self.target_feat_params = config['target_feat_params']
-        self.optflow_params = config['optflow_params']
+        self.opt_flow_params = config['opt_flow_params']
         
         self.bkg_feature_detector = cv2.FastFeatureDetector_create(threshold=self.bkg_feat_thresh)
 
@@ -41,8 +41,8 @@ class Flow:
 
     def initiate(self, frame):
         self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.optflow_scale_factor[0],
-            fy=self.optflow_scale_factor[1])
+        self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.opt_flow_scale_factor[0],
+            fy=self.opt_flow_scale_factor[1])
 
     def predict(self, frame, tracks):
         """
@@ -56,13 +56,13 @@ class Flow:
             Current frame.
         Returns
         -------
-        Dict[int, Rect]
+        Dict[int, ndarray]
             Returns a dictionary with track IDs as keys and predicted bounding
             boxes as values.
         """
         # preprocess frame
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_small = cv2.resize(frame_gray, None, fx=self.optflow_scale_factor[0], fy=self.optflow_scale_factor[1])
+        frame_small = cv2.resize(frame_gray, None, fx=self.opt_flow_scale_factor[0], fy=self.opt_flow_scale_factor[1])
         # order tracks from closest to farthest
         sorted_tracks = sorted(tracks.values(), reverse=True)
 
@@ -79,14 +79,12 @@ class Flow:
             elif len(keypoints) / target_area < self.feature_density:
                 # only detect new keypoints when too few are propagated
                 img = crop(self.prev_frame_gray, inside_tlbr)
-                # target_mask = crop(self.bkg_mask, inside_tlbr)
                 feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
                 keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask, minDistance=feature_dist, 
                     **self.target_feat_params)
                 if keypoints is None or len(keypoints) == 0:
                     keypoints = np.empty((0, 2), np.float32)
                 else:
-                    # TODO: only keep points in front?
                     keypoints = self._ellipse_filter(keypoints, track.tlbr, inside_tlbr[:2])
             # batch target keypoints
             all_prev_pts.append(keypoints)
@@ -96,7 +94,7 @@ class Flow:
         target_begins = [0] + target_ends[:-1]
 
         # detect background feature points
-        prev_frame_small_bkg = cv2.resize(self.prev_frame_gray, None, fx=self.bkg_feat_scale_factor[0], 
+        prev_frame_small_bkg = cv2.resize(self.prev_frame_gray, None, fx=self.bkg_feat_scale_factor[0],
             fy=self.bkg_feat_scale_factor[1])
         bkg_mask_small = cv2.resize(self.bkg_mask, None, fx=self.bkg_feat_scale_factor[0],
             fy=self.bkg_feat_scale_factor[1], interpolation=cv2.INTER_NEAREST)
@@ -111,11 +109,11 @@ class Flow:
 
         # match features using optical flow
         all_prev_pts = np.concatenate(all_prev_pts)
-        scaled_prev_pts = self._scale_pts(all_prev_pts, self.optflow_scale_factor)
-        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(self.prev_frame_small, frame_small, 
-            scaled_prev_pts, None, **self.optflow_params)
+        scaled_prev_pts = self._scale_pts(all_prev_pts, self.opt_flow_scale_factor)
+        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(self.prev_frame_small, frame_small,
+            scaled_prev_pts, None, **self.opt_flow_params)
         status = self._get_status(status, err, self.max_error)
-        all_cur_pts = self._unscale_pts(all_cur_pts, self.optflow_scale_factor, status)
+        all_cur_pts = self._unscale_pts(all_cur_pts, self.opt_flow_scale_factor, status)
 
         # reuse preprocessed frame for next prediction
         self.prev_frame_gray = frame_gray
@@ -125,16 +123,16 @@ class Flow:
         H_camera = None
         prev_bkg_pts, matched_bkg_pts = self._get_good_match(all_prev_pts, all_cur_pts, status, bkg_begin, -1)
         if len(matched_bkg_pts) >= 4:
-            H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC, 
+            H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC,
                 maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
             self.prev_bkg_keypoints, self.bkg_keypoints = self._get_inliers(prev_bkg_pts, matched_bkg_pts, inlier_mask)
-            if H_camera is None or len(self.bkg_keypoints) < self.min_inlier:
+            if H_camera is None or len(self.bkg_keypoints) < self.inlier_thresh:
                 self.bkg_keypoints = np.empty((0, 2), np.float32)
-                logging.warning('Background registration failed')
+                logging.warning('Camera motion estimation failed')
                 return {}, None
         else:
             self.bkg_keypoints = np.empty((0, 2), np.float32)
-            logging.warning('Background registration failed')
+            logging.warning('Camera motion estimation failed')
             return {}, None
 
         # estimate target bounding boxes
@@ -154,7 +152,7 @@ class Flow:
             # delete track when it goes outside the frame
             est_tlbr = self._estimate_bbox(track.tlbr, H_affine)
             track.prev_keypoints, track.keypoints = self._get_inliers(prev_pts, matched_pts, inlier_mask)
-            if intersection(est_tlbr, self.frame_rect) is None or len(track.keypoints) < self.min_inlier:
+            if intersection(est_tlbr, self.frame_rect) is None or len(track.keypoints) < self.inlier_thresh:
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
             target_mask = crop(self.fg_mask, est_tlbr)

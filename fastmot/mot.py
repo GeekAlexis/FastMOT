@@ -64,7 +64,7 @@ class Mot:
                 self.detector_time += time.perf_counter() - tic
                 tic = time.perf_counter()
                 self.extractor.extract_async(frame, detections)
-                self.tracker.step_kalman_filter(self.frame_count)
+                self.tracker.step_kalman_filter()
                 embeddings = self.extractor.postprocess()
                 self.extractor_time += time.perf_counter() - tic
                 tic = time.perf_counter()
@@ -73,7 +73,7 @@ class Mot:
                 self.detector_frame_count += 1
             else:
                 tic = time.perf_counter()
-                self.tracker.track(self.frame_count, frame)
+                self.tracker.track(frame)
                 self.tracker_time += time.perf_counter() - tic
 
         if self.draw:

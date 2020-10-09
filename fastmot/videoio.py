@@ -19,7 +19,6 @@ class VideoIO:
         self.size = size
         self.input_uri = input_uri
         self.output_uri = output_uri
-        self.latency = latency
 
         self.camera_size = config['camera_size']
         self.camera_fps = config['camera_fps']
@@ -46,7 +45,7 @@ class VideoIO:
         output_fps = self.fps
         if self.protocol != Protocol.FILE:
             # limit capture latency at processing latency
-            self.capture_dt = max(self.latency, self.capture_dt)
+            self.capture_dt = max(self.capture_dt, latency)
             output_fps = 1 / self.capture_dt
         if self.output_uri is not None:
             Path(self.output_uri).parent.mkdir(parents=True, exist_ok=True)

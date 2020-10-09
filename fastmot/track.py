@@ -5,12 +5,11 @@ from .utils.rect import get_center
 
 
 class Track:
-    def __init__(self, tlbr, label, trk_id, frame_id):
-        self.tlbr = tlbr
-        self.init_tlbr = tlbr
-        self.label = label
-        self.trk_id = trk_id
+    def __init__(self, frame_id, trk_id, tlbr, label):
         self.start_frame = frame_id
+        self.trk_id = trk_id
+        self.tlbr = tlbr
+        self.label = label
 
         self.bin_height = 10
         self.alpha = 0.9
@@ -23,11 +22,11 @@ class Track:
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
-    def __repr__(self):
-        return "Track(tlbr=%r, label=%r, trk_id=%r, frame_id=%r)" % (self.tlbr, self.label, self.trk_id, self.start_frame)
-
     def __str__(self):
         return "%s %d at %s" % (LABEL_MAP[self.label], self.trk_id, get_center(self.tlbr).astype(int))
+
+    def __repr__(self):
+        return self.__str__()
 
     def __lt__(self, other):
         # ordered by approximate distance to the image plane, closer is greater
@@ -37,7 +36,7 @@ class Track:
     def active(self):
         return self.age < 3
 
-    def update_features(self, embedding):
+    def update_feature(self, embedding):
         if self.smooth_feature is None:
             self.smooth_feature = embedding
         else:
@@ -45,11 +44,10 @@ class Track:
             self.smooth_feature /= np.linalg.norm(self.smooth_feature)
 
     def reactivate(self, frame_id, tlbr, embedding):
-        self.tlbr = tlbr
-        self.init_tlbr = tlbr
         self.start_frame = frame_id
+        self.tlbr = tlbr
         self.age = 0
-        self.update_features(embedding)
+        self.update_feature(embedding)
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
            

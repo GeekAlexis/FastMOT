@@ -21,9 +21,8 @@ class KalmanFilter:
     coupling and decay for tracking stability.
     """
 
-    def __init__(self, dt, n_init, config):
+    def __init__(self, dt, config):
         self.dt = dt
-        self.n_init = n_init
         self.small_std_acc = config['small_std_acc']
         self.large_std_acc = config['large_std_acc']
         self.min_std_det = config['min_std_det']
@@ -36,7 +35,7 @@ class KalmanFilter:
         self.vel_half_life = config['vel_half_life']
 
         # acceleration std adjustment rate with respect to pixel width/height
-        self.std_acc_slope = (self.large_std_acc[1] - self.small_std_acc[1]) / (self.large_std_acc[0] - 
+        self.std_acc_rate = (self.large_std_acc[1] - self.small_std_acc[1]) / (self.large_std_acc[0] - 
             self.small_std_acc[0])
 
         # acceleration-based process noise
@@ -56,39 +55,40 @@ class KalmanFilter:
             [0, 0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life)],
         ], dtype=np.float)
 
-    def initiate(self, init_meas, flow_meas):
-        """Create track from unassociated measurement.
+    def initiate(self, det_meas):
+        """
+        Create track from unassociated measurement.
         Parameters
         ----------
-        init_meas : Rect
-            Initial bounding box registered by the detector.
-        flow_meas : Rect
-            Bounding box tracked by optical flow after n_init frames.
+        det_meas : ndarray
+            Bounding box measurement detected.
         Returns
         -------
         (ndarray, ndarray)
             Returns the mean vector (8 dimensional) and covariance matrix (8x8
             dimensional) of the new track.
         """
-        center_vel = (get_center(flow_meas) - get_center(init_meas)) / (self.dt * self.n_init)
-        mean = np.r_[flow_meas, center_vel, center_vel]
+        mean_pos = det_meas
+        mean_vel = np.zeros_like(mean_pos)
+        mean = np.r_[mean_pos, mean_vel]
 
-        width, height = get_size(flow_meas)
+        width, height = get_size(det_meas)
         std = np.array([
-            self.init_pos_std_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
-            self.init_pos_std_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
-            self.init_pos_std_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
-            self.init_pos_std_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
-            self.init_vel_std_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
-            self.init_vel_std_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
-            self.init_vel_std_factor * max(width * self.std_factor_flow[0], self.min_std_flow[0]),
-            self.init_vel_std_factor * max(height * self.std_factor_flow[1], self.min_std_flow[1]),
+            self.init_pos_std_factor * max(width * self.std_factor_det[0], self.std_factor_det[0]),
+            self.init_pos_std_factor * max(height * self.std_factor_det[1], self.std_factor_det[1]),
+            self.init_pos_std_factor * max(width * self.std_factor_det[0], self.std_factor_det[0]),
+            self.init_pos_std_factor * max(height * self.std_factor_det[1], self.std_factor_det[1]),
+            self.init_vel_std_factor * max(width * self.std_factor_det[0], self.std_factor_det[0]),
+            self.init_vel_std_factor * max(height * self.std_factor_det[1], self.std_factor_det[1]),
+            self.init_vel_std_factor * max(width * self.std_factor_det[0], self.std_factor_det[0]),
+            self.init_vel_std_factor * max(height * self.std_factor_det[1], self.std_factor_det[1]),
         ], dtype=np.float)
         covariance = np.diag(np.square(std))
         return mean, covariance
 
     def predict(self, mean, covariance):
-        """Run Kalman filter prediction step.
+        """
+        Run Kalman filter prediction step.
         Parameters
         ----------
         mean : ndarray
@@ -103,11 +103,12 @@ class KalmanFilter:
             Returns the mean vector and covariance matrix of the predicted
             state.
         """
-        return self._predict(mean, covariance, self.small_std_acc, self.std_acc_slope, 
+        return self._predict(mean, covariance, self.small_std_acc, self.std_acc_rate, 
             self.acc_cov, self.transition_mat)
 
     def project(self, mean, covariance, meas_type, multiplier=1.):
-        """Project state distribution to measurement space.
+        """
+        Project state distribution to measurement space.
         Parameters
         ----------
         mean : ndarray
@@ -132,7 +133,8 @@ class KalmanFilter:
         return self._project(mean, covariance, std_factor, min_std, self.meas_mat, multiplier)
 
     def update(self, mean, covariance, measurement, meas_type, multiplier=1.):
-        """Run Kalman filter correction step.
+        """
+        Run Kalman filter correction step.
         Parameters
         ----------
         mean : ndarray
@@ -152,7 +154,8 @@ class KalmanFilter:
             projected_cov, measurement, self.meas_mat)
 
     def motion_distance(self, mean, covariance, measurements):
-        """Compute mahalanobis distance between `measurements` and state distribution.
+        """
+        Compute mahalanobis distance between `measurements` and state distribution.
         Parameters
         ----------
         mean : ndarray
@@ -173,7 +176,8 @@ class KalmanFilter:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def warp(mean, covariance, H):
-        """Warp kalman filter state using a homography transform.
+        """
+        Warp kalman filter state using a homography transform.
         https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub
         ----------
         mean : ndarray
@@ -236,9 +240,9 @@ class KalmanFilter:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _predict(mean, covariance, small_std_acc, std_acc_slope, acc_cov, transition_mat):
+    def _predict(mean, covariance, small_std_acc, std_acc_rate, acc_cov, transition_mat):
         size = max(mean[2:4] - mean[:2] + 1) # max(w, h)
-        std_acc = small_std_acc[1] + (size - small_std_acc[0]) * std_acc_slope
+        std_acc = small_std_acc[1] + (size - small_std_acc[0]) * std_acc_rate
         motion_cov = acc_cov * std_acc**2
 
         mean = transition_mat @ mean

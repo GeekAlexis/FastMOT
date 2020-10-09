@@ -41,13 +41,12 @@
             "max_age": 8,
             "age_factor": 2,
             "motion_weight": 0.04,
-            "max_feature_cost": 0.9,
-            "min_iou_cost": 0.4,
+            "max_feat_cost": 0.9,
             "max_reid_cost": 0.6,
+            "iou_thresh": 0.4,
             "duplicate_iou": 0.8,
-            "min_register_conf": 0.5,
+            "conf_thresh": 0.5,
             "lost_buf_size": 50,
-            "n_init": 3,
 
             "kalman_filter": {
                 "small_std_acc": [32, 150],
@@ -56,28 +55,28 @@
                 "min_std_flow": [5, 5],
                 "std_factor_det": [0.08, 0.08],
                 "std_factor_flow": [0.14, 0.14],
-                "init_pos_std_factor": 25,
-                "init_vel_std_factor": 20,
+                "init_pos_std_factor": 24,
+                "init_vel_std_factor": 40,
                 "vel_coupling": 0.6,
                 "vel_half_life": 1
             },
 
-            "optical_flow": {
+            "flow": {
                 "bkg_feat_scale_factor": [0.1, 0.1],
-                "optflow_scale_factor": [0.5, 0.5],
+                "opt_flow_scale_factor": [0.5, 0.5],
                 "feature_density": 0.005,
                 "feat_dist_factor": 0.06,
                 "max_error": 100,
                 "ransac_max_iter": 500,
                 "ransac_conf": 0.99,
-                "min_inlier": 4,
+                "inlier_thresh": 4,
                 "bkg_feat_thresh": 15,
                 "target_feat_params": {
                     "maxCorners": 1000,
                     "qualityLevel": 0.06,
                     "blockSize": 3
                 },
-                "optflow_params": {
+                "opt_flow_params": {
                     "winSize": [5, 5],
                     "maxLevel": 5,
                     "criteria": [3, 10, 0.03]
