@@ -16,6 +16,23 @@ class DetectorType(Enum):
 
 
 class Mot:
+    """
+    An online multiple object tracker based on tracking-by-detection.
+    This is a top level module that integrates detection and tracking.
+    Parameters
+    ----------
+    size : (int, int)
+        Width and height of each frame.
+    capture_dt : float
+        Time interval in seconds between each captured frame.
+    config : Dict
+        Tracker configuration.
+    draw : bool
+        Flag to toggle visualization drawing.
+    verbose : bool
+        Flag to toggle output verbosity.
+    """
+
     def __init__(self, size, capture_dt, config, draw=False, verbose=False):
         self.size = size
         self.draw = draw
@@ -33,7 +50,8 @@ class Mot:
 
         logging.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor(config['feature_extractor'])
-        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric, config['multi_tracker'])
+        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric,
+            config['multi_tracker'])
         
         # reset counters
         self.frame_count = 0
@@ -46,7 +64,8 @@ class Mot:
     
     @property
     def visible_tracks(self):
-        return [track for track in self.tracker.tracks.values() if track.confirmed and track.active]
+        return [track for track in self.tracker.tracks.values()
+            if track.confirmed and track.active]
 
     def initiate(self):
         """
@@ -56,11 +75,11 @@ class Mot:
     
     def run(self, frame):
         """
-        Runs multiple object tracking on the current frame.
+        Runs multiple object tracking on the next frame.
         Parameters
         ----------
         frame : ndarray
-            Current frame.
+            The next frame.
         """
         detections = []
         if self.frame_count == 0:

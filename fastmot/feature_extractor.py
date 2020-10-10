@@ -31,7 +31,7 @@ class FeatureExtractor:
 
     def extract_async(self, frame, detections):
         """
-        Asynchronous feature extraction.
+        Extract feature embeddings from detections asynchronously.
         """
         imgs = multi_crop(frame, detections.tlbr)
         self.embeddings, cur_imgs = [], []
@@ -47,7 +47,7 @@ class FeatureExtractor:
 
     def postprocess(self):
         """
-        Synchronize, apply postprocessing, and return a NxM matrix of N
+        Synchronizes, applies postprocessing, and returns a NxM matrix of N
         extracted embeddings with dimension M.
         This function should be called after `extract_async`.
         """

@@ -137,7 +137,7 @@ def perspective_transform(pts, m):
 @nb.njit(fastmath=True, cache=True)
 def nms(bboxes, scores, nms_thresh):
     """
-    Applies the Non-Maximum Suppression algorithm on the bounding boxes (x, y, w, h)
+    Applies the Non-Maximum Suppression algorithm on the bounding boxes [x, y, w, h]
     with their confidence scores and return an array with the indexes of the bounding
     boxes we want to keep
     """

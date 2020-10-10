@@ -20,6 +20,12 @@ class KalmanFilter:
     Object motion follows a modified constant velocity model.
     Velocity will decay over time without measurement and bounding box
     corners are coupled together to minimize drifting.
+    Parameters
+    ----------
+    dt : float
+        Time interval in seconds between each frame.
+    config : Dict
+        Kalman Filter hyperparameters.
     """
 
     def __init__(self, dt, config):
@@ -62,7 +68,7 @@ class KalmanFilter:
         Parameters
         ----------
         det_meas : ndarray
-            Detected bounding box of (x1, x2, y1, y2).
+            Detected bounding box of [x1, x2, y1, y2].
         Returns
         -------
         (ndarray, ndarray)
@@ -147,7 +153,7 @@ class KalmanFilter:
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
         measurement : ndarray
-            Bounding box of (x1, x2, y1, y2).
+            Bounding box of [x1, x2, y1, y2].
         meas_type : MeasType
             Measurement type indicating where the measurement comes from.
         multiplier : float
@@ -172,7 +178,7 @@ class KalmanFilter:
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
         measurements : array_like
-            An Nx4 matrix of N samples of (x1, x2, y1, y2).
+            An Nx4 matrix of N samples of [x1, x2, y1, y2].
         Returns
         -------
         ndarray

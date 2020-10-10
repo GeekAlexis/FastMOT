@@ -37,7 +37,7 @@ class Detector:
 
     def postprocess(self):
         """
-        Synchronize, apply postprocessing, and return a record array
+        Synchronizes, applies postprocessing, and returns a record array
         of detections (DET_DTYPE).
         This function should be called after `detect_async`.
         """

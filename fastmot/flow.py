@@ -8,6 +8,18 @@ from .utils.rect import *
 
 
 class Flow:
+    """
+    An efficient tracker based on feature points matching using optical flow.
+    Camera motion is simultaneously estimated by matching feature points
+    on the background.
+    Parameters
+    ----------
+    size : (int, int)
+        Width and height of each frame.
+    config : Dict
+        Flow hyperparameters.
+    """
+
     def __init__(self, size, config):
         self.size = size
         self.bg_feat_scale_factor = config['bg_feat_scale_factor']
@@ -54,15 +66,14 @@ class Flow:
 
     def predict(self, frame, tracks):
         """
-        Predicts tracklet positions and estimates camera motion based on
-        feature points detection and matching.
+        Predicts tracklet positions in the next frame and estimates camera motion.
         Parameters
         ----------
         tracks : Dict[int, Track]
             A dictionary with track IDs as keys and tracks as values.
             Feature points of each track are updated in place.
         frame : ndarray
-            Current frame.
+            The next frame.
         Returns
         -------
         Dict[int, ndarray], ndarray

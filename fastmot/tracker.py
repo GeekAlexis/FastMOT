@@ -18,10 +18,19 @@ INF_COST = 1e5
 
 class MultiTracker:
     """
-    An online multiple object tracker based on tracking-by-detection.
-    Optical flow is computed to maintain tracklets when detections
-    are not given. Therefore, it is not required to have detections
-    at every frame.
+    Associates detections to tracklets and computes optical flow
+    to maintain tracklets when detections are not given.
+    Parameters
+    ----------
+    size : (int, int)
+        Width and height of each frame.
+    dt : float
+        Time interval in seconds between each frame.
+    metric : string
+        Feature distance metric for track association. Usually
+        `euclidean` or `cosine`.
+    config : Dict
+        Tracker hyperparameters.
     """
 
     def __init__(self, size, dt, metric, config):
@@ -73,7 +82,7 @@ class MultiTracker:
         Parameters
         ----------
         frame : ndarray
-            Current frame.
+            The next frame.
         """
         self.compute_flow(frame)
         self.step_kalman_filter()
@@ -84,7 +93,7 @@ class MultiTracker:
         Parameters
         ----------
         frame : ndarray
-            Current frame.
+            The next frame.
         """
         self.flow_bboxes, self.H_camera = self.flow.predict(frame, self.tracks)
         if self.H_camera is None:
@@ -93,8 +102,8 @@ class MultiTracker:
 
     def step_kalman_filter(self):
         """
-        Predicts tracklet positions using kalman filter and flow measurement if
-        there is any. The function should be called after `compute_flow`.
+        Predicts tracklet positions using kalman filter and flow measurements if
+        there are any. The function should be called after `compute_flow`.
         """
         for trk_id, track in list(self.tracks.items()):
             flow_bbox = self.flow_bboxes.get(trk_id)
@@ -121,7 +130,7 @@ class MultiTracker:
         Parameters
         ----------
         frame_id : int
-            Current frame ID.
+            The next frame ID.
         detections : recarray[DET_DTYPE]
             Record array of N detections.
         embeddings : ndarray

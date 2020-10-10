@@ -18,8 +18,20 @@ class VideoIO:
     """
     Class for video capturing from video files or cameras, and writing video files.
     Encoding and decoding are accelerated using the GStreamer backend.
+    Parameters
+    ----------
+    size : (int, int)
+        Width and height of each frame.
+    config : Dict
+        Camera configuration.
+    input_uri : string
+        URI to an input video file or capturing device.
+    output_uri : string
+        URI to an output video file.
+    latency : float
+        Approximate video processing latency.
     """
-    
+
     def __init__(self, size, config, input_uri, output_uri=None, latency=1/30):
         self.size = size
         self.input_uri = input_uri
@@ -49,7 +61,7 @@ class VideoIO:
 
         output_fps = self.fps
         if self.protocol != Protocol.FILE:
-            # limit capture latency at processing latency
+            # limit capture interval at processing latency
             self.capture_dt = max(self.capture_dt, latency)
             output_fps = 1 / self.capture_dt
         if self.output_uri is not None:
@@ -182,7 +194,7 @@ class VideoIO:
         pipeline = (
             'appsrc ! autovideoconvert ! %s ! qtmux ! filesink location=%s '
             % (
-                h264_encoder, 
+                h264_encoder,
                 self.output_uri
             )
         )
