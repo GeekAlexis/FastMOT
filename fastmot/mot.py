@@ -6,7 +6,7 @@ import time
 from .detector import SSDDetector, YoloDetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
-from .utils.visualization import draw_trk, draw_det, draw_bkg_flow
+from .utils.visualization import draw_trk, draw_det, draw_bg_flow
 
 
 class DetectorType(Enum):
@@ -47,8 +47,21 @@ class Mot:
     @property
     def visible_tracks(self):
         return [track for track in self.tracker.tracks.values() if track.confirmed and track.active]
+
+    def initiate(self):
+        """
+        Initializes/restarts multiple object tracking.
+        """
+        self.frame_count = 0
     
     def run(self, frame):
+        """
+        Runs multiple object tracking on the current frame.
+        Parameters
+        ----------
+        frame : ndarray
+            Current frame.
+        """
         detections = []
         if self.frame_count == 0:
             detections = self.detector(self.frame_count, frame)
@@ -81,15 +94,12 @@ class Mot:
 
         self.frame_count += 1
 
-    def initiate(self):
-        self.frame_count = 0
-
     def _draw(self, frame, detections, verbose=False):
         for track in self.visible_tracks:
             draw_trk(frame, track, draw_flow=verbose)
         if verbose:
             for det in detections:
                 draw_det(frame, det)
-            draw_bkg_flow(frame, self.tracker)
+            draw_bg_flow(frame, self.tracker)
         cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30),
             cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

@@ -15,6 +15,11 @@ class Protocol(Enum):
 
 
 class VideoIO:
+    """
+    Class for video capturing from video files or cameras, and writing video files.
+    Encoding and decoding are accelerated using the GStreamer backend.
+    """
+    
     def __init__(self, size, config, input_uri, output_uri=None, latency=1/30):
         self.size = size
         self.input_uri = input_uri
@@ -52,12 +57,18 @@ class VideoIO:
             self.writer = cv2.VideoWriter(self._gst_write_pipeline(), 0, output_fps, self.size, True)
 
     def start_capture(self):
+        """
+        Start capturing from video file or device.
+        """
         if not self.cap.isOpened():
             self.cap.open(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
         if not self.capture_thread.is_alive():
             self.capture_thread.start()
 
     def stop_capture(self):
+        """
+        Stop capturing from video file or device.
+        """
         with self.cond:
             self.exit_event.set()
             self.cond.notify()
@@ -65,6 +76,10 @@ class VideoIO:
         self.capture_thread.join()
 
     def read(self):
+        """
+        Returns the next video frame.
+        Returns None if there are no more frames.
+        """
         with self.cond:
             while len(self.frame_queue) == 0 and not self.exit_event.is_set():
                 self.cond.wait()
@@ -75,10 +90,16 @@ class VideoIO:
         return frame
 
     def write(self, frame):
+        """
+        Writes the next video frame.
+        """
         assert hasattr(self, 'writer')
         self.writer.write(frame)
 
     def release(self):
+        """
+        Closes video file or capturing device.
+        """
         self.stop_capture()
         if hasattr(self, 'writer'):
             self.writer.release()
@@ -128,7 +149,7 @@ class VideoIO:
                     )
                 )
             else:
-                raise RuntimeError('Gstreamer CSI plugin not found')
+                raise RuntimeError('GStreamer CSI plugin not found')
         elif self.protocol == Protocol.V4L2:
             if 'v4l2src' in gst_elements:
                 pipeline = (
@@ -142,7 +163,7 @@ class VideoIO:
                     )
                 )
             else:
-                raise RuntimeError('Gstreamer V4L2 plugin not found')
+                raise RuntimeError('GStreamer V4L2 plugin not found')
         elif self.protocol == Protocol.RTSP:
             pipeline = 'rtspsrc location=%s latency=0 ! decodebin ! ' % self.input_uri
         return pipeline + cvt_pipeline
@@ -157,7 +178,7 @@ class VideoIO:
         elif 'x264enc' in gst_elements:
             h264_encoder = 'x264enc'
         else:
-            raise RuntimeError('Gstreamer H.264 encoder not found')
+            raise RuntimeError('GStreamer H.264 encoder not found')
         pipeline = (
             'appsrc ! autovideoconvert ! %s ! qtmux ! filesink location=%s '
             % (

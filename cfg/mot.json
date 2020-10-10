@@ -62,7 +62,7 @@
             },
 
             "flow": {
-                "bkg_feat_scale_factor": [0.1, 0.1],
+                "bg_feat_scale_factor": [0.1, 0.1],
                 "opt_flow_scale_factor": [0.5, 0.5],
                 "feature_density": 0.005,
                 "feat_dist_factor": 0.06,
@@ -70,7 +70,7 @@
                 "ransac_max_iter": 500,
                 "ransac_conf": 0.99,
                 "inlier_thresh": 4,
-                "bkg_feat_thresh": 15,
+                "bg_feat_thresh": 15,
                 "target_feat_params": {
                     "maxCorners": 1000,
                     "qualityLevel": 0.06,

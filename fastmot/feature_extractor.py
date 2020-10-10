@@ -30,8 +30,12 @@ class FeatureExtractor:
         return self.model.METRIC
 
     def extract_async(self, frame, detections):
+        """
+        Asynchronous feature extraction.
+        """
         imgs = multi_crop(frame, detections.tlbr)
         self.embeddings, cur_imgs = [], []
+        # pipeline inference and preprocessing the next batch in parallel
         for offset in range(0, len(imgs), self.batch_size):
             cur_imgs = imgs[offset:offset + self.batch_size]
             self.pool.starmap(self._preprocess, enumerate(cur_imgs))
@@ -42,6 +46,11 @@ class FeatureExtractor:
         self.num_features = len(cur_imgs)
 
     def postprocess(self):
+        """
+        Synchronize, apply postprocessing, and return a NxM matrix of N
+        extracted embeddings with dimension M.
+        This function should be called after `extract_async`.
+        """
         if self.num_features == 0:
             return np.empty((0, self.feature_dim))
 

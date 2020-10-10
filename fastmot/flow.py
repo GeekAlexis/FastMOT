@@ -10,7 +10,7 @@ from .utils.rect import *
 class Flow:
     def __init__(self, size, config):
         self.size = size
-        self.bkg_feat_scale_factor = config['bkg_feat_scale_factor']
+        self.bg_feat_scale_factor = config['bg_feat_scale_factor']
         self.opt_flow_scale_factor = config['opt_flow_scale_factor']
         self.feature_density = config['feature_density']
         self.max_error = config['max_error']
@@ -19,15 +19,15 @@ class Flow:
         self.ransac_conf = config['ransac_conf']
         self.inlier_thresh = config['inlier_thresh']
 
-        self.bkg_feat_thresh = config['bkg_feat_thresh']
+        self.bg_feat_thresh = config['bg_feat_thresh']
         self.target_feat_params = config['target_feat_params']
         self.opt_flow_params = config['opt_flow_params']
         
-        self.bkg_feature_detector = cv2.FastFeatureDetector_create(threshold=self.bkg_feat_thresh)
+        self.bg_feat_detector = cv2.FastFeatureDetector_create(threshold=self.bg_feat_thresh)
 
         # background feature points for visualization
-        self.bkg_keypoints = np.empty((0, 2), np.float32)
-        self.prev_bkg_keypoints = np.empty((0, 2), np.float32)
+        self.bg_keypoints = np.empty((0, 2), np.float32)
+        self.prev_bg_keypoints = np.empty((0, 2), np.float32)
 
         # previous frames
         self.prev_frame_gray = None
@@ -35,18 +35,27 @@ class Flow:
 
         # preallocate
         self.ones = np.full(self.size[::-1], 255, np.uint8)
-        self.bkg_mask = np.empty_like(self.ones)
-        self.fg_mask = self.bkg_mask # alias
+        self.bg_mask = np.empty_like(self.ones)
+        self.fg_mask = self.bg_mask # alias
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
     def initiate(self, frame):
+        """
+        Preprocesses the first frame to prepare for subsequent optical
+        flow computations.
+        Parameters
+        ----------
+        frame : ndarray
+            Initial frame.
+        """
         self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         self.prev_frame_small = cv2.resize(self.prev_frame_gray, None, fx=self.opt_flow_scale_factor[0],
             fy=self.opt_flow_scale_factor[1])
 
     def predict(self, frame, tracks):
         """
-        Predict track locations in the current frame using optical flow.
+        Predicts tracklet positions and estimates camera motion based on
+        feature points detection and matching.
         Parameters
         ----------
         tracks : Dict[int, Track]
@@ -56,23 +65,24 @@ class Flow:
             Current frame.
         Returns
         -------
-        Dict[int, ndarray]
+        Dict[int, ndarray], ndarray
             Returns a dictionary with track IDs as keys and predicted bounding
-            boxes as values.
+            boxes of (x1, x2, y1, y2) as values, and a 3x3 homography matrix.
         """
         # preprocess frame
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_small = cv2.resize(frame_gray, None, fx=self.opt_flow_scale_factor[0], fy=self.opt_flow_scale_factor[1])
+        frame_small = cv2.resize(frame_gray, None, fx=self.opt_flow_scale_factor[0], 
+            fy=self.opt_flow_scale_factor[1])
         # order tracks from closest to farthest
         sorted_tracks = sorted(tracks.values(), reverse=True)
 
         # detect target feature points
         all_prev_pts = []
-        np.copyto(self.bkg_mask, self.ones)
+        np.copyto(self.bg_mask, self.ones)
         for track in sorted_tracks:
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
-            keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.bkg_mask)
-            target_mask = crop(self.bkg_mask, inside_tlbr)
+            keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.bg_mask)
+            target_mask = crop(self.bg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
             if target_area == 0:
                 keypoints = np.empty((0, 2), np.float32)
@@ -94,17 +104,17 @@ class Flow:
         target_begins = [0] + target_ends[:-1]
 
         # detect background feature points
-        prev_frame_small_bkg = cv2.resize(self.prev_frame_gray, None, fx=self.bkg_feat_scale_factor[0],
-            fy=self.bkg_feat_scale_factor[1])
-        bkg_mask_small = cv2.resize(self.bkg_mask, None, fx=self.bkg_feat_scale_factor[0],
-            fy=self.bkg_feat_scale_factor[1], interpolation=cv2.INTER_NEAREST)
-        keypoints = self.bkg_feature_detector.detect(prev_frame_small_bkg, mask=bkg_mask_small)
+        prev_frame_small_bg = cv2.resize(self.prev_frame_gray, None, fx=self.bg_feat_scale_factor[0],
+            fy=self.bg_feat_scale_factor[1])
+        bg_mask_small = cv2.resize(self.bg_mask, None, fx=self.bg_feat_scale_factor[0],
+            fy=self.bg_feat_scale_factor[1], interpolation=cv2.INTER_NEAREST)
+        keypoints = self.bg_feat_detector.detect(prev_frame_small_bg, mask=bg_mask_small)
         if keypoints is None or len(keypoints) == 0:
             keypoints = np.empty((0, 2), np.float32)
         else:
             keypoints = np.float32([kp.pt for kp in keypoints])
-            keypoints = self._unscale_pts(keypoints, self.bkg_feat_scale_factor, None)
-        bkg_begin = target_ends[-1]
+            keypoints = self._unscale_pts(keypoints, self.bg_feat_scale_factor, None)
+        bg_begin = target_ends[-1]
         all_prev_pts.append(keypoints)
 
         # match features using optical flow
@@ -121,17 +131,17 @@ class Flow:
 
         # estimate camera motion
         H_camera = None
-        prev_bkg_pts, matched_bkg_pts = self._get_good_match(all_prev_pts, all_cur_pts, status, bkg_begin, -1)
-        if len(matched_bkg_pts) >= 4:
-            H_camera, inlier_mask = cv2.findHomography(prev_bkg_pts, matched_bkg_pts, method=cv2.RANSAC,
+        prev_bg_pts, matched_bg_pts = self._get_good_match(all_prev_pts, all_cur_pts, status, bg_begin, -1)
+        if len(matched_bg_pts) >= 4:
+            H_camera, inlier_mask = cv2.findHomography(prev_bg_pts, matched_bg_pts, method=cv2.RANSAC,
                 maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
-            self.prev_bkg_keypoints, self.bkg_keypoints = self._get_inliers(prev_bkg_pts, matched_bkg_pts, inlier_mask)
-            if H_camera is None or len(self.bkg_keypoints) < self.inlier_thresh:
-                self.bkg_keypoints = np.empty((0, 2), np.float32)
+            self.prev_bg_keypoints, self.bg_keypoints = self._get_inliers(prev_bg_pts, matched_bg_pts, inlier_mask)
+            if H_camera is None or len(self.bg_keypoints) < self.inlier_thresh:
+                self.bg_keypoints = np.empty((0, 2), np.float32)
                 logging.warning('Camera motion estimation failed')
                 return {}, None
         else:
-            self.bkg_keypoints = np.empty((0, 2), np.float32)
+            self.bg_keypoints = np.empty((0, 2), np.float32)
             logging.warning('Camera motion estimation failed')
             return {}, None
 

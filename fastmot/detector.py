@@ -30,9 +30,17 @@ class Detector:
         return self.postprocess()
 
     def detect_async(self, frame_id, frame):
+        """
+        Asynchronous detection.
+        """
         raise NotImplementedError
 
     def postprocess(self):
+        """
+        Synchronize, apply postprocessing, and return a record array
+        of detections (DET_DTYPE).
+        This function should be called after `detect_async`.
+        """
         raise NotImplementedError
 
 
@@ -157,7 +165,6 @@ class SSDDetector(Detector):
                             candidates.append(j)
                             tile_ids[j] = -1
                             stack.append(j)
-                # merge candidates
                 for k in candidates:
                     dets[i].tlbr[:] = union(dets[i].tlbr, dets[k].tlbr)
                     dets[i].conf = max(dets[i].conf, dets[k].conf)
@@ -212,7 +219,7 @@ class YoloDetector(Detector):
         """
         size = np.asarray(size)
 
-        # drop detections with score lower than conf_thresh
+        # drop detections with low score
         scores = det_out[:, 4] * det_out[:, 6]
         keep = np.where(scores >= conf_thresh)[0]
         det_out = det_out[keep]

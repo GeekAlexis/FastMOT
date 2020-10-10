@@ -96,6 +96,9 @@ def multi_crop(img, tlbrs):
 
 @nb.njit(fastmath=True, cache=True)
 def warp(tlbr, m):
+    """
+    Warps bounding box with a 3x3 transformation matrix.
+    """
     corners = get_corners(tlbr)
     warped_corners = perspective_transform(corners, m)
     xmin = min(warped_corners[:, 0])
@@ -107,6 +110,9 @@ def warp(tlbr, m):
 
 @nb.njit(fastmath=True, cache=True)
 def transform(pts, m):
+    """
+    Numba implementation of OpenCV's transform.
+    """
     pts = np.asarray(pts)
     pts = np.atleast_2d(pts)
     augment = np.ones((len(pts), 1))
@@ -116,6 +122,9 @@ def transform(pts, m):
 
 @nb.njit(fastmath=True, cache=True)
 def perspective_transform(pts, m):
+    """
+    Numba implementation of OpenCV's perspectiveTransform.
+    """
     pts = np.asarray(pts)
     pts = np.atleast_2d(pts)
     augment = np.ones((len(pts), 1))
@@ -128,9 +137,9 @@ def perspective_transform(pts, m):
 @nb.njit(fastmath=True, cache=True)
 def nms(bboxes, scores, nms_thresh):
     """
-    Apply the Non-Maximum Suppression (NMS) algorithm on the bounding boxes (tlwh) with their
-    confidence scores and return an array with the indexes of the bounding boxes we want to
-    keep
+    Applies the Non-Maximum Suppression algorithm on the bounding boxes (x, y, w, h)
+    with their confidence scores and return an array with the indexes of the bounding
+    boxes we want to keep
     """
     areas = bboxes[:, 2] * bboxes[:, 3]
     ordered = scores.argsort()[::-1]

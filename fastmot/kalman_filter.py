@@ -2,7 +2,7 @@ from enum import Enum
 import numpy as np
 import numba as nb
 
-from .utils.rect import get_size, get_center
+from .utils.rect import get_size
 
 
 class MeasType(Enum):
@@ -14,11 +14,12 @@ class KalmanFilter:
     """
     A simple Kalman filter for tracking bounding boxes in image space.
     The 8-dimensional state space
-        xmin, ymin, xmax, ymax, v_xmin, v_ymin, v_xmax, v_ymax
+        x1, y1, x2, y2, v_x1, v_y1, v_x2, v_y2
     contains the bounding box top left corner, bottom right corner,
     and their respective velocities.
-    Object motion follows a constant velocity model augmented with corner
-    coupling and decay for tracking stability.
+    Object motion follows a modified constant velocity model.
+    Velocity will decay over time without measurement and bounding box
+    corners are coupled together to minimize drifting.
     """
 
     def __init__(self, dt, config):
@@ -57,11 +58,11 @@ class KalmanFilter:
 
     def initiate(self, det_meas):
         """
-        Create track from unassociated measurement.
+        Creates track from unassociated measurement.
         Parameters
         ----------
         det_meas : ndarray
-            Bounding box measurement detected.
+            Detected bounding box of (x1, x2, y1, y2).
         Returns
         -------
         (ndarray, ndarray)
@@ -88,7 +89,7 @@ class KalmanFilter:
 
     def predict(self, mean, covariance):
         """
-        Run Kalman filter prediction step.
+        Runs Kalman filter prediction step.
         Parameters
         ----------
         mean : ndarray
@@ -108,13 +109,17 @@ class KalmanFilter:
 
     def project(self, mean, covariance, meas_type, multiplier=1.):
         """
-        Project state distribution to measurement space.
+        Projects state distribution to measurement space.
         Parameters
         ----------
         mean : ndarray
             The state's mean vector (8 dimensional array).
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
+        meas_type : MeasType
+            Measurement type indicating where the measurement comes from.
+        multiplier : float
+            Multiplier used to adjust the measurement std.
         Returns
         -------
         (ndarray, ndarray)
@@ -134,15 +139,19 @@ class KalmanFilter:
 
     def update(self, mean, covariance, measurement, meas_type, multiplier=1.):
         """
-        Run Kalman filter correction step.
+        Runs Kalman filter correction step.
         Parameters
         ----------
         mean : ndarray
             The predicted state's mean vector (8 dimensional).
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
-        measurement : Rect
-            Bounding box output from detector or flow
+        measurement : ndarray
+            Bounding box of (x1, x2, y1, y2).
+        meas_type : MeasType
+            Measurement type indicating where the measurement comes from.
+        multiplier : float
+            Multiplier used to adjust the measurement std.
         Returns
         -------
         (ndarray, ndarray)
@@ -155,7 +164,7 @@ class KalmanFilter:
 
     def motion_distance(self, mean, covariance, measurements):
         """
-        Compute mahalanobis distance between `measurements` and state distribution.
+        Computes mahalanobis distance between `measurements` and state distribution.
         Parameters
         ----------
         mean : ndarray
@@ -163,7 +172,7 @@ class KalmanFilter:
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
         measurements : array_like
-            An Nx4 matrix of N samples of (xmin, ymin, xmax, ymax).
+            An Nx4 matrix of N samples of (x1, x2, y1, y2).
         Returns
         -------
         ndarray
@@ -177,7 +186,7 @@ class KalmanFilter:
     @nb.njit(fastmath=True, cache=True)
     def warp(mean, covariance, H):
         """
-        Warp kalman filter state using a homography transform.
+        Warps kalman filter state using a homography transformation.
         https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub
         ----------
         mean : ndarray

@@ -17,6 +17,13 @@ INF_COST = 1e5
 
 
 class MultiTracker:
+    """
+    An online multiple object tracker based on tracking-by-detection.
+    Optical flow is computed to maintain tracklets when detections
+    are not given. Therefore, it is not required to have detections
+    at every frame.
+    """
+
     def __init__(self, size, dt, metric, config):
         self.size = size
         self.metric = metric
@@ -40,17 +47,58 @@ class MultiTracker:
         self.flow_bboxes = {}
         self.H_camera = None
 
+    def initiate(self, frame, detections):
+        """
+        Initializes the tracker from detections in the first frame.
+        Parameters
+        ----------
+        frame : ndarray
+            Initial frame.
+        detections : recarray[DET_DTYPE]
+            Record array of N detections.
+        """
+        if self.tracks:
+            self.tracks.clear()
+        self.flow.initiate(frame)
+        for det in detections:
+            new_track = Track(0, self.next_id, det.tlbr, det.label)
+            new_track.state = self.kf.initiate(det.tlbr)
+            self.tracks[self.next_id] = new_track
+            logging.debug('Detected: %s', new_track)
+            self.next_id += 1
+
+    def track(self, frame):
+        """
+        Convenience function that combines flow and kalman filter steps.
+        Parameters
+        ----------
+        frame : ndarray
+            Current frame.
+        """
+        self.compute_flow(frame)
+        self.step_kalman_filter()
+
     def compute_flow(self, frame):
+        """
+        Computes optical flow to estimate tracklet positions and camera motion.
+        Parameters
+        ----------
+        frame : ndarray
+            Current frame.
+        """
         self.flow_bboxes, self.H_camera = self.flow.predict(frame, self.tracks)
         if self.H_camera is None:
-            # clear tracks when camera motion estimation failed
+            # clear tracks when camera motion cannot be estimated
             self.tracks.clear()
 
     def step_kalman_filter(self):
+        """
+        Predicts tracklet positions using kalman filter and flow measurement if
+        there is any. The function should be called after `compute_flow`.
+        """
         for trk_id, track in list(self.tracks.items()):
             flow_bbox = self.flow_bboxes.get(trk_id)
             mean, cov = track.state
-            # track using kalman filter and flow measurement
             mean, cov = self.kf.warp(mean, cov, self.H_camera)
             mean, cov = self.kf.predict(mean, cov)
             if flow_bbox is not None and track.active:
@@ -67,27 +115,17 @@ class MultiTracker:
                 else:
                     del self.tracks[trk_id]
 
-    def track(self, frame):
-        self.compute_flow(frame)
-        self.step_kalman_filter()
-
-    def initiate(self, frame, detections):
-        """
-        Initialize the tracker from detections in the first frame.
-        """
-        if self.tracks:
-            self.tracks.clear()
-        self.flow.initiate(frame)
-        for det in detections:
-            new_track = Track(0, self.next_id, det.tlbr, det.label)
-            new_track.state = self.kf.initiate(det.tlbr)
-            self.tracks[self.next_id] = new_track
-            logging.debug('Detected: %s', new_track)
-            self.next_id += 1
-
     def update(self, frame_id, detections, embeddings):
         """
-        Update tracks using detections and embeddings.
+        Associate tracklets with detections based on motion and feature embeddings.
+        Parameters
+        ----------
+        frame_id : int
+            Current frame ID.
+        detections : recarray[DET_DTYPE]
+            Record array of N detections.
+        embeddings : ndarray
+            NxM matrix of N extracted embeddings with dimension M.
         """
         det_ids = list(range(len(detections)))
         confirmed = [trk_id for trk_id, track in self.tracks.items() if track.confirmed]
@@ -139,7 +177,8 @@ class MultiTracker:
                 logging.info('Out: %s', track)
                 self._mark_lost(trk_id)
 
-        for (trk_id, det_id) in reid_matches:
+        # reactivate matched lost tracks
+        for trk_id, det_id in reid_matches:
             track = self.lost[trk_id]
             det = detections[det_id]
             logging.info('Re-identified: %s', track)

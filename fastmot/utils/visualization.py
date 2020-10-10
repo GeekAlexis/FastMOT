@@ -53,8 +53,8 @@ def draw_tile(frame, detector):
         cv2.rectangle(frame, tuple(tl), tuple(br), 0, 1)
 
 
-def draw_bkg_flow(frame, tracker):
-    _draw_feature_match(frame, tracker.flow.bkg_keypoints, tracker.flow.prev_bkg_keypoints, (0, 0, 255))
+def draw_bg_flow(frame, tracker):
+    _draw_feature_match(frame, tracker.flow.bg_keypoints, tracker.flow.prev_bg_keypoints, (0, 0, 255))
 
 
 def _draw_bbox(frame, tlbr, text, bbox_color, text_color):
