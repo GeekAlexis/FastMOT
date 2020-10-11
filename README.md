@@ -11,16 +11,16 @@ Fast MOT is a real-time tracker based on tracking by detection. The tracker impl
   - Optical flow tracking
   - Camera motion compensation
   
-Unlike Deep SORT, the detector only runs at every Nth frame to achieve faster processing. The detector uses the TensorRT backend and performs inference in an asynchronous way. In addition, most algorithms, including kalman filter, optical flow, and track association, are significantly optimized using Numba. Adding ReID enables Deep SORT to identify previously lost targets. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow. The tracker is currently designed for pedestrian tracking. 
+Unlike Deep SORT, the detector only runs at every Nth frame to achieve faster processing. For this reason, I adapted Deep SORT significantly. Both detector and feature extractor use the TensorRT backend and perform inference in an asynchronous way. In addition, most algorithms, including kalman filter, optical flow, and track association, are optimized using Numba. Adding ReID enables Deep SORT to identify previously lost targets. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow. The tracker is currently designed for pedestrian tracking. 
 
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
 |:-------|:-------:|:-------:|:-------:|:-------:|:-----:|
-| MOT17-13 | 5 - 20  | 19.8% | 41.3% | 45.6%  | 30 |
-| MOT17-04 | 20 - 50  | 43.8% | 61.0% | 74.9% | 24 |
+| MOT17-13 | 5 - 20  | 19.8% | 45.6% | 41.3%  | 30 |
+| MOT17-04 | 20 - 50  | 43.8% | 61.0% | 75.1% | 24 |
 | MOT17-03 | 40 - 80  | - | - | - | 16 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve up to **30 FPS** depending on crowd density. On a Desktop CPU/GPU, FPS will be even higher. Note that plain Deep SORT cannot run in real-time on any edge device. 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on crowd density. On a Desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT cannot run in real-time on any edge device (or desktop). 
 
 ## Requirements
 - CUDA >= 10
@@ -51,7 +51,7 @@ Build OpenCV from source with GStreamer. Modify `ARCH_BIN=7.5` to match your GPU
   $ pip3 install -r requirements.txt
   ```
 ### Download models
-This includes both pretrained OSNet, SSD and my custom YOLOv4 ONNX model
+This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
   ```
   $ scripts/download_models.sh
   ```
@@ -83,15 +83,15 @@ Only if you want to use SSD
   ```
   $ python3 app.py --input_uri video.mp4 --mot
   ```
-- Use `--gui` to visualize and `--output_uri` to save output
-- For more flexibility, modify `cfg/mot.json` 
-  - Use `v4l2-ctl -d /dev/video0 --list-formats-ext` to view available settings for your camera, and set `camera_size` and `camera_fps` accordingly
+- Use `--gui` to visualize and `--output_uri out.mp4` to save output
+- For more flexibility, modify the config file `cfg/mot.json` 
+  - Set `camera_size` and `camera_fps` to match your camera setting. You can use `v4l2-ctl -d /dev/video0 --list-formats-ext` to list all settings for your camera
   - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
   - To change target classes, please refer to the labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py), and set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
-  - For SSD, a more lightweight backbone can be used by setting `model` to `SSDMobileNetV1` or `SSDMobileNetV2`
+  - For SSD, a more lightweight backbone can be used by changing `model` to `SSDMobileNetV1` or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]` if a smaller batch size is preferred
-  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to reduce `n_init` and make sure it is set not more than `detector_frame_skip` but not less than `1`
- - To track custom classes (e.g. vehicle), please refer to [torchreid](https://github.com/KaiyangZhou/deep-person-reid) and [darknet](https://github.com/AlexeyAB/darknet) to train your ReID model and YOLOv4, respectively. Convert the model to ONNX and place it under `fastmot/models`. [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great source if you want to convert a Darknet model to ONNX. Finally, follow the examples below to add additional models: 
+  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to reduce `max_age` to get rid of undetected lost tracks quickly
+ - To track custom classes (e.g. vehicle), please refer to [fast-reid](https://github.com/JDAI-CV/fast-reid) and [darknet](https://github.com/AlexeyAB/darknet) to train your ReID model and YOLOv4, respectively. Convert the model to ONNX format and place it under `fastmot/models`. [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great source if you want to convert a Darknet model to ONNX. Finally, follow the examples below to add additional models: 
 https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/reid.py#L49
 https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/yolo.py#L90
-- Please star if you find this repo useful!
+- Please star if you find this repo useful/interesting. It means a lot to me!
