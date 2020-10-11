@@ -4,7 +4,7 @@ High performance multiple object tracking in Python
 <img src="assets/demo.gif" width="720" height="405" />
 
 ## Description
-Fast MOT is a real-time tracker based on tracking by detection. The tracker implements:
+Fast MOT is a **real-time** tracker based on tracking by detection. The tracker implements:
   - YOLOv4 detector
   - SSD detector
   - Deep SORT + OSNet ReID
@@ -20,18 +20,18 @@ Unlike Deep SORT, the detector only runs at every Nth frame to achieve faster pr
 | MOT17-04 | 20 - 50  | 43.8% | 61.0% | 75.1% | 24 |
 | MOT17-03 | 40 - 80  | - | - | - | 16 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on crowd density. On a Desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT cannot run in real-time on any edge device (or desktop). 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on crowd density. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT cannot run in real-time on any edge device (or desktop). 
 
 ## Requirements
 - CUDA >= 10
-- CuDNN >= 7
-- TensorRT >= 7 (UFF converter also required for SSD)
+- cuDNN >= 7
+- TensorRT >= 7 (SSD also requires UFF converter)
 - OpenCV >= 3.3 (with GStreamer)
-- TensorFlow <= 1.15.2 (for SSD support)
 - PyCuda
 - Numpy >= 1.15
 - Scipy >= 1.5
-- Numba
+- TensorFlow <= 1.15.2 (for SSD)
+- Numba >= 0.48
 - cython-bbox
 
 ### Install for Jetson (TX2/Xavier NX/Xavier)
@@ -40,11 +40,11 @@ Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack 4.4](https://developer.n
   $ scripts/install_jetson.sh
   ```
 ### Install for Ubuntu 18.04
-Make sure to have CUDA, TensorRT, and its Python API installed. You can optionally use my script to install from scratch
+Make sure to have CUDA, cuDNN, TensorRT (Python API too) installed. You can optionally use my script to install from scratch
   ```
   $ scripts/install_tensorrt.sh
   ```
-Build OpenCV from source with GStreamer. Modify `ARCH_BIN=7.5` to match your GPU compute capability. Then install Python dependencies
+Build OpenCV from source with GStreamer. Modify `ARCH_BIN=7.5` to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute). Then install Python dependencies
 
   ```
   $ scripts/install_opencv.sh
@@ -61,7 +61,7 @@ This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
   $ make
   ```
 ### Download VOC dataset for INT8 calibration
-Only if you want to use SSD
+Only required if you want to use SSD
   ```
   $ scripts/download_data.sh
   ```
@@ -87,11 +87,12 @@ Only if you want to use SSD
 - For more flexibility, modify the config file `cfg/mot.json` 
   - Set `camera_size` and `camera_fps` to match your camera setting. You can use `v4l2-ctl -d /dev/video0 --list-formats-ext` to list all settings for your camera
   - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
-  - To change target classes, please refer to the labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py), and set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
-  - For SSD, a more lightweight backbone can be used by changing `model` to `SSDMobileNetV1` or `SSDMobileNetV2`
+  - To change classes, please refer to the labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py), and set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
+  - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]` if a smaller batch size is preferred
-  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to reduce `max_age` to get rid of undetected lost tracks quickly
- - To track custom classes (e.g. vehicle), please refer to [fast-reid](https://github.com/JDAI-CV/fast-reid) and [darknet](https://github.com/AlexeyAB/darknet) to train your ReID model and YOLOv4, respectively. Convert the model to ONNX format and place it under `fastmot/models`. [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great source if you want to convert a Darknet model to ONNX. Finally, follow the examples below to add additional models: 
+  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to increase `max_age` such that `max_age * detector_frame_skip` is around `30-40`
+ - To track custom classes (e.g. vehicle), please refer to [fast-reid](https://github.com/JDAI-CV/fast-reid) and [Darknet](https://github.com/AlexeyAB/darknet) to train your ReID model and YOLOv4, respectively. Convert the model to ONNX format and place it under `fastmot/models`. To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great source. Finally, follow the examples below to add additional models: 
 https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/reid.py#L49
 https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/yolo.py#L90
+Note that TensorRT conversion happens at runtime, so `ENGINE_PATH` does not have to exist beforehand
 - Please star if you find this repo useful/interesting. It means a lot to me!
