@@ -69,16 +69,16 @@ class Flow:
         Predicts tracklet positions in the next frame and estimates camera motion.
         Parameters
         ----------
+        frame : ndarray
+            The next frame.
         tracks : Dict[int, Track]
             A dictionary with track IDs as keys and tracks as values.
             Feature points of each track are updated in place.
-        frame : ndarray
-            The next frame.
         Returns
         -------
         Dict[int, ndarray], ndarray
             Returns a dictionary with track IDs as keys and predicted bounding
-            boxes of (x1, x2, y1, y2) as values, and a 3x3 homography matrix.
+            boxes of [x1, x2, y1, y2] as values, and a 3x3 homography matrix.
         """
         # preprocess frame
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
