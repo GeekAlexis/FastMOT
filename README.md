@@ -11,7 +11,7 @@ Fast MOT is a **real-time** tracker based on tracking by detection. The tracker 
   - Optical flow tracking
   - Camera motion compensation
   
-Unlike Deep SORT, the detector only runs at every Nth frame to achieve faster processing. For this reason, I adapted Deep SORT significantly. Both detector and feature extractor use the TensorRT backend and perform inference in an asynchronous way. In addition, most algorithms, including kalman filter, optical flow, and track association, are optimized using Numba. Adding ReID enables Deep SORT to identify previously lost targets. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow. The tracker is currently designed for pedestrian tracking. 
+Unlike Deep SORT, the detector only runs every N frames to achieve faster processing. For this reason, optical flow is used to fill in the gaps. I swapped the feature extractor in Deep SORT to a better model, OSNet. The tracker is also able to re-identify previously lost targets and keep the same track IDs. Both detector and feature extractor use the TensorRT backend and perform asynchronous inference. In addition, most algorithms, including kalman filter, optical flow, and track association, are optimized using Numba. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow. The tracker is currently designed for person tracking. 
 
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
@@ -87,12 +87,29 @@ Only required if you want to use SSD
 - For more flexibility, modify the config file `cfg/mot.json` 
   - Set `camera_size` and `camera_fps` to match your camera setting. You can use `v4l2-ctl -d /dev/video0 --list-formats-ext` to list all settings for your camera
   - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
-  - To change classes, please refer to the labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py), and set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
+  - To change classes, set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
   - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]` if a smaller batch size is preferred
-  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to increase `max_age` such that `max_age * detector_frame_skip` is around `30-40`
- - To track custom classes (e.g. vehicle), please refer to [fast-reid](https://github.com/JDAI-CV/fast-reid) and [Darknet](https://github.com/AlexeyAB/darknet) to train your ReID model and YOLOv4, respectively. Convert the model to ONNX format and place it under `fastmot/models`. To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great source. Finally, follow the examples below to add additional models: 
-https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/reid.py#L49
-https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/yolo.py#L90
-Note that TensorRT conversion happens at runtime, so `ENGINE_PATH` does not have to exist beforehand
-- Please star if you find this repo useful/interesting. It means a lot to me!
+  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to increase `max_age` such that `max_age * detector_frame_skip` is around `30-40`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy
+ - Please star if you find this repo useful/interesting. It means a lot to me!
+  
+ ## Track custom classes
+This repo does not support training. To track custom classes (e.g. vehicle), you need to train both YOLOv4 and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLOv4 and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change the labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference. 
+### Add custom YOLOv4
+1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/yolo.py#L90
+  - `ENGINE_PATH`: path to TensorRT engine (converted at runtime)
+  - `MODEL_PATH`: path to ONNX model
+  - `NUM_CLASSES`: total number of classes
+  - `INPUT_SHAPE`: input size in the format `(channel, height, width)`
+  - `LAYER_FACTORS`: scale factors with respect to the input size for the three yolo layers. Change this to `[32, 16]` for YOLOv4-Tiny
+  - `ANCHORS`: anchors used to train the model
+2. Set `model` in `cfg/mot.json` to the new class
+### Add custom ReID
+1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/reid.py#L49
+  - `ENGINE_PATH`: path to TensorRT engine (converted at runtime)
+  - `MODEL_PATH`: path to ONNX model
+  - `INPUT_SHAPE`: input size in the format `(channel, height, width)`
+  - `OUTPUT_LAYOUT`: feature dimension output by the model (e.g. `512`)
+  - `METRIC`: distance metric used to match features (e.g. `'euclidean'`)
+2. Set `model` in `cfg/mot.json` to the new class
+3. You may want to play with `max_feature_cost` and `max_reid_cost`
