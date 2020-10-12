@@ -1,7 +1,7 @@
 # Fast MOT
 High performance multiple object tracking in Python
 
-<img src="assets/demo.gif" width="720" height="405" />
+<img src="assets/demo.gif" />
 
 ## Description
 Fast MOT is a **real-time** tracker based on tracking by detection. The tracker implements:
@@ -94,7 +94,7 @@ Only required if you want to use SSD
   - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]` if a smaller batch size is preferred
   - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to increase `max_age` such that `max_age * detector_frame_skip` is around `30-40`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy
- - Please star if you find this repo useful/interesting.
+ - Please star if you find this repo useful/interesting
   
  ## Track custom classes
 This repo does not support training. To track custom classes (e.g. vehicle), you need to train both YOLOv4 and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLOv4 and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change the label names [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference. 
