@@ -94,7 +94,7 @@ Only required if you want to use SSD
  - Please star if you find this repo useful/interesting. It means a lot to me!
   
  ## Track custom classes
-This repo does not support training. To track custom classes (e.g. vehicle), you need to train both YOLOv4 and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLOv4 and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change the labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference. 
+This repo does not support training. To track custom classes (e.g. vehicle), you need to train both YOLOv4 and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLOv4 and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change the label names [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference. 
 ### Add custom YOLOv4
 1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/yolo.py#L90
   - `ENGINE_PATH`: path to TensorRT engine (converted at runtime)
@@ -103,7 +103,9 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
   - `INPUT_SHAPE`: input size in the format `(channel, height, width)`
   - `LAYER_FACTORS`: scale factors with respect to the input size for the three yolo layers. Change this to `[32, 16]` for YOLOv4-Tiny
   - `ANCHORS`: anchors used to train the model
-2. Set `model` in `cfg/mot.json` to the new class
+2. Modify `cfg/mot.json`:
+  - Set `model` under `yolo_detector` to the added Python class
+  - Set `class_ids` under `yolo_detector`
 ### Add custom ReID
 1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/reid.py#L49
   - `ENGINE_PATH`: path to TensorRT engine (converted at runtime)
@@ -111,5 +113,7 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
   - `INPUT_SHAPE`: input size in the format `(channel, height, width)`
   - `OUTPUT_LAYOUT`: feature dimension output by the model (e.g. `512`)
   - `METRIC`: distance metric used to match features (e.g. `'euclidean'`)
-2. Set `model` in `cfg/mot.json` to the new class
-3. You may want to play with `max_feature_cost` and `max_reid_cost`
+2. Modify `cfg/mot.json`:
+  - Set `model` under `feature_extractor` to the added Python class
+  - Set `class_ids` under `feature_extractor`
+  - You may want to play with `max_feature_cost` and `max_reid_cost`
