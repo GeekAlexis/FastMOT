@@ -17,8 +17,7 @@ class DetectorType(Enum):
 
 class Mot:
     """
-    An online multiple object tracker based on tracking-by-detection.
-    This is a top level module that integrates detection and tracking.
+    This is the top level module that integrates detection and tracking together.
     Parameters
     ----------
     size : (int, int)
@@ -64,18 +63,19 @@ class Mot:
     
     @property
     def visible_tracks(self):
+        # retrieve confirmed and active tracks from the tracker
         return [track for track in self.tracker.tracks.values()
             if track.confirmed and track.active]
 
     def initiate(self):
         """
-        Initializes/restarts multiple object tracking.
+        Resets multiple object tracker.
         """
         self.frame_count = 0
     
-    def run(self, frame):
+    def step(self, frame):
         """
-        Runs multiple object tracking on the next frame.
+        Runs multiple object tracker on the next frame.
         Parameters
         ----------
         frame : ndarray
@@ -109,14 +109,13 @@ class Mot:
                 self.tracker_time += time.perf_counter() - tic
 
         if self.draw:
-            self._draw(frame, detections, self.verbose)
-
+            self._draw(frame, detections)
         self.frame_count += 1
 
-    def _draw(self, frame, detections, verbose=False):
+    def _draw(self, frame, detections):
         for track in self.visible_tracks:
-            draw_trk(frame, track, draw_flow=verbose)
-        if verbose:
+            draw_trk(frame, track, draw_flow=self.verbose)
+        if self.verbose:
             for det in detections:
                 draw_det(frame, det)
             draw_bg_flow(frame, self.tracker)

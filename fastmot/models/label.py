@@ -1,7 +1,10 @@
-# Combination of COCO and Crowdhuman labels
-# "unlabled" in COCO is replaced with "head" in Crowdhuman
+"""
+90-class COCO labels
+`unlabled` (id = 0) is replaced with `person` to work with CrowdHuman
+"""
+
 LABEL_MAP = (
-    'head',
+    'person',
     'person',
     'bicycle',
     'car',

@@ -92,7 +92,7 @@ Only required if you want to use SSD
   - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
   - To change classes, set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
   - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
-  - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]` if a smaller batch size is preferred
+  - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]`, `[2, 1]`, or `[1, 1]` if a smaller batch size is preferred
   - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to increase `max_age` such that `max_age * detector_frame_skip` is around `30-40`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy
  - Please star if you find this repo useful/interesting
   
@@ -108,7 +108,7 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
     LAYER_FACTORS: scale factors with respect to the input size for the three yolo layers. Change this to [32, 16] for YOLOv4-Tiny
     ANCHORS: anchors used to train the model
     ```
-2. Modify `cfg/mot.json`. Under `yolo_detector`, set `model` to the added Python class and set `class_ids`
+2. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids`
 ### Add custom ReID
 1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/reid.py#L49
     ```
@@ -118,4 +118,4 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
     OUTPUT_LAYOUT: feature dimension output by the model (e.g. 512)
     METRIC: distance metric used to match features (e.g. 'euclidean')
     ```
-2. Modify `cfg/mot.json`. Under `feature_extractor`, set `model` to the added Python class and set `class_ids`. You may want to play with `max_feature_cost` and `max_reid_cost` for your model
+2. Modify `cfg/mot.json`: under `feature_extractor`, set `model` to the added Python class and set `class_ids`. You may want to play with `max_feature_cost` and `max_reid_cost` for your model

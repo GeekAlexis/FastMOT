@@ -48,7 +48,7 @@ class SSDDetector(Detector):
     def __init__(self, size, config):
         super().__init__(size)
         self.label_mask = np.zeros(len(models.LABEL_MAP), dtype=bool)
-        self.label_mask[config['class_ids']] = True
+        self.label_mask[list(config['class_ids'])] = True
 
         self.model = getattr(models, config['model'])
         self.tile_overlap = config['tile_overlap']
@@ -70,7 +70,7 @@ class SSDDetector(Detector):
 
     def postprocess(self):
         det_out = self.backend.synchronize()[0]
-        detections, tile_ids = self._filter_dets(det_out, self.tiles, self.model.TOPK, 
+        detections, tile_ids = self._filter_dets(det_out, self.tiles, self.model.TOPK,
             self.label_mask, self.max_area, self.conf_thresh, self.scale_factor)
         detections = self._merge_dets(detections, tile_ids)
         return detections
@@ -237,7 +237,7 @@ class YoloDetector(Detector):
         keep = np.asarray(keep)
         nms_dets = det_out[keep]
         
-        detections = []
+        detections = [] 
         for i in range(len(nms_dets)):
             tlbr = to_tlbr(nms_dets[i, :4])
             # clip inside frame
