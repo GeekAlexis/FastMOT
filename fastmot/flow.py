@@ -9,15 +9,15 @@ from .utils.rect import *
 
 class Flow:
     """
-    An efficient tracker based on feature points matching using optical flow.
-    Camera motion is simultaneously estimated by matching feature points
+    A KLT tracker based on optical flow feature point matching.
+    Camera motion is simultaneously estimated by tracking feature points
     on the background.
     Parameters
     ----------
     size : (int, int)
         Width and height of each frame.
     config : Dict
-        Flow hyperparameters.
+        KLT hyperparameters.
     """
 
     def __init__(self, size, config):
@@ -143,7 +143,7 @@ class Flow:
         # estimate camera motion
         H_camera = None
         prev_bg_pts, matched_bg_pts = self._get_good_match(all_prev_pts, all_cur_pts, status, bg_begin, -1)
-        if len(matched_bg_pts) >= 4:
+        if len(matched_bg_pts) >= max(self.inlier_thresh, 4):
             H_camera, inlier_mask = cv2.findHomography(prev_bg_pts, matched_bg_pts, method=cv2.RANSAC,
                 maxIters=self.ransac_max_iter, confidence=self.ransac_conf)
             self.prev_bg_keypoints, self.bg_keypoints = self._get_inliers(prev_bg_pts, matched_bg_pts, inlier_mask)
@@ -162,7 +162,7 @@ class Flow:
         for begin, end, track in zip(target_begins, target_ends, sorted_tracks):
             prev_pts, matched_pts = self._get_good_match(all_prev_pts, all_cur_pts, status, begin, end)
             prev_pts, matched_pts = self._fg_filter(prev_pts, matched_pts, self.fg_mask, self.size)
-            if len(matched_pts) < 3:
+            if len(matched_pts) < max(self.inlier_thresh, 2):
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
             H_affine, inlier_mask = cv2.estimateAffinePartial2D(prev_pts, matched_pts, method=cv2.RANSAC, 
@@ -217,6 +217,7 @@ class Flow:
         pts = pts + offset
         center = get_center(tlbr)
         semi_axes = get_size(tlbr) * 0.5
+        # filter out points outside the ellipse
         keep = np.sum(((pts - center) / semi_axes)**2, axis=1) <= 1
         return pts[keep]
 

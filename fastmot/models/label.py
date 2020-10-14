@@ -1,10 +1,10 @@
 """
 90-class COCO labels
-`unlabled` (id = 0) is replaced with `person` to work with CrowdHuman
+`unlabled` (id = 0) is replaced with `head` to work with CrowdHuman
 """
 
 LABEL_MAP = (
-    'person',
+    'head',
     'person',
     'bicycle',
     'car',

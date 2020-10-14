@@ -8,7 +8,7 @@ Fast MOT is a **real-time** tracker based on tracking by detection. The tracker 
   - YOLOv4 detector
   - SSD detector
   - Deep SORT + OSNet ReID
-  - Optical flow tracking
+  - KLT optical flow tracking
   - Camera motion compensation
   
 Unlike Deep SORT, the detector only runs every N frames to achieve faster processing. For this reason, optical flow is used to fill in the gaps. I swapped the feature extractor in Deep SORT to a better model, OSNet. The tracker is also able to re-identify previously lost targets and keep the same track IDs. Both detector and feature extractor use the TensorRT backend and perform asynchronous inference. In addition, most algorithms, including kalman filter, optical flow, and track association, are optimized using Numba. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow. The tracker is currently designed for person tracking. 

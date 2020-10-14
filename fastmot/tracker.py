@@ -12,14 +12,14 @@ from .kalman_filter import MeasType, KalmanFilter
 from .utils.rect import as_rect, to_tlbr, intersection
 
 
-CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution (4 DOF)
+CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution (4 dof)
 INF_COST = 1e5
 
 
 class MultiTracker:
     """
-    Associates detections to tracklets and computes optical flow
-    to maintain tracklets when detections are not given.
+    Uses optical flow and kalman filter to track multiple objects and
+    associates detections to tracklets based on motion and appearance.
     Parameters
     ----------
     size : (int, int)
@@ -27,7 +27,7 @@ class MultiTracker:
     dt : float
         Time interval in seconds between each frame.
     metric : string
-        Feature distance metric for track association. Usually
+        Feature distance metric to associate tracklets. Usually
         `euclidean` or `cosine`.
     config : Dict
         Tracker hyperparameters.
@@ -239,7 +239,7 @@ class MultiTracker:
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
             motion_dist = self.kf.motion_distance(*track.state, detections.tlbr)
-            cost[i] = self._fuse_motion(cost[i], motion_dist, track.label, detections.label, 
+            cost[i] = self._fuse_motion(cost[i], motion_dist, track.label, detections.label,
                 self.max_feat_cost, self.motion_weight)
         return cost
 
