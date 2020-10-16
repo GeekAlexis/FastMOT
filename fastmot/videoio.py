@@ -115,6 +115,7 @@ class VideoIO:
         self.stop_capture()
         if hasattr(self, 'writer'):
             self.writer.release()
+        self.cap.release()
 
     def _parse_uri(self, uri):
         pos = uri.find('://')

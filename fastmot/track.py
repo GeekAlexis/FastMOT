@@ -11,14 +11,13 @@ class Track:
         self.tlbr = tlbr
         self.label = label
 
-        self.bin_height = 10
         self.alpha = 0.9
-
         self.age = 0
         self.confirmed = False
         self.smooth_feature = None
         self.state = None
         
+        self.inlier_ratio = 1
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
@@ -30,11 +29,11 @@ class Track:
 
     def __lt__(self, other):
         # ordered by approximate distance to the image plane, closer is greater
-        return (self.tlbr[-1] // self.bin_height, -self.age) < (other.tlbr[-1] // self.bin_height, -other.age)
+        return (self.tlbr[-1], -self.age) < (other.tlbr[-1], -other.age)
 
     @property
     def active(self):
-        return self.age < 3
+        return self.age < 2
 
     def update_feature(self, embedding):
         if self.smooth_feature is None:

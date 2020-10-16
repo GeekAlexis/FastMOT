@@ -42,7 +42,7 @@ class KalmanFilter:
         self.vel_half_life = config['vel_half_life']
 
         # acceleration std adjustment rate with respect to pixel width/height
-        self.std_acc_rate = (self.large_std_acc[1] - self.small_std_acc[1]) / (self.large_std_acc[0] - 
+        self.std_acc_rate = (self.large_std_acc[1] - self.small_std_acc[1]) / (self.large_std_acc[0] -
             self.small_std_acc[0])
 
         # acceleration-based process noise
@@ -53,9 +53,9 @@ class KalmanFilter:
         self.meas_mat = np.eye(4, 8)
         self.transition_mat = np.array([
             [1, 0, 0, 0, self.vel_coupling * self.dt, 0, (1 - self.vel_coupling) * self.dt, 0],
-            [0, 1, 0, 0, 0, self.vel_coupling * self.dt, 0, (1 - self.vel_coupling) * self.dt], 
-            [0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt, 0], 
-            [0, 0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt], 
+            [0, 1, 0, 0, 0, self.vel_coupling * self.dt, 0, (1 - self.vel_coupling) * self.dt],
+            [0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt, 0],
+            [0, 0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt],
             [0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0, 0], 
             [0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0], 
             [0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0],

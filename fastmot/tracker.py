@@ -1,7 +1,8 @@
 from collections import OrderedDict
+import itertools
+import logging
 import numpy as np
 import numba as nb
-import logging
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 from cython_bbox import bbox_overlaps
@@ -78,7 +79,7 @@ class MultiTracker:
 
     def track(self, frame):
         """
-        Convenience function that combines flow and kalman filter steps.
+        Convenience function that combines `compute_flow` and `step_kalman_filter`.
         Parameters
         ----------
         frame : ndarray
@@ -102,8 +103,8 @@ class MultiTracker:
 
     def step_kalman_filter(self):
         """
-        Predicts tracklet positions using kalman filter and flow measurements if
-        there are any. The function should be called after `compute_flow`.
+        Performs kalman filter prediction and update from flow measurements.
+        The function should be called after `compute_flow`.
         """
         for trk_id, track in list(self.tracks.items()):
             flow_bbox = self.flow_bboxes.get(trk_id)
@@ -112,7 +113,8 @@ class MultiTracker:
             mean, cov = self.kf.predict(mean, cov)
             if flow_bbox is not None and track.active:
                 # give large flow uncertainty for occluded objects
-                std_multiplier = max(self.age_factor * track.age, 1)
+                # usually these with high age and low inlier ratio
+                std_multiplier = max(self.age_factor * track.age, 1) / track.inlier_ratio
                 mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
             next_tlbr = as_rect(mean[:4])
             track.state = (mean, cov)
@@ -126,7 +128,7 @@ class MultiTracker:
 
     def update(self, frame_id, detections, embeddings):
         """
-        Associate tracklets with detections based on motion and feature embeddings.
+        Associates detections to tracklets based on motion and feature embeddings.
         Parameters
         ----------
         frame_id : int
@@ -163,8 +165,8 @@ class MultiTracker:
         cost = self._reid_cost(u_detections, u_embeddings)
         reid_matches, _, u_det_ids = self._linear_assignment(cost, lost_ids, u_det_ids)
 
-        matches = matches1 + matches2 + matches3
-        u_trk_ids = u_trk_ids1 + u_trk_ids2 + u_trk_ids3
+        matches = itertools.chain(matches1, matches2, matches3)
+        u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
         updated, aged = [], []
 
         # update matched tracks
@@ -180,12 +182,12 @@ class MultiTracker:
             if not track.confirmed:
                 track.confirmed = True
                 logging.info('Found: %s', track)
-            if intersection(next_tlbr, self.frame_rect) is not None:
-                updated.append(trk_id)
-            else:
+            if intersection(next_tlbr, self.frame_rect) is None:
                 logging.info('Out: %s', track)
                 self._mark_lost(trk_id)
-
+            else:
+                updated.append(trk_id)
+                
         # reactivate matched lost tracks
         for trk_id, det_id in reid_matches:
             track = self.lost[trk_id]

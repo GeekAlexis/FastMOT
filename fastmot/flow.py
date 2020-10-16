@@ -101,7 +101,7 @@ class Flow:
                 # only detect new keypoints when too few are propagated
                 img = crop(self.prev_frame_gray, inside_tlbr)
                 feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
-                keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask, minDistance=feature_dist, 
+                keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask, minDistance=feature_dist,
                     **self.target_feat_params)
                 if keypoints is None or len(keypoints) == 0:
                     keypoints = np.empty((0, 2), np.float32)
@@ -176,9 +176,10 @@ class Flow:
             if intersection(est_tlbr, self.frame_rect) is None or len(track.keypoints) < self.inlier_thresh:
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
-            target_mask = crop(self.fg_mask, est_tlbr)
             next_bboxes[track.trk_id] = est_tlbr
+            track.inlier_ratio = len(track.keypoints) / len(matched_pts)
             # zero out current track in foreground mask
+            target_mask = crop(self.fg_mask, est_tlbr)
             target_mask[:] = 0
         return next_bboxes, H_camera
 
