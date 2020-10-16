@@ -18,7 +18,7 @@
             "tiling_grid": [4, 2],
             "conf_thresh": 0.5,
             "max_area": 70000,
-            "merge_thresh": 0.3
+            "merge_thresh": 0.6
         },
         "yolo_detector": {
             "model": "YOLOV4",

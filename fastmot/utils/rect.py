@@ -91,8 +91,22 @@ def crop(img, tlbr):
 @nb.njit(cache=True)
 def multi_crop(img, tlbrs):
     _tlbrs = tlbrs.astype(np.int_)
-    return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1] for i in range(len(_tlbrs))]
+    return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1]
+        for i in range(len(_tlbrs))]
     
+
+@nb.njit(fastmath=True, cache=True)
+def iom(tlbr1, tlbr2):
+    """
+    Computes intersection over minimum.
+    """
+    tlbr = intersection(tlbr1, tlbr2)
+    if tlbr is None:
+        return 0.
+    area_intersection = area(tlbr)
+    area_minimum = min(area(tlbr1), area(tlbr2))
+    return area_intersection / area_minimum
+
 
 @nb.njit(fastmath=True, cache=True)
 def warp(tlbr, m):
@@ -135,17 +149,17 @@ def perspective_transform(pts, m):
 
 
 @nb.njit(fastmath=True, cache=True)
-def nms(bboxes, scores, nms_thresh):
+def nms(tlwhs, scores, nms_thresh):
     """
     Applies the Non-Maximum Suppression algorithm on the bounding boxes [x, y, w, h]
     with their confidence scores and return an array with the indexes of the bounding
     boxes we want to keep
     """
-    areas = bboxes[:, 2] * bboxes[:, 3]
+    areas = tlwhs[:, 2] * tlwhs[:, 3]
     ordered = scores.argsort()[::-1]
 
-    tl = bboxes[:, :2]
-    br = bboxes[:, :2] + bboxes[:, 2:] - 1
+    tl = tlwhs[:, :2]
+    br = tlwhs[:, :2] + tlwhs[:, 2:] - 1
 
     keep = []
     while ordered.size > 0:

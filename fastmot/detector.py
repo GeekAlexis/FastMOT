@@ -1,9 +1,6 @@
+from collections import defaultdict
 from pathlib import Path
 import configparser
-
-from cython_bbox import bbox_overlaps
-from collections import defaultdict
-from numba.typed import Dict
 import numpy as np
 import numba as nb
 import cv2
@@ -81,7 +78,7 @@ class SSDDetector(Detector):
         step_size = (1 - self.tile_overlap) * tile_size
         total_size = (tiling_grid - 1) * step_size + tile_size
         total_size = tuple(total_size.astype(int))
-        tiles = np.array([to_tlbr((c * step_size[0], r * step_size[1], *tile_size)) 
+        tiles = np.array([to_tlbr((c * step_size[0], r * step_size[1], *tile_size))
             for r in range(tiling_grid[1]) for c in range(tiling_grid[0])])
         return tiles, total_size
 
@@ -90,11 +87,7 @@ class SSDDetector(Detector):
         tile_ids = np.asarray(tile_ids)
         if len(detections) == 0:
             return detections
-
-        # merge detections across different tiles
-        bboxes = detections.tlbr
-        ious = bbox_overlaps(bboxes, bboxes)
-        detections = self._merge(detections, tile_ids, ious, self.merge_thresh)
+        detections = self._merge(detections, tile_ids, self.batch_size, self.merge_thresh)
         return detections.view(np.recarray)
     
     @staticmethod
@@ -138,20 +131,20 @@ class SSDDetector(Detector):
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _merge(dets, tile_ids, ious, thresh):
-        # find adjacent detections
-        neighbors = [Dict.empty(nb.types.int64, nb.types.int64) for _ in range(len(dets))]
+    def _merge(dets, tile_ids, num_tile, thresh):
+        # find duplicate neighbors across tiles
+        neighbors = [[0 for _ in range(0)] for _ in range(len(dets))]
         for i in range(len(dets)):
-            cur_neighbors = neighbors[i]
+            max_ioms = np.zeros(num_tile)
             for j in range(len(dets)):
-                if tile_ids[j] != tile_ids[i] and dets[i].label == dets[j].label:
-                    if contains(dets[i].tlbr, dets[j].tlbr) or contains(dets[j].tlbr, dets[i].tlbr) or \
-                        ious[i, j] >= thresh:
-                        # pick the nearest detection from each tile
-                        if cur_neighbors.get(tile_ids[j]) is None or ious[i, j] > ious[i, cur_neighbors[tile_ids[j]]]:
-                            cur_neighbors[tile_ids[j]] = j
+                if tile_ids[i] != tile_ids[j] and dets[i].label == dets[j].label:
+                    overlap = iom(dets[i].tlbr, dets[j].tlbr)
+                    # use the detection with the greatest IoM from each tile
+                    if overlap >= thresh and overlap > max_ioms[tile_ids[j]]:
+                        max_ioms[tile_ids[j]] = overlap
+                        neighbors[i].append(j)
         
-        # merge detections using depth-first search
+        # merge neighbors using depth-first search
         keep = set(range(len(dets)))
         stack = []
         for i in range(len(dets)):
@@ -160,7 +153,7 @@ class SSDDetector(Detector):
                 stack.append(i)
                 candidates = []
                 while len(stack) > 0:
-                    for j in neighbors[stack.pop()].values():
+                    for j in neighbors[stack.pop()]:
                         if tile_ids[j] != -1:
                             candidates.append(j)
                             tile_ids[j] = -1
