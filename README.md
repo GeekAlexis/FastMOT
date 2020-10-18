@@ -1,5 +1,5 @@
 # Fast MOT
-High performance multiple object tracking in Python
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <img src="assets/demo.gif" />
 
@@ -11,16 +11,18 @@ Fast MOT is a **real-time** tracker based on tracking by detection. The tracker 
   - KLT optical flow tracking
   - Camera motion compensation
   
-Unlike Deep SORT, the detector only runs every N frames to achieve faster processing. For this reason, optical flow is used to fill in the gaps. I swapped the feature extractor in Deep SORT to a better model, OSNet. The tracker is also able to re-identify previously lost targets and keep the same track IDs. Both detector and feature extractor use the TensorRT backend and perform asynchronous inference. In addition, most algorithms, including kalman filter, optical flow, and track association, are optimized using Numba. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow. The tracker is currently designed for person tracking. 
+CNN models are expensive to run, which makes Deep SORT unscalable. Therefore, the tracker only runs detector/feature extractor every N frames to achieve faster processing. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT to a better ReID model, OSNet. I also added a feature to re-identify previously lost targets and keep the same track IDs. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow.
+
+Both detector and feature extractor use the TensorRT backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba. 
 
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
 |:-------|:-------:|:-------:|:-------:|:-------:|:-----:|
-| MOT17-13 | 5 - 20  | 19.8% | 45.6% | 41.3%  | 30 |
-| MOT17-04 | 20 - 50  | 43.8% | 61.0% | 75.1% | 24 |
-| MOT17-03 | 40 - 80  | - | - | - | 16 |
+| MOT17-13 | 5 - 30  | 19.8% | 45.6% | 41.3%  | 30 |
+| MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 24 |
+| MOT17-03 | 50 - 80  | - | - | - | 16 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on crowd density. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT cannot run in real-time on any edge device (or desktop). 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on crowd density. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT is cannot run in real-time on any edge device (or desktop). 
 
 ## Requirements
 - CUDA >= 10
@@ -93,7 +95,7 @@ Only required if you want to use SSD
   - To change classes, set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
   - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]`, `[2, 1]`, or `[1, 1]` if a smaller batch size is preferred
-  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. You may also want to increase `max_age` such that `max_age * detector_frame_skip` is around `30-40`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy
+  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy. You may also want to change `max_age` such that `max_age * detector_frame_skip` is around `30-40` 
  - Please star if you find this repo useful/interesting
   
  ## Track custom classes
@@ -104,8 +106,9 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model
     NUM_CLASSES: total number of classes
-    INPUT_SHAPE: input size in the format (channel, height, width)
-    LAYER_FACTORS: scale factors with respect to the input size for the three yolo layers. Change this to [32, 16] for YOLOv4-Tiny
+    INPUT_SHAPE: input size in the format "(channel, height, width)"
+    LAYER_FACTORS: scale factors with respect to the input size for the three yolo layers. 
+                   For YOLOv4-tiny, change this to [32, 16]
     ANCHORS: anchors used to train the model
     ```
 2. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids`
@@ -114,7 +117,7 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
     ```
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model
-    INPUT_SHAPE: input size in the format (channel, height, width)
+    INPUT_SHAPE: input size in the format "(channel, height, width)"
     OUTPUT_LAYOUT: feature dimension output by the model (e.g. 512)
     METRIC: distance metric used to match features (e.g. 'euclidean')
     ```
