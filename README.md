@@ -11,16 +11,16 @@ Fast MOT is a **real-time** tracker based on tracking by detection. The tracker 
   - KLT optical flow tracking
   - Camera motion compensation
   
-Unlike Deep SORT, the detector only runs every N frames to achieve faster processing. For this reason, optical flow is used to fill in the gaps. I swapped the feature extractor in Deep SORT to a better model, OSNet. The tracker is also able to re-identify previously lost targets and keep the same track IDs. Both detector and feature extractor use the TensorRT backend and perform asynchronous inference. In addition, most algorithms, including kalman filter, optical flow, and track association, are optimized using Numba. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow. The tracker is currently designed for person tracking. 
+CNN models are expensive to run, which makes Deep SORT unscalable. Therefore, the tracker only runs detector/feature extractor every N frames to achieve faster processing. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT to a better ReID model, OSNet. The tracker is able to re-identify previously lost persons and keep the same track IDs. Both detector and feature extractor use the TensorRT backend and perform asynchronous inference. In addition, most algorithms, including kalman filter, optical flow, and track association, are optimized using Numba. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow.
 
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
 |:-------|:-------:|:-------:|:-------:|:-------:|:-----:|
-| MOT17-13 | 5 - 20  | 19.8% | 45.6% | 41.3%  | 30 |
-| MOT17-04 | 20 - 50  | 43.8% | 61.0% | 75.1% | 24 |
-| MOT17-03 | 40 - 80  | - | - | - | 16 |
+| MOT17-13 | 5 - 30  | 19.8% | 45.6% | 41.3%  | 30 |
+| MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 24 |
+| MOT17-03 | 50 - 80  | - | - | - | 16 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on crowd density. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT cannot run in real-time on any edge device (or desktop). 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on crowd density. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT is cannot run in real-time on any edge device (or desktop). 
 
 ## Requirements
 - CUDA >= 10
