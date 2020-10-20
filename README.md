@@ -1,5 +1,5 @@
 # Fast MOT
-High performance multiple object tracking in Python
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <img src="assets/demo.gif" />
 
