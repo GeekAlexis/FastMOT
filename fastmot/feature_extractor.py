@@ -12,7 +12,7 @@ class FeatureExtractor:
     def __init__(self, config):
         self.model = getattr(models, config['model'])
         self.batch_size = config['batch_size']
-        
+
         self.input_size = np.prod(self.model.INPUT_SHAPE)
         self.feature_dim = self.model.OUTPUT_LAYOUT
         self.backend = InferenceBackend(self.model, self.batch_size)

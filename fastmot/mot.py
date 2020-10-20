@@ -1,7 +1,8 @@
 from enum import Enum
 import logging
-import cv2
 import time
+import cv2
+
 
 from .detector import SSDDetector, YoloDetector, PublicDetector
 from .feature_extractor import FeatureExtractor
@@ -50,8 +51,8 @@ class Mot:
         logging.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor(config['feature_extractor'])
         self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric,
-            config['multi_tracker'])
-        
+                                    config['multi_tracker'])
+
         # reset counters
         self.frame_count = 0
         self.detector_frame_count = 0
@@ -60,19 +61,19 @@ class Mot:
         self.extractor_time = 0
         self.association_time = 0
         self.tracker_time = 0
-    
+
     @property
     def visible_tracks(self):
         # retrieve confirmed and active tracks from the tracker
         return [track for track in self.tracker.tracks.values()
-            if track.confirmed and track.active]
+                if track.confirmed and track.active]
 
     def initiate(self):
         """
         Resets multiple object tracker.
         """
         self.frame_count = 0
-    
+
     def step(self, frame):
         """
         Runs multiple object tracker on the next frame.
@@ -120,4 +121,4 @@ class Mot:
                 draw_detection(frame, det)
             draw_bg_flow(frame, self.tracker)
         cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30),
-            cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

@@ -46,7 +46,7 @@ class MultiTracker:
         self.duplicate_iou = config['duplicate_iou']
         self.conf_thresh = config['conf_thresh']
         self.lost_buf_size = config['lost_buf_size']
-        
+
         self.next_id = 1
         self.tracks = {}
         self.lost = OrderedDict()
@@ -55,7 +55,7 @@ class MultiTracker:
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
         self.flow_bboxes = {}
-        self.H_camera = None
+        self.homography = None
 
     def initiate(self, frame, detections):
         """
@@ -96,8 +96,8 @@ class MultiTracker:
         frame : ndarray
             The next frame.
         """
-        self.flow_bboxes, self.H_camera = self.flow.predict(frame, self.tracks)
-        if self.H_camera is None:
+        self.flow_bboxes, self.homography = self.flow.predict(frame, self.tracks)
+        if self.homography is None:
             # clear tracks when camera motion cannot be estimated
             self.tracks.clear()
 
@@ -109,7 +109,7 @@ class MultiTracker:
         for trk_id, track in list(self.tracks.items()):
             flow_bbox = self.flow_bboxes.get(trk_id)
             mean, cov = track.state
-            mean, cov = self.kf.warp(mean, cov, self.H_camera)
+            mean, cov = self.kf.warp(mean, cov, self.homography)
             mean, cov = self.kf.predict(mean, cov)
             if flow_bbox is not None and track.active:
                 # give large flow uncertainty for occluded objects
@@ -156,7 +156,8 @@ class MultiTracker:
         # 3rd association with unconfirmed tracks
         u_detections = detections[u_det_ids]
         cost = self._iou_cost(unconfirmed, u_detections)
-        matches3, u_trk_ids3, u_det_ids = self._linear_assignment(cost, unconfirmed, u_det_ids, True)
+        matches3, u_trk_ids3, u_det_ids = self._linear_assignment(cost, unconfirmed,
+                                                                  u_det_ids, True)
 
         # re-id with lost tracks
         lost_ids = list(self.lost.keys())
@@ -187,7 +188,7 @@ class MultiTracker:
                 self._mark_lost(trk_id)
             else:
                 updated.append(trk_id)
-                
+
         # reactivate matched lost tracks
         for trk_id, det_id in reid_matches:
             track = self.lost[trk_id]
@@ -198,7 +199,7 @@ class MultiTracker:
             self.tracks[trk_id] = track
             del self.lost[trk_id]
             updated.append(trk_id)
-            
+
         # clean up lost tracks
         for trk_id in u_trk_ids:
             track = self.tracks[trk_id]
@@ -242,7 +243,7 @@ class MultiTracker:
             track = self.tracks[trk_id]
             motion_dist = self.kf.motion_distance(*track.state, detections.tlbr)
             cost[i] = self._fuse_motion(cost[i], motion_dist, track.label, detections.label,
-                self.max_feat_cost, self.motion_weight)
+                                        self.max_feat_cost, self.motion_weight)
         return cost
 
     def _iou_cost(self, trk_ids, detections):
@@ -256,18 +257,39 @@ class MultiTracker:
         ious = bbox_overlaps(trk_bboxes, det_bboxes)
         ious = self._gate_cost(ious, trk_labels, detections.label, self.iou_thresh, True)
         return ious
-    
+
     def _reid_cost(self, detections, embeddings):
         if len(self.lost) == 0 or len(detections) == 0:
             return np.empty((len(self.lost), len(detections)))
-            
+
         features = [track.smooth_feature for track in self.lost.values()]
         trk_labels = np.array([track.label for track in self.lost.values()])
         cost = cdist(features, embeddings, self.metric)
         cost = self._gate_cost(cost, trk_labels, detections.label, self.max_reid_cost, False)
         return cost
 
-    def _linear_assignment(self, cost, trk_ids, det_ids, maximize=False):
+    def _remove_duplicate(self, updated, aged):
+        if len(updated) == 0 or len(aged) == 0:
+            return
+
+        updated_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in updated])
+        aged_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in aged])
+
+        ious = bbox_overlaps(updated_bboxes, aged_bboxes)
+        idx = np.where(ious >= self.duplicate_iou)
+        dup_ids = set()
+        for row, col in zip(*idx):
+            updated_id, aged_id = updated[row], aged[col]
+            if self.tracks[updated_id].start_frame <= self.tracks[aged_id].start_frame:
+                dup_ids.add(aged_id)
+            else:
+                dup_ids.add(updated_id)
+        for trk_id in dup_ids:
+            logging.debug('Duplicate: %s', self.tracks[trk_id])
+            del self.tracks[trk_id]
+
+    @staticmethod
+    def _linear_assignment(cost, trk_ids, det_ids, maximize=False):
         rows, cols = linear_sum_assignment(cost, maximize)
         unmatched_rows = list(set(range(cost.shape[0])) - set(rows))
         unmatched_cols = list(set(range(cost.shape[1])) - set(cols))
@@ -289,26 +311,6 @@ class MultiTracker:
                     unmatched_trk_ids.append(trk_ids[row])
                     unmatched_det_ids.append(det_ids[col])
         return matches, unmatched_trk_ids, unmatched_det_ids
-
-    def _remove_duplicate(self, updated, aged):
-        if len(updated) == 0 or len(aged) == 0:
-            return
-
-        updated_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in updated])
-        aged_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in aged])
-
-        ious = bbox_overlaps(updated_bboxes, aged_bboxes)
-        idx = np.where(ious >= self.duplicate_iou)
-        dup_ids = set()
-        for row, col in zip(*idx):
-            updated_id, aged_id = updated[row], aged[col]
-            if self.tracks[updated_id].start_frame <= self.tracks[aged_id].start_frame:
-                dup_ids.add(aged_id)
-            else:
-                dup_ids.add(updated_id)
-        for trk_id in dup_ids:
-            logging.debug('Duplicate: %s', self.tracks[trk_id])
-            del self.tracks[trk_id]
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

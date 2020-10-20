@@ -16,13 +16,14 @@ class Track:
         self.confirmed = False
         self.smooth_feature = None
         self.state = None
-        
+
         self.inlier_ratio = 1
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
     def __str__(self):
-        return "%s %d at %s" % (LABEL_MAP[self.label], self.trk_id, get_center(self.tlbr).astype(int))
+        return "%s %d at %s" % (LABEL_MAP[self.label], self.trk_id,
+                                get_center(self.tlbr).astype(int))
 
     def __repr__(self):
         return self.__str__()

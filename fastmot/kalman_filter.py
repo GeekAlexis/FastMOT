@@ -42,8 +42,8 @@ class KalmanFilter:
         self.vel_half_life = config['vel_half_life']
 
         # acceleration std adjustment rate with respect to pixel width/height
-        self.std_acc_rate = (self.large_std_acc[1] - self.small_std_acc[1]) / (self.large_std_acc[0] -
-            self.small_std_acc[0])
+        self.std_acc_rate = ((self.large_std_acc[1] - self.small_std_acc[1]) /
+                             (self.large_std_acc[0] - self.small_std_acc[0]))
 
         # acceleration-based process noise
         self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4, dtype=np.float))
@@ -56,8 +56,8 @@ class KalmanFilter:
             [0, 1, 0, 0, 0, self.vel_coupling * self.dt, 0, (1 - self.vel_coupling) * self.dt],
             [0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt, 0],
             [0, 0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt],
-            [0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0, 0], 
-            [0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0], 
+            [0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0, 0],
+            [0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0],
             [0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0],
             [0, 0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life)],
         ], dtype=np.float)
@@ -110,8 +110,8 @@ class KalmanFilter:
             Returns the mean vector and covariance matrix of the predicted
             state.
         """
-        return self._predict(mean, covariance, self.small_std_acc, self.std_acc_rate, 
-            self.acc_cov, self.transition_mat)
+        return self._predict(mean, covariance, self.small_std_acc, self.std_acc_rate,
+                             self.acc_cov, self.transition_mat)
 
     def project(self, mean, covariance, meas_type, multiplier=1.):
         """
@@ -165,8 +165,8 @@ class KalmanFilter:
         """
         projected_mean, projected_cov = self.project(mean, covariance, meas_type, multiplier)
 
-        return self._update(mean, covariance, projected_mean, 
-            projected_cov, measurement, self.meas_mat)
+        return self._update(mean, covariance, projected_mean,
+                            projected_cov, measurement, self.meas_mat)
 
     def motion_distance(self, mean, covariance, measurements):
         """
@@ -211,8 +211,8 @@ class KalmanFilter:
         h2 = np.ascontiguousarray(H[:2, 2])
         h3 = np.ascontiguousarray(H[2, :2])
         h4 = 1
-        
-        E1 = np.eye(8, 2) 
+
+        E1 = np.eye(8, 2)
         E3 = np.eye(8, 2, -4)
         M = E1 @ H1 @ E1.T + E3 @ H1 @ E3.T
         M31 = E3 @ H1 @ E1.T

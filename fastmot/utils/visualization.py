@@ -25,7 +25,8 @@ def draw_tile(frame, detector):
 
 
 def draw_bg_flow(frame, tracker):
-    _draw_feature_match(frame, tracker.flow.bg_keypoints, tracker.flow.prev_bg_keypoints, (0, 0, 255))
+    _draw_feature_match(frame, tracker.flow.bg_keypoints,
+                        tracker.flow.prev_bg_keypoints, (0, 0, 255))
 
 
 def _get_color(idx, s=0.8, vmin=0.7):
@@ -41,7 +42,8 @@ def _draw_bbox(frame, tlbr, text, bbox_color, text_color):
     tl, br = tuple(tlbr[:2]), tuple(tlbr[2:])
     (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, 0.7, 1)
     cv2.rectangle(frame, tl, br, bbox_color, 2)
-    cv2.rectangle(frame, tl, (tl[0] + text_width - 1, tl[1] - text_height + 1), bbox_color, cv2.FILLED)
+    cv2.rectangle(frame, tl, (tl[0] + text_width - 1, tl[1] - text_height + 1),
+                  bbox_color, cv2.FILLED)
     cv2.putText(frame, text, tl, cv2.FONT_HERSHEY_DUPLEX, 0.7, text_color, 1, cv2.LINE_AA)
 
 
@@ -52,4 +54,4 @@ def _draw_feature_match(frame, cur_pts, prev_pts, color):
         if len(prev_pts) > 0:
             prev_pts = np.rint(prev_pts).astype(int)
             [cv2.line(frame, tuple(pt1), tuple(pt2), color, 1, cv2.LINE_AA) for pt1, pt2 in
-                zip(prev_pts, cur_pts)]
+             zip(prev_pts, cur_pts)]

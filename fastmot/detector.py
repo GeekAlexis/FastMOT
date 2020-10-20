@@ -10,10 +10,10 @@ from .utils import InferenceBackend
 from .utils.rect import *
 
 
-DET_DTYPE = np.dtype([
-    ('tlbr', float, 4), 
-    ('label', int), 
-    ('conf', float)], 
+DET_DTYPE = np.dtype(
+    [('tlbr', float, 4),
+     ('label', int),
+     ('conf', float)],
     align=True
 )
 
@@ -68,7 +68,8 @@ class SSDDetector(Detector):
     def postprocess(self):
         det_out = self.backend.synchronize()[0]
         detections, tile_ids = self._filter_dets(det_out, self.tiles, self.model.TOPK,
-            self.label_mask, self.max_area, self.conf_thresh, self.scale_factor)
+                                                 self.label_mask, self.max_area,
+                                                 self.conf_thresh, self.scale_factor)
         detections = self._merge_dets(detections, tile_ids)
         return detections
 
@@ -79,7 +80,7 @@ class SSDDetector(Detector):
         total_size = (tiling_grid - 1) * step_size + tile_size
         total_size = tuple(total_size.astype(int))
         tiles = np.array([to_tlbr((c * step_size[0], r * step_size[1], *tile_size))
-            for r in range(tiling_grid[1]) for c in range(tiling_grid[0])])
+                          for r in range(tiling_grid[1]) for c in range(tiling_grid[0])])
         return tiles, total_size
 
     def _merge_dets(self, detections, tile_ids):
@@ -89,7 +90,7 @@ class SSDDetector(Detector):
             return detections
         detections = self._merge(detections, tile_ids, self.batch_size, self.merge_thresh)
         return detections.view(np.recarray)
-    
+
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
     def _preprocess(frame, tiles, out, size):
@@ -134,16 +135,16 @@ class SSDDetector(Detector):
     def _merge(dets, tile_ids, num_tile, thresh):
         # find duplicate neighbors across tiles
         neighbors = [[0 for _ in range(0)] for _ in range(len(dets))]
-        for i in range(len(dets)):
+        for i, det in enumerate(dets):
             max_ioms = np.zeros(num_tile)
-            for j in range(len(dets)):
-                if tile_ids[i] != tile_ids[j] and dets[i].label == dets[j].label:
-                    overlap = iom(dets[i].tlbr, dets[j].tlbr)
+            for j, other in enumerate(dets):
+                if tile_ids[i] != tile_ids[j] and det.label == other.label:
+                    overlap = iom(det.tlbr, other.tlbr)
                     # use the detection with the greatest IoM from each tile
                     if overlap >= thresh and overlap > max_ioms[tile_ids[j]]:
                         max_ioms[tile_ids[j]] = overlap
                         neighbors[i].append(j)
-        
+
         # merge neighbors using depth-first search
         keep = set(range(len(dets)))
         stack = []
@@ -174,7 +175,7 @@ class YoloDetector(Detector):
         self.conf_thresh = config['conf_thresh']
         self.max_area = config['max_area']
         self.nms_thresh = config['nms_thresh']
-        
+
         self.batch_size = 1
         self.backend = InferenceBackend(self.model, self.batch_size)
 
@@ -186,11 +187,11 @@ class YoloDetector(Detector):
     def postprocess(self):
         det_out = self.backend.synchronize()
         det_out = np.concatenate(det_out).reshape(-1, 7)
-        detections = self._filter_dets(det_out, self.size, self.class_ids, self.conf_thresh, 
-            self.nms_thresh, self.max_area)
+        detections = self._filter_dets(det_out, self.size, self.class_ids, self.conf_thresh,
+                                       self.nms_thresh, self.max_area)
         detections = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
         return detections
-    
+
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _preprocess(frame, out):
@@ -229,8 +230,8 @@ class YoloDetector(Detector):
             keep.extend(class_idx[class_keep])
         keep = np.asarray(keep)
         nms_dets = det_out[keep]
-        
-        detections = [] 
+
+        detections = []
         for i in range(len(nms_dets)):
             tlbr = to_tlbr(nms_dets[i, :4])
             # clip inside frame

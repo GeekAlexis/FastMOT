@@ -66,7 +66,8 @@ class VideoIO:
             output_fps = 1 / self.capture_dt
         if self.output_uri is not None:
             Path(self.output_uri).parent.mkdir(parents=True, exist_ok=True)
-            self.writer = cv2.VideoWriter(self._gst_write_pipeline(), 0, output_fps, self.size, True)
+            self.writer = cv2.VideoWriter(self._gst_write_pipeline(), 0, output_fps,
+                                          self.size, True)
 
     def start_capture(self):
         """
@@ -117,18 +118,6 @@ class VideoIO:
             self.writer.release()
         self.cap.release()
 
-    def _parse_uri(self, uri):
-        pos = uri.find('://')
-        if '/dev/video' in uri:
-            protocol = Protocol.V4L2
-        elif uri[:pos] == 'csi':
-            protocol = Protocol.CSI
-        elif uri[:pos] == 'rtsp':
-            protocol = Protocol.RTSP
-        else:
-            protocol = Protocol.FILE
-        return protocol
-        
     def _gst_cap_pipeline(self):
         gst_elements = str(subprocess.check_output('gst-inspect-1.0'))
         if 'nvvidconv' in gst_elements and self.protocol != Protocol.V4L2:
@@ -211,7 +200,21 @@ class VideoIO:
                     break
                 # keep unprocessed frames in the buffer for video file
                 if self.protocol == Protocol.FILE:
-                    while len(self.frame_queue) == self.buffer_size and not self.exit_event.is_set():
+                    while (len(self.frame_queue) == self.buffer_size and
+                           not self.exit_event.is_set()):
                         self.cond.wait()
                 self.frame_queue.append(frame)
                 self.cond.notify()
+
+    @staticmethod
+    def _parse_uri(uri):
+        pos = uri.find('://')
+        if '/dev/video' in uri:
+            protocol = Protocol.V4L2
+        elif uri[:pos] == 'csi':
+            protocol = Protocol.CSI
+        elif uri[:pos] == 'rtsp':
+            protocol = Protocol.RTSP
+        else:
+            protocol = Protocol.FILE
+        return protocol

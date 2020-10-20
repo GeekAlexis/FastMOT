@@ -92,8 +92,8 @@ def crop(img, tlbr):
 def multi_crop(img, tlbrs):
     _tlbrs = tlbrs.astype(np.int_)
     return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1]
-        for i in range(len(_tlbrs))]
-    
+            for i in range(len(_tlbrs))]
+
 
 @nb.njit(fastmath=True, cache=True)
 def iom(tlbr1, tlbr2):
@@ -166,7 +166,7 @@ def nms(tlwhs, scores, nms_thresh):
         # index of the current element
         i = ordered[0]
         keep.append(i)
-        
+
         # compute IOU
         candidate_tl = tl[ordered[1:]]
         candidate_br = br[ordered[1:]]
@@ -175,7 +175,7 @@ def nms(tlwhs, scores, nms_thresh):
         overlap_ymin = np.maximum(tl[i, 1], candidate_tl[:, 1])
         overlap_xmax = np.minimum(br[i, 0], candidate_br[:, 0])
         overlap_ymax = np.minimum(br[i, 1], candidate_br[:, 1])
-        
+
         width = np.maximum(0, overlap_xmax - overlap_xmin + 1)
         height = np.maximum(0, overlap_ymax - overlap_ymin + 1)
         area_intersection = width * height

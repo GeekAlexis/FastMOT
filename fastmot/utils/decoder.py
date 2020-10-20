@@ -1,7 +1,7 @@
 import json
 
 class ConfigDecoder(json.JSONDecoder):
-    
+
     def __init__(self, **kwargs):
         json.JSONDecoder.__init__(self, **kwargs)
         # Use the custom JSONArray

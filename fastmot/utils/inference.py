@@ -25,7 +25,7 @@ class InferenceBackend:
         self.model = model
         self.batch_size = batch_size
         self.runtime = trt.Runtime(InferenceBackend.TRT_LOGGER)
-        
+
         # load plugin if the model requires one
         if self.model.PLUGIN_PATH is not None:
             try:
@@ -65,7 +65,7 @@ class InferenceBackend:
                 self.input = HostDeviceMem(host_mem, device_mem)
             else:
                 self.outputs.append(HostDeviceMem(host_mem, device_mem))
-        
+
         self.stream = cuda.Stream()
         self.context = self.engine.create_execution_context()
 
@@ -76,7 +76,8 @@ class InferenceBackend:
     def infer_async(self):
         cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
         if self.engine.has_implicit_batch_dimension:
-            self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
+            self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings,
+                                       stream_handle=self.stream.handle)
         else:
             self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
         for out in self.outputs:
