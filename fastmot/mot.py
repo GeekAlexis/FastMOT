@@ -6,7 +6,7 @@ import time
 from .detector import SSDDetector, YoloDetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
-from .utils.visualization import draw_trk, draw_det, draw_bg_flow
+from .utils.visualization import draw_track, draw_detection, draw_bg_flow
 
 
 class DetectorType(Enum):
@@ -114,10 +114,10 @@ class Mot:
 
     def _draw(self, frame, detections):
         for track in self.visible_tracks:
-            draw_trk(frame, track, draw_flow=self.verbose)
+            draw_track(frame, track, draw_flow=self.verbose)
         if self.verbose:
             for det in detections:
-                draw_det(frame, det)
+                draw_detection(frame, det)
             draw_bg_flow(frame, self.tracker)
         cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30),
             cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

@@ -82,7 +82,7 @@ class Flow:
         """
         # preprocess frame
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_small = cv2.resize(frame_gray, None, fx=self.opt_flow_scale_factor[0], 
+        frame_small = cv2.resize(frame_gray, None, fx=self.opt_flow_scale_factor[0],
             fy=self.opt_flow_scale_factor[1])
         # order tracks from closest to farthest
         sorted_tracks = sorted(tracks.values(), reverse=True)
@@ -112,7 +112,7 @@ class Flow:
             # zero out track in background mask
             target_mask[:] = 0
         target_ends = list(itertools.accumulate(len(pts) for pts in all_prev_pts)) if all_prev_pts else [0]
-        target_begins = [0] + target_ends[:-1]
+        target_begins = itertools.chain([0], target_ends[:-1])
 
         # detect background feature points
         prev_frame_small_bg = cv2.resize(self.prev_frame_gray, None, fx=self.bg_feat_scale_factor[0],
