@@ -96,7 +96,8 @@ class MultiTracker:
         frame : ndarray
             The next frame.
         """
-        self.flow_bboxes, self.homography = self.flow.predict(frame, self.tracks)
+        active_tracks = [track for track in self.tracks.values() if track.active]
+        self.flow_bboxes, self.homography = self.flow.predict(frame, active_tracks)
         if self.homography is None:
             # clear tracks when camera motion cannot be estimated
             self.tracks.clear()
@@ -107,13 +108,13 @@ class MultiTracker:
         The function should be called after `compute_flow`.
         """
         for trk_id, track in list(self.tracks.items()):
-            flow_bbox = self.flow_bboxes.get(trk_id)
             mean, cov = track.state
             mean, cov = self.kf.warp(mean, cov, self.homography)
             mean, cov = self.kf.predict(mean, cov)
-            if flow_bbox is not None and track.active:
+            if trk_id in self.flow_bboxes:
                 # give large flow uncertainty for occluded objects
                 # usually these with high age and low inlier ratio
+                flow_bbox = self.flow_bboxes[trk_id]
                 std_multiplier = max(self.age_factor * track.age, 1) / track.inlier_ratio
                 mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
             next_tlbr = as_rect(mean[:4])

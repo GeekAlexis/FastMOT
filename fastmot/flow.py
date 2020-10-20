@@ -34,7 +34,7 @@ class Flow:
         self.bg_feat_thresh = config['bg_feat_thresh']
         self.target_feat_params = config['target_feat_params']
         self.opt_flow_params = config['opt_flow_params']
-     
+
         self.bg_feat_detector = cv2.FastFeatureDetector_create(threshold=self.bg_feat_thresh)
 
         # background feature points for visualization
@@ -72,8 +72,8 @@ class Flow:
         ----------
         frame : ndarray
             The next frame.
-        tracks : Dict[int, Track]
-            A dictionary with track IDs as keys and tracks as values.
+        tracks : List[Track]
+            List of tracks to predict.
             Feature points of each track are updated in place.
         Returns
         -------
@@ -86,28 +86,30 @@ class Flow:
         frame_small = cv2.resize(frame_gray, None, fx=self.opt_flow_scale_factor[0],
                                  fy=self.opt_flow_scale_factor[1])
         # order tracks from closest to farthest
-        sorted_tracks = sorted(tracks.values(), reverse=True)
+        sorted_tracks = sorted(tracks, reverse=True)
 
         # detect target feature points
         all_prev_pts = []
         np.copyto(self.bg_mask, self.ones)
         for track in sorted_tracks:
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
-            keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.bg_mask)
             target_mask = crop(self.bg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
             if target_area == 0:
                 keypoints = np.empty((0, 2), np.float32)
-            elif len(keypoints) / target_area < self.feature_density:
+            else:
+                keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.bg_mask)
                 # only detect new keypoints when too few are propagated
-                img = crop(self.prev_frame_gray, inside_tlbr)
-                feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
-                keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask, minDistance=feature_dist,
-                                                    **self.target_feat_params)
-                if keypoints is None or len(keypoints) == 0:
-                    keypoints = np.empty((0, 2), np.float32)
-                else:
-                    keypoints = self._ellipse_filter(keypoints, track.tlbr, inside_tlbr[:2])
+                if len(keypoints) / target_area < self.feature_density:
+                    img = crop(self.prev_frame_gray, inside_tlbr)
+                    feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
+                    keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask,
+                                                        minDistance=feature_dist,
+                                                        **self.target_feat_params)
+                    if keypoints is None:
+                        keypoints = np.empty((0, 2), np.float32)
+                    else:
+                        keypoints = self._ellipse_filter(keypoints, track.tlbr, inside_tlbr[:2])
             # batch target keypoints
             all_prev_pts.append(keypoints)
             # zero out track in background mask
@@ -117,13 +119,13 @@ class Flow:
         target_begins = itertools.chain([0], target_ends[:-1])
 
         # detect background feature points
-        prev_frame_small_bg = cv2.resize(self.prev_frame_gray, None, 
+        prev_frame_small_bg = cv2.resize(self.prev_frame_gray, None,
                                          fx=self.bg_feat_scale_factor[0],
                                          fy=self.bg_feat_scale_factor[1])
         bg_mask_small = cv2.resize(self.bg_mask, None, fx=self.bg_feat_scale_factor[0],
                                    fy=self.bg_feat_scale_factor[1], interpolation=cv2.INTER_NEAREST)
         keypoints = self.bg_feat_detector.detect(prev_frame_small_bg, mask=bg_mask_small)
-        if keypoints is None or len(keypoints) == 0:
+        if keypoints is None:
             keypoints = np.empty((0, 2), np.float32)
         else:
             keypoints = np.float32([kp.pt for kp in keypoints])
@@ -148,19 +150,17 @@ class Flow:
         homography = None
         prev_bg_pts, matched_bg_pts = self._get_good_match(all_prev_pts, all_cur_pts,
                                                            status, bg_begin, -1)
-        if len(matched_bg_pts) > 0:
-            homography, inlier_mask = cv2.findHomography(prev_bg_pts, matched_bg_pts,
-                                                         method=cv2.RANSAC,
-                                                         maxIters=self.ransac_max_iter,
-                                                         confidence=self.ransac_conf)
-            self.prev_bg_keypoints, self.bg_keypoints = self._get_inliers(prev_bg_pts,
-                                                                          matched_bg_pts,
-                                                                          inlier_mask)
-            if homography is None or len(self.bg_keypoints) < self.inlier_thresh:
-                self.bg_keypoints = np.empty((0, 2), np.float32)
-                logging.warning('Camera motion estimation failed')
-                return {}, None
-        else:
+        if len(matched_bg_pts) == 0:
+            self.bg_keypoints = np.empty((0, 2), np.float32)
+            logging.warning('Camera motion estimation failed')
+            return {}, None
+        homography, inlier_mask = cv2.findHomography(prev_bg_pts, matched_bg_pts,
+                                                     method=cv2.RANSAC,
+                                                     maxIters=self.ransac_max_iter,
+                                                     confidence=self.ransac_conf)
+        self.prev_bg_keypoints, self.bg_keypoints = self._get_inliers(prev_bg_pts, matched_bg_pts,
+                                                                      inlier_mask)
+        if homography is None or len(self.bg_keypoints) < self.inlier_thresh:
             self.bg_keypoints = np.empty((0, 2), np.float32)
             logging.warning('Camera motion estimation failed')
             return {}, None
@@ -262,7 +262,7 @@ class Flow:
         return pts
 
     @staticmethod
-    @nb.njit(fastmath=True, cache=True) 
+    @nb.njit(fastmath=True, cache=True)
     def _unscale_pts(pts, scale_factor, mask):
         scale_factor = np.asarray(scale_factor, np.float32)
         pts = pts.reshape(-1, 2)
