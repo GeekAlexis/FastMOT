@@ -4,16 +4,18 @@
 <img src="assets/demo.gif" />
 
 ## Description
-Fast MOT is a **real-time** tracker based on tracking by detection. The tracker implements:
+Fast MOT is a multiple object tracker that implements:
   - YOLOv4 detector
   - SSD detector
   - Deep SORT + OSNet ReID
   - KLT optical flow tracking
   - Camera motion compensation
   
-CNN models are expensive to run, which makes Deep SORT unscalable. Therefore, the tracker only runs detector/feature extractor every N frames to achieve faster processing. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT to a better ReID model, OSNet. I also added a feature to re-identify previously lost targets and keep the same track IDs. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow.
+Deep learning models are usually the bottleneck in Deep SORT, which makes Deep SORT unscalable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson.
 
-Both detector and feature extractor use the TensorRT backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba. 
+To achieve faster processing, the tracker only runs detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify previously lost targets so that the tracker can keep the same track IDs. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow.
+
+Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba. 
 
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
@@ -22,7 +24,7 @@ Both detector and feature extractor use the TensorRT backend and perform asynchr
 | MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 22 |
 | MOT17-03 | 50 - 80  | - | - | - | 15 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT cannot run in real-time on any edge device (or desktop). 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT cannot run in real-time on any edge device or desktop. 
 
 ## Requirements
 - CUDA >= 10
@@ -86,6 +88,7 @@ Only required if you want to use SSD
   $ python3 app.py --input_uri video.mp4 --mot
   ```
 - Use `--gui` to visualize and `--output_uri out.mp4` to save output
+- Note that the first run will be slow due to Numba compilation
 - For more flexibility, modify the config file `cfg/mot.json` 
   - Set `camera_size` and `camera_fps` to match your camera setting. List all settings for your camera:
     ```
@@ -99,9 +102,9 @@ Only required if you want to use SSD
  - Please star if you find this repo useful/interesting
   
  ## Track custom classes
-This repo does not support training. To track custom classes (e.g. vehicle), you need to train both YOLOv4 and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLOv4 and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change the label names [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference. 
+This repo does not support training but multi-class tracking is supported. To track custom classes (e.g. vehicle), you need to train both YOLOv4 and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLOv4 and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference.
 ### Add custom YOLOv4
-1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/23667e57ccf49f9f61ac0ce7e8ac8225ec59ca82/fastmot/models/yolo.py#L90
+1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/yolo.py#L92
     ```
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model
@@ -113,7 +116,7 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
     ```
 2. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids`
 ### Add custom ReID
-1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/23667e57ccf49f9f61ac0ce7e8ac8225ec59ca82/fastmot/models/reid.py#L49
+1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/reid.py#L51
     ```
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model
@@ -121,4 +124,4 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
     OUTPUT_LAYOUT: feature dimension output by the model (e.g. 512)
     METRIC: distance metric used to match features (e.g. 'euclidean')
     ```
-2. Modify `cfg/mot.json`: under `feature_extractor`, set `model` to the added Python class and set `class_ids`. You may want to play with `max_feature_cost` and `max_reid_cost` for your model
+2. Modify `cfg/mot.json`: under `feature_extractor`, set `model` to the added Python class and set `class_ids`. You may want to play with `max_feat_cost` and `max_reid_cost` for your model
