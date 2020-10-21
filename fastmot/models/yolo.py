@@ -4,6 +4,9 @@ import numpy as np
 import tensorrt as trt
 
 
+EXPLICIT_BATCH = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+
+
 class YOLO:
     PLUGIN_PATH = Path(__file__).parents[1] / 'plugins' / 'libyolo_layer.so'
     ENGINE_PATH = None
@@ -44,7 +47,7 @@ class YOLO:
                     trt.PluginField("inputHeight", np.array(cls.INPUT_SHAPE[1], dtype=np.int32), trt.PluginFieldType.INT32),
                     trt.PluginField("numClasses", np.array(cls.NUM_CLASSES, dtype=np.int32), trt.PluginFieldType.INT32),
                     trt.PluginField("numAnchors", np.array(num_anchors, dtype=np.int32), trt.PluginFieldType.INT32),
-                    trt.PluginField("anchors", np.ascontiguousarray(cls.ANCHORS[i], dtype=np.float32), trt.PluginFieldType.FLOAT32),
+                    trt.PluginField("anchors", np.array(cls.ANCHORS[i], dtype=np.float32), trt.PluginFieldType.FLOAT32),
                 ]))
             )
             new_tensors.append(plugin.get_output(0))
@@ -57,7 +60,6 @@ class YOLO:
 
     @classmethod
     def build_engine(cls, trt_logger, batch_size):
-        EXPLICIT_BATCH = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
         with trt.Builder(trt_logger) as builder, builder.create_network(EXPLICIT_BATCH) as network, \
             trt.OnnxParser(network, trt_logger) as parser:
 

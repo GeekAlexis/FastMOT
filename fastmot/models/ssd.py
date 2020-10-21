@@ -19,7 +19,7 @@ class SSD:
         import graphsurgeon as gs
         import uff
         from . import calibrator
-        
+
         # compile model into TensorRT
         dynamic_graph = gs.DynamicGraph(str(cls.MODEL_PATH))
         dynamic_graph = cls.add_plugin(dynamic_graph)
@@ -30,13 +30,15 @@ class SSD:
             builder.max_batch_size = batch_size
             logging.info('Building engine with batch size: %d', batch_size)
             logging.info('This may take a while...')
-            
+
             if builder.platform_has_fast_fp16:
                 builder.fp16_mode = True
             if builder.platform_has_fast_int8:
                 builder.int8_mode = True
-                builder.int8_calibrator = calibrator.SSDEntropyCalibrator(cls.INPUT_SHAPE, data_dir=calib_dataset, 
-                    cache_file=Path(__file__).parent / f'{cls.__name__}_calib_cache')
+                builder.int8_calibrator = calibrator.SSDEntropyCalibrator(cls.INPUT_SHAPE,
+                                                                          data_dir=calib_dataset,
+                                                                          cache_file=Path(__file__).parent /
+                                                                          f'{cls.__name__}_calib_cache')
 
             parser.register_input('Input', cls.INPUT_SHAPE)
             parser.register_output('MarkOutput_0')

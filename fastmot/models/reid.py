@@ -3,6 +3,9 @@ import logging
 import tensorrt as trt
 
 
+EXPLICIT_BATCH = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+
+
 class ReID:
     PLUGIN_PATH = None
     ENGINE_PATH = None
@@ -11,7 +14,6 @@ class ReID:
 
     @classmethod
     def build_engine(cls, trt_logger, batch_size):
-        EXPLICIT_BATCH = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
         with trt.Builder(trt_logger) as builder, builder.create_network(EXPLICIT_BATCH) as network, \
             trt.OnnxParser(network, trt_logger) as parser:
 
@@ -19,7 +21,7 @@ class ReID:
             builder.max_batch_size = batch_size
             logging.info('Building engine with batch size: %d', batch_size)
             logging.info('This may take a while...')
-            
+
             if builder.platform_has_fast_fp16:
                 builder.fp16_mode = True
 

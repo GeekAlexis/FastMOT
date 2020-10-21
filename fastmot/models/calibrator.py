@@ -1,8 +1,8 @@
 import os
+import numpy as np
 import pycuda.driver as cuda
 import pycuda.autoinit
 import tensorrt as trt
-import numpy as np
 import cv2
 
 
@@ -57,7 +57,7 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         return [int(self.device_input)]
 
     def read_calibration_cache(self):
-        # If there is a cache, use it instead of calibrating again. Otherwise, implicitly return None.
+        # If there is a cache, use it instead of calibrating again.
         if os.path.exists(self.cache_file):
             with open(self.cache_file, "rb") as f:
                 return f.read()

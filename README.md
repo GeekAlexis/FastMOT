@@ -19,10 +19,10 @@ Both detector and feature extractor use the TensorRT backend and perform asynchr
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
 |:-------|:-------:|:-------:|:-------:|:-------:|:-----:|
 | MOT17-13 | 5 - 30  | 19.8% | 45.6% | 41.3%  | 30 |
-| MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 24 |
-| MOT17-03 | 50 - 80  | - | - | - | 16 |
+| MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 22 |
+| MOT17-03 | 50 - 80  | - | - | - | 15 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on crowd density. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT is cannot run in real-time on any edge device (or desktop). 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT cannot run in real-time on any edge device (or desktop). 
 
 ## Requirements
 - CUDA >= 10
@@ -101,7 +101,7 @@ Only required if you want to use SSD
  ## Track custom classes
 This repo does not support training. To track custom classes (e.g. vehicle), you need to train both YOLOv4 and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLOv4 and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change the label names [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference. 
 ### Add custom YOLOv4
-1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/yolo.py#L90
+1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/23667e57ccf49f9f61ac0ce7e8ac8225ec59ca82/fastmot/models/yolo.py#L90
     ```
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model
@@ -113,7 +113,7 @@ This repo does not support training. To track custom classes (e.g. vehicle), you
     ```
 2. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids`
 ### Add custom ReID
-1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/f7864e011699b355128d0cc25768c71d12ee6397/fastmot/models/reid.py#L49
+1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/23667e57ccf49f9f61ac0ce7e8ac8225ec59ca82/fastmot/models/reid.py#L49
     ```
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model

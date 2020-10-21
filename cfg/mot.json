@@ -34,7 +34,7 @@
         },
         "feature_extractor": {
             "model": "OSNet025",
-            "batch_size": 32
+            "batch_size": 16
         },
 
         "multi_tracker": {
