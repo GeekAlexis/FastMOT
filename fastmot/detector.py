@@ -208,14 +208,14 @@ class YoloDetector(Detector):
     def _filter_dets(det_out, size, class_ids, conf_thresh, nms_thresh, max_area):
         """
         det_out: a list of 3 tensors, where each tensor
-                    contains a multiple of 7 float32 numbers in
-                    the order of [x, y, w, h, box_confidence, class_id, class_prob]
+                 contains a multiple of 7 float32 numbers in
+                 the order of [x, y, w, h, box_confidence, class_id, class_prob]
         """
         size = np.asarray(size)
 
         # drop detections with low score
         scores = det_out[:, 4] * det_out[:, 6]
-        keep = np.where(scores >= conf_thresh)[0]
+        keep = np.where(scores >= conf_thresh)
         det_out = det_out[keep]
 
         # scale to pixel values

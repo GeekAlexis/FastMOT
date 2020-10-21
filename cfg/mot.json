@@ -17,20 +17,20 @@
             "tile_overlap": 0.25,
             "tiling_grid": [4, 2],
             "conf_thresh": 0.5,
-            "max_area": 70000,
+            "max_area": 130000,
             "merge_thresh": 0.6
         },
         "yolo_detector": {
             "model": "YOLOV4",
             "class_ids": [1],
             "conf_thresh": 0.25,
-            "max_area": 900000,
+            "max_area": 800000,
             "nms_thresh": 0.5
         },
         "public_detector": {
             "sequence": "eval/data/MOT17-04",
             "conf_thresh": 0.5,
-            "max_area": 900000
+            "max_area": 800000
         },
         "feature_extractor": {
             "model": "OSNet025",
@@ -58,7 +58,7 @@
                 "init_pos_std_factor": 24,
                 "init_vel_std_factor": 40,
                 "vel_coupling": 0.6,
-                "vel_half_life": 1
+                "vel_half_life": 2
             },
 
             "flow": {
