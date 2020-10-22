@@ -56,9 +56,10 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
     -D CMAKE_INSTALL_PREFIX=/usr/local \
     -D INSTALL_PYTHON_EXAMPLES=ON \
     -D INSTALL_C_EXAMPLES=OFF \
+    -D BUILD_PROTOBUF=OFF \
+    -D BUILD_EXAMPLES=ON \
     -D OPENCV_EXTRA_MODULES_PATH='../opencv_contrib/modules' \
     -D PYTHON_EXECUTABLE='../opencv4/bin/python' \
-    -D BUILD_EXAMPLES=ON \
     -D WITH_CUDA=ON \
     -D CUDA_ARCH_BIN=${ARCH_BIN} \
     -D CUDA_ARCH_PTX="" \
@@ -69,6 +70,7 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
     -D WITH_GSTREAMER=ON \
     -D WITH_GSTREAMER_0_10=OFF \
     -D WITH_TBB=ON \
+    -D ENABLE_PRECOMPILED_HEADERS=OFF \
     ../
 
 make -j8
