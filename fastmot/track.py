@@ -17,7 +17,7 @@ class Track:
         self.smooth_feature = None
         self.state = None
 
-        self.inlier_ratio = 1
+        self.inlier_ratio = 1.
         self.keypoints = np.empty((0, 2), np.float32)
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
