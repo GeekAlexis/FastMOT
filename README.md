@@ -5,7 +5,7 @@
 
 ## Description
 Fast MOT is a multiple object tracker that implements:
-  - YOLOv4 detector
+  - YOLO detector
   - SSD detector
   - Deep SORT + OSNet ReID
   - KLT optical flow tracking
@@ -24,7 +24,9 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 | MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 22 |
 | MOT17-03 | 50 - 80  | - | - | - | 15 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT + YOLO usually struggles to run in real-time on most edge devices and desktop machines. 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS should be even higher. 
+
+This means even though the tracker runs much faster, it is still highly accurate. More lightweight detector/feature extractor can potentially be used to obtain more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines. 
 
 ## Requirements
 - CUDA >= 10
@@ -89,7 +91,7 @@ Only required if you want to use SSD
   ```
 - Use `--gui` to visualize and `--output_uri out.mp4` to save output
 - Note that the first run will be slow due to Numba compilation
-- For more flexibility, modify the config file `cfg/mot.json` 
+- More options can be configured in `cfg/mot.json` 
   - Set `camera_size` and `camera_fps` to match your camera setting. List all settings for your camera:
     ```
     $ v4l2-ctl -d /dev/video0 --list-formats-ext
@@ -104,7 +106,7 @@ Only required if you want to use SSD
  ## Track custom classes
 This repo does not support training but multi-class tracking is supported. To track custom classes (e.g. vehicle), you need to train both YOLO and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLO to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference.
 ### Add custom YOLOv3/v4
-1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/yolo.py#L92
+1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/4e946b85381ad807d5456f2ad57d1274d0e72f3d/fastmot/models/yolo.py#L94
     ```
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model
