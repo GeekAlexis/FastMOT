@@ -86,12 +86,12 @@ class Flow:
         frame_small = cv2.resize(frame_gray, None, fx=self.opt_flow_scale_factor[0],
                                  fy=self.opt_flow_scale_factor[1])
         # order tracks from closest to farthest
-        sorted_tracks = sorted(tracks, reverse=True)
+        tracks.sort(reverse=True)
 
         # detect target feature points
         all_prev_pts = []
         np.copyto(self.bg_mask, self.ones)
-        for track in sorted_tracks:
+        for track in tracks:
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
             target_mask = crop(self.bg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
@@ -168,7 +168,7 @@ class Flow:
         # estimate target bounding boxes
         next_bboxes = {}
         np.copyto(self.fg_mask, self.ones)
-        for begin, end, track in zip(target_begins, target_ends, sorted_tracks):
+        for begin, end, track in zip(target_begins, target_ends, tracks):
             prev_pts, matched_pts = self._get_good_match(all_prev_pts, all_cur_pts,
                                                          status, begin, end)
             prev_pts, matched_pts = self._fg_filter(prev_pts, matched_pts, self.fg_mask, self.size)
