@@ -11,9 +11,9 @@ Fast MOT is a multiple object tracker that implements:
   - KLT optical flow tracking
   - Camera motion compensation
   
-Deep learning models are usually the bottleneck in Deep SORT, which makes Deep SORT unscalable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson.
+Deep learning models are usually the bottleneck in Deep SORT, which makes Deep SORT unscalable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to customize the speed-accuracy tradeoff without a lightweight model.
 
-To achieve faster processing, the tracker only runs detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify previously lost targets so that the tracker can keep the same track IDs. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow.
+To achieve faster processing, the tracker only runs detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify targets that moved out of frame so that the tracker can keep the same IDs. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow.
 
 Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba. 
 
@@ -24,7 +24,7 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 | MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 22 |
 | MOT17-03 | 50 - 80  | - | - | - | 15 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT + YOLOv4 usually struggles to run in real-time on any edge or desktop machine. 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS will be even higher. This means even though the tracker runs much faster, it is still highly accurate. Note that plain Deep SORT + YOLO usually struggles to run in real-time on most edge devices and desktop machines. 
 
 ## Requirements
 - CUDA >= 10
@@ -102,16 +102,17 @@ Only required if you want to use SSD
  - Please star if you find this repo useful/interesting
   
  ## Track custom classes
-This repo does not support training but multi-class tracking is supported. To track custom classes (e.g. vehicle), you need to train both YOLOv4 and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLOv4 and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLOv4 to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference.
-### Add custom YOLOv4
+This repo does not support training but multi-class tracking is supported. To track custom classes (e.g. vehicle), you need to train both YOLO and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLO to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference.
+### Add custom YOLOv3/v4
 1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/yolo.py#L92
     ```
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model
     NUM_CLASSES: total number of classes
     INPUT_SHAPE: input size in the format "(channel, height, width)"
-    LAYER_FACTORS: scale factors with respect to the input size for the three yolo layers. 
-                   For YOLOv4-tiny, change this to [32, 16]
+    LAYER_FACTORS: scale factors with respect to the input size for the three yolo layers.
+                   For YOLOv3, change this to [32, 16, 8]
+                   For YOLOv3/v4 tiny, change this to [32, 16]
     ANCHORS: anchors used to train the model
     ```
 2. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids`
