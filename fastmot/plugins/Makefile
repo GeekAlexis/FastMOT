@@ -11,7 +11,7 @@ ifeq ($(cpu_arch), aarch64)  # Jetson
     compute=53
   else ifeq ($(chip_id), 24)  # TX2
     compute=62
-  else ifeq ($(chip_id), 25)  # Xavier NX
+  else ifeq ($(chip_id), 25)  # AGX Xavier and Xavier NX
     compute=72
   else
     $(error Cannot determine cuda compute automatically, so please modify Makefile manually)

@@ -14,6 +14,7 @@ class YOLO:
     NUM_CLASSES = None
     INPUT_SHAPE = ()
     LAYER_FACTORS = []
+    SCALES = []
     ANCHORS = []
 
     @classmethod
@@ -48,6 +49,7 @@ class YOLO:
                     trt.PluginField("numClasses", np.array(cls.NUM_CLASSES, dtype=np.int32), trt.PluginFieldType.INT32),
                     trt.PluginField("numAnchors", np.array(num_anchors, dtype=np.int32), trt.PluginFieldType.INT32),
                     trt.PluginField("anchors", np.array(cls.ANCHORS[i], dtype=np.float32), trt.PluginFieldType.FLOAT32),
+                    trt.PluginField("scaleXY", np.array(cls.SCALES[i], dtype=np.float32), trt.PluginFieldType.FLOAT32),
                 ]))
             )
             new_tensors.append(plugin.get_output(0))
@@ -89,10 +91,13 @@ class YOLO:
             return engine
 
 
-class YOLOV4(YOLO):
+class YOLOv4(YOLO):
     ENGINE_PATH = Path(__file__).parent / 'yolov4_crowdhuman.trt'
     MODEL_PATH = Path(__file__).parent /  'yolov4_crowdhuman.onnx'
     NUM_CLASSES = 2
     INPUT_SHAPE = (3, 512, 512)
     LAYER_FACTORS = [8, 16, 32]
-    ANCHORS = [[11, 22, 24, 60, 37, 116], [54, 186, 69, 268, 89, 369], [126, 491, 194, 314, 278, 520]]
+    SCALES = [1.2, 1.1, 1.05]
+    ANCHORS = [[11, 22, 24, 60, 37, 116],
+               [54, 186, 69, 268, 89, 369],
+               [126, 491, 194, 314, 278, 520]]

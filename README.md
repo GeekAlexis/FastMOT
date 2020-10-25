@@ -110,11 +110,17 @@ This repo does not support training but multi-class tracking is supported. To tr
     MODEL_PATH: path to ONNX model
     NUM_CLASSES: total number of classes
     INPUT_SHAPE: input size in the format "(channel, height, width)"
-    LAYER_FACTORS: scale factors with respect to the input size for the three yolo layers.
-                   For YOLOv3, change this to [32, 16, 8]
-                   For YOLOv3/v4 tiny, change this to [32, 16]
-    ANCHORS: anchors used to train the model
+    LAYER_FACTORS: scale factors with respect to the input size for each yolo layer
+                   For YOLOv3, change to [32, 16, 8]
+                   For YOLOv3/v4-tiny, change to [32, 16]
+    SCALES: scale_x_y parameter for each yolo layer
+            For YOLOv3, change to [1., 1., 1.]
+            For YOLOv3-tiny, change to [1., 1.]
+            For YOLOv4-tiny, change to [1.05, 1.05]
+    ANCHORS: anchors grouped by each yolo layer
     ```
+    Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask`.
+    For tiny and YOLOv3, the anchors are usually flipped.
 2. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids`
 ### Add custom ReID
 1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/reid.py#L51

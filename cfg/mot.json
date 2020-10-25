@@ -21,7 +21,7 @@
             "merge_thresh": 0.6
         },
         "yolo_detector": {
-            "model": "YOLOV4",
+            "model": "YOLOv4",
             "class_ids": [1],
             "conf_thresh": 0.25,
             "max_area": 800000,
