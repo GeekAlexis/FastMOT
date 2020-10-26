@@ -6,7 +6,7 @@ DIR=$HOME
 
 set -e
 
-# install dependencies:
+# install dependencies
 sudo apt-get -y update
 sudo apt-get install -y build-essential \
     cmake \
@@ -33,6 +33,11 @@ sudo apt-get install -y build-essential \
     gstreamer1.0-plugins-ugly \
     libdc1394-22-dev \
     libavresample-dev \
+
+# set up python
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+sudo -H python3 get-pip.py
+sudo -H pip3 install numpy
     
 cd $DIR
 wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip
@@ -45,10 +50,6 @@ mv opencv_contrib-${OPENCV_VERSION} opencv_contrib
 mv opencv_contrib OpenCV
 
 cd OpenCV
-curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-sudo -H python3 get-pip.py
-sudo -H pip3 install numpy
-
 mkdir build && cd build
 
 cmake -D CMAKE_BUILD_TYPE=RELEASE \

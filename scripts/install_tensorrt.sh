@@ -23,9 +23,11 @@ wget https://developer.download.nvidia.com/compute/machine-learning/repos/${OS}/
 sudo dpkg -i nvidia-machine-learning-repo-*.deb
 sudo apt-get update
 
-# install cuda, cudnn, and tensorrt
+# install CUDA and cuDNN 
 sudo apt-get install -y cuda=${CUDA_VERSION}-1
 sudo apt-get install -y libcudnn7 libcudnn7-dev
+
+# install TensorRT and its Python API
 sudo apt-get install libnvinfer7=${TRT_VERSION} libnvonnxparsers7=${TRT_VERSION} libnvparsers7=${TRT_VERSION} \
                      libnvinfer-plugin7=${TRT_VERSION} libnvinfer-dev=${TRT_VERSION} libnvonnxparsers-dev=${TRT_VERSION} \
                      libnvparsers-dev=${TRT_VERSION} libnvinfer-plugin-dev=${TRT_VERSION} python-libnvinfer=${TRT_VERSION} \
@@ -33,4 +35,9 @@ sudo apt-get install libnvinfer7=${TRT_VERSION} libnvonnxparsers7=${TRT_VERSION}
 sudo apt-mark hold libnvinfer7 libnvonnxparsers7 libnvparsers7 libnvinfer-plugin7 libnvinfer-dev libnvonnxparsers-dev \
                    libnvparsers-dev libnvinfer-plugin-dev python-libnvinfer python3-libnvinfer uff-converter-tf
 
-echo 'If everything worked fine, reboot now.'
+
+# set up environment variables
+echo 'export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}' >> ~/.bashrc 
+source ~/.bashrc
+echo 'If everything worked fine, reboot now'
