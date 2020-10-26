@@ -25,6 +25,7 @@ if [ -e /usr/local/cuda ]; then
 fi
 
 wget https://developer.download.nvidia.com/compute/cuda/repos/${OS}/x86_64/cuda-repo-${OS}_${CUDA_VERSION}-1_amd64.deb
+sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/${OS}/x86_64/7fa2af80.pub
 sudo dpkg -i cuda-repo-*.deb
 wget https://developer.download.nvidia.com/compute/machine-learning/repos/${OS}/x86_64/nvidia-machine-learning-repo-${OS}_1.0.0-1_amd64.deb
 sudo dpkg -i nvidia-machine-learning-repo-*.deb
