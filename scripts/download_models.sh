@@ -5,7 +5,7 @@ DIR=$BASEDIR/../fastmot/models
 
 set -e
 
-pip3 install gdown
+sudo -H pip3 install gdown
 
 gdown https://drive.google.com/uc?id=19APITvaqv_Ts5j3zkbo6MWCTvwTmka_T -O $DIR/osnet_ain_x1_0_msmt17.onnx
 gdown https://drive.google.com/uc?id=1hC3dFrjPM_olJ5utDCUkkMUqXIMIybKq -O $DIR/osnet_x0_25_msmt17.onnx
