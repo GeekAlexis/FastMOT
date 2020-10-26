@@ -31,7 +31,7 @@ sudo dpkg -i nvidia-machine-learning-repo-*.deb
 sudo apt-get update
 
 # install cuda, cudnn, and tensorrt
-sudo apt-get install -y cuda
+sudo apt-get install -y cuda=${CUDA_VERSION}-1
 sudo apt-get install -y libcudnn7 libcudnn7-dev
 sudo apt-get install libnvinfer7=${TRT_VERSION} libnvonnxparsers7=${TRT_VERSION} libnvparsers7=${TRT_VERSION} 
                      libnvinfer-plugin7=${TRT_VERSION} libnvinfer-dev=${TRT_VERSION} libnvonnxparsers-dev=${TRT_VERSION} \ 
@@ -39,3 +39,5 @@ sudo apt-get install libnvinfer7=${TRT_VERSION} libnvonnxparsers7=${TRT_VERSION}
                      python3-libnvinfer=${TRT_VERSION} uff-converter-tf=${TRT_VERSION}
 sudo apt-mark hold libnvinfer7 libnvonnxparsers7 libnvparsers7 libnvinfer-plugin7 libnvinfer-dev libnvonnxparsers-dev \
                    libnvparsers-dev libnvinfer-plugin-dev python-libnvinfer python3-libnvinfer uff-converter-tf
+
+echo 'If everything worked fine, reboot now.'
