@@ -9,6 +9,7 @@ set -e
 # install dependencies:
 sudo apt-get -y update
 sudo apt-get install -y build-essential \
+    cmake \
     unzip \
     pkg-config \
     libjpeg-dev \
@@ -24,7 +25,6 @@ sudo apt-get install -y build-essential \
     libatlas-base-dev \
     gfortran \
     python3-dev \
-    python3-venv \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     gstreamer1.0-libav \
@@ -33,8 +33,7 @@ sudo apt-get install -y build-essential \
     gstreamer1.0-plugins-ugly \
     libdc1394-22-dev \
     libavresample-dev \
-    cmake
-
+    
 cd $DIR
 wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip
 unzip ${OPENCV_VERSION}.zip && rm ${OPENCV_VERSION}.zip
@@ -46,10 +45,9 @@ mv opencv_contrib-${OPENCV_VERSION} opencv_contrib
 mv opencv_contrib OpenCV
 
 cd OpenCV
-python3 -m venv opencv4
-source opencv4/bin/activate
-pip install wheel
-pip install numpy
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+sudo -H python3 get-pip.py
+sudo -H pip3 install numpy
 
 mkdir build && cd build
 
@@ -60,7 +58,6 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
     -D BUILD_PROTOBUF=OFF \
     -D BUILD_EXAMPLES=ON \
     -D OPENCV_EXTRA_MODULES_PATH='../opencv_contrib/modules' \
-    -D PYTHON_EXECUTABLE='../opencv4/bin/python' \
     -D WITH_CUDA=ON \
     -D CUDA_ARCH_BIN=${ARCH_BIN} \
     -D CUDA_ARCH_PTX="" \
