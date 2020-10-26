@@ -54,7 +54,7 @@ Build OpenCV from source with GStreamer. Modify `ARCH_BIN=7.5` to match your [GP
 
   ```
   $ scripts/install_opencv.sh
-  $ pip3 install -r requirements.txt
+  $ sudo -H pip3 install -r requirements.txt
   ```
 ### Download models
 This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
