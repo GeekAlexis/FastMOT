@@ -32,7 +32,8 @@ sudo apt-get install -y build-essential \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly \
     libdc1394-22-dev \
-    libavresample-dev
+    libavresample-dev \
+    cmake
 
 cd $DIR
 wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip
