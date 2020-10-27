@@ -175,8 +175,6 @@ class VideoIO:
         # use hardware encoder if found
         if 'omxh264enc' in gst_elements:
             h264_encoder = 'omxh264enc'
-        elif 'avenc_h264_omx' in gst_elements:
-            h264_encoder = 'avenc_h264_omx'
         elif 'x264enc' in gst_elements:
             h264_encoder = 'x264enc'
         else:
