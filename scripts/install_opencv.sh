@@ -36,7 +36,7 @@ sudo apt-get install -y build-essential \
 
 # set up python
 curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-sudo -H python3 get-pip.py
+sudo -H python3 get-pip.py --force-reinstall
 sudo -H pip3 install numpy
     
 cd $DIR
