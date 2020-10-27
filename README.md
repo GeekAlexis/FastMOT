@@ -46,7 +46,8 @@ Install [JetPack 4.4](https://developer.nvidia.com/embedded/jetpack) and run the
   $ scripts/install_jetson.sh
   ```
 ### Install for Ubuntu 18.04
-Make sure to have [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html), [cuDNN](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html), [TensorRT](https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html#downloading) (including Python API) installed. Follow the official guide if you want to install UFF with TensorRT for SSD support.
+Make sure to have [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html), [cuDNN](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html), and [TensorRT](https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html#downloading) (including Python API) installed. Follow the official guide if you want to install UFF with TensorRT for SSD support.
+
 To only run YOLO, you can optionally use my script to install from scratch
   ```
   $ scripts/install_tensorrt.sh
@@ -55,6 +56,7 @@ Build OpenCV from source with GStreamer. Modify `ARCH_BIN=7.5` to match your [GP
 
   ```
   $ scripts/install_opencv.sh
+  ```
 
 Install Python dependencies
   ```
