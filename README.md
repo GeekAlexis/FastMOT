@@ -31,7 +31,7 @@ This means even though the tracker runs much faster, it is still highly accurate
 ## Requirements
 - CUDA >= 10
 - cuDNN >= 7
-- TensorRT >= 7 (SSD also requires UFF converter)
+- TensorRT >= 7 (SSD requires UFF converter)
 - OpenCV >= 3.3 (with GStreamer)
 - PyCuda
 - Numpy >= 1.15
@@ -41,19 +41,23 @@ This means even though the tracker runs much faster, it is still highly accurate
 - cython-bbox
 
 ### Install for Jetson (TX2/Xavier NX/Xavier)
-Install OpenCV, CUDA, and TensorRT from [NVIDIA JetPack 4.4](https://developer.nvidia.com/embedded/jetpack) and run the script
+Install [JetPack 4.4](https://developer.nvidia.com/embedded/jetpack) and run the script
   ```
   $ scripts/install_jetson.sh
   ```
 ### Install for Ubuntu 18.04
-Make sure to have CUDA, cuDNN, TensorRT (Python API too) installed. You can optionally use my script to install from scratch
+Make sure to have [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html), [cuDNN](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html), [TensorRT](https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html#downloading) (including Python API) installed. Follow the official guide if you want to install UFF with TensorRT for SSD support.
+To only run YOLO, you can optionally use my script to install from scratch
   ```
   $ scripts/install_tensorrt.sh
   ```
-Build OpenCV from source with GStreamer. Modify `ARCH_BIN=7.5` to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute). Then install Python dependencies
+Build OpenCV from source with GStreamer. Modify `ARCH_BIN=7.5` to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute)
 
   ```
   $ scripts/install_opencv.sh
+
+Install Python dependencies
+  ```
   $ pip3 install -r requirements.txt
   ```
 ### Download models

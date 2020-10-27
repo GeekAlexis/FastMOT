@@ -25,15 +25,15 @@ sudo apt-get update
 
 # install CUDA and cuDNN 
 sudo apt-get install -y cuda=${CUDA_VERSION}-1
-sudo apt-get install -y libcudnn7 libcudnn7-dev
+sudo apt-get install -y libcudnn8 libcudnn8-dev
 
 # install TensorRT and its Python API
 sudo apt-get install libnvinfer7=${TRT_VERSION} libnvonnxparsers7=${TRT_VERSION} libnvparsers7=${TRT_VERSION} \
                      libnvinfer-plugin7=${TRT_VERSION} libnvinfer-dev=${TRT_VERSION} libnvonnxparsers-dev=${TRT_VERSION} \
                      libnvparsers-dev=${TRT_VERSION} libnvinfer-plugin-dev=${TRT_VERSION} python-libnvinfer=${TRT_VERSION} \
-                     python3-libnvinfer=${TRT_VERSION} uff-converter-tf=${TRT_VERSION}
+                     python3-libnvinfer=${TRT_VERSION}
 sudo apt-mark hold libnvinfer7 libnvonnxparsers7 libnvparsers7 libnvinfer-plugin7 libnvinfer-dev libnvonnxparsers-dev \
-                   libnvparsers-dev libnvinfer-plugin-dev python-libnvinfer python3-libnvinfer uff-converter-tf
+                   libnvparsers-dev libnvinfer-plugin-dev python-libnvinfer python3-libnvinfer
 
 
 # set up environment variables
