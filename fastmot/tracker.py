@@ -13,7 +13,8 @@ from .kalman_filter import MeasType, KalmanFilter
 from .utils.rect import as_rect, to_tlbr, intersection
 
 
-CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of the chi-square distribution (4 dof)
+LOGGER = logging.getLogger(__name__)
+CHI_SQ_INV_95 = 9.4877 # 0.95 quantile of chi-square distribution
 INF_COST = 1e5
 
 
@@ -74,7 +75,7 @@ class MultiTracker:
             new_track = Track(0, self.next_id, det.tlbr, det.label)
             new_track.state = self.kf.initiate(det.tlbr)
             self.tracks[self.next_id] = new_track
-            logging.debug('Detected: %s', new_track)
+            LOGGER.debug('Detected: %s', new_track)
             self.next_id += 1
 
     def track(self, frame):
@@ -121,7 +122,7 @@ class MultiTracker:
             track.state = (mean, cov)
             track.tlbr = next_tlbr
             if intersection(next_tlbr, self.frame_rect) is None:
-                logging.info('Out: %s', track)
+                LOGGER.info('Out: %s', track)
                 if track.confirmed:
                     self._mark_lost(trk_id)
                 else:
@@ -183,9 +184,9 @@ class MultiTracker:
             track.age = 0
             if not track.confirmed:
                 track.confirmed = True
-                logging.info('Found: %s', track)
+                LOGGER.info('Found: %s', track)
             if intersection(next_tlbr, self.frame_rect) is None:
-                logging.info('Out: %s', track)
+                LOGGER.info('Out: %s', track)
                 self._mark_lost(trk_id)
             else:
                 updated.append(trk_id)
@@ -194,7 +195,7 @@ class MultiTracker:
         for trk_id, det_id in reid_matches:
             track = self.lost[trk_id]
             det = detections[det_id]
-            logging.info('Re-identified: %s', track)
+            LOGGER.info('Re-identified: %s', track)
             track.reactivate(frame_id, det.tlbr, embeddings[det_id])
             track.state = self.kf.initiate(det.tlbr)
             self.tracks[trk_id] = track
@@ -205,12 +206,12 @@ class MultiTracker:
         for trk_id in u_trk_ids:
             track = self.tracks[trk_id]
             if not track.confirmed:
-                logging.debug('Unconfirmed: %s', track)
+                LOGGER.debug('Unconfirmed: %s', track)
                 del self.tracks[trk_id]
                 continue
             track.age += 1
             if track.age > self.max_age:
-                logging.info('Lost: %s', track)
+                LOGGER.info('Lost: %s', track)
                 self._mark_lost(trk_id)
             else:
                 aged.append(trk_id)
@@ -221,7 +222,7 @@ class MultiTracker:
             new_track = Track(frame_id, self.next_id, det.tlbr, det.label)
             new_track.state = self.kf.initiate(det.tlbr)
             self.tracks[self.next_id] = new_track
-            logging.debug('Detected: %s', new_track)
+            LOGGER.debug('Detected: %s', new_track)
             updated.append(self.next_id)
             self.next_id += 1
 
@@ -286,7 +287,7 @@ class MultiTracker:
             else:
                 dup_ids.add(updated_id)
         for trk_id in dup_ids:
-            logging.debug('Duplicate: %s', self.tracks[trk_id])
+            LOGGER.debug('Duplicate: %s', self.tracks[trk_id])
             del self.tracks[trk_id]
 
     @staticmethod

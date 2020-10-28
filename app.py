@@ -25,19 +25,21 @@ def main():
                         help='output a MOT Challenge format log (e.g. eval/results/mot17-04.txt)')
     parser.add_argument('-g', '--gui', action='store_true', help='enable display')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output for debugging')
-
     args = parser.parse_args()
-    loglevel = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(format='[%(levelname)s] %(message)s', level=loglevel)
 
+    # set up logging
+    logging.basicConfig(format='[%(levelname)s] %(message)s')
+    logger = logging.getLogger(fastmot.__name__)
+    logger.setLevel(logging.DEBUG if args.verbose else logging.INFO)
+
+    # load config file
     with open(Path(__file__).parent / 'cfg' / 'mot.json') as config_file:
         config = json.load(config_file, cls=fastmot.utils.ConfigDecoder)
-
-    stream = fastmot.VideoIO(config['size'], config['video_io'], args.input_uri, args.output_uri)
 
     mot = None
     log = None
     elapsed_time = 0
+    stream = fastmot.VideoIO(config['size'], config['video_io'], args.input_uri, args.output_uri)
 
     if args.mot:
         draw = args.gui or args.output_uri is not None
@@ -49,11 +51,11 @@ def main():
     if args.gui:
         cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
 
-    logging.info('Starting video capture...')
+    logger.info('Starting video capture...')
     stream.start_capture()
     try:
+        tic = time.perf_counter()
         while not args.gui or cv2.getWindowProperty("Video", 0) >= 0:
-            tic = time.perf_counter()
             frame = stream.read()
             if frame is None:
                 break
@@ -74,12 +76,11 @@ def main():
                 cv2.imshow('Video', frame)
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
-
             if args.output_uri is not None:
                 stream.write(frame)
 
-            toc = time.perf_counter()
-            elapsed_time += toc - tic
+        toc = time.perf_counter()
+        elapsed_time = toc - tic
     finally:
         # clean up resources
         if log is not None:
@@ -96,12 +97,12 @@ def main():
         avg_detector_time = mot.detector_time / mot.detector_frame_count
         avg_assoc_time = mot.association_time / mot.detector_frame_count
 
-        logging.info('Average FPS: %d', avg_fps)
-        logging.debug('Average tracker time: %f', avg_tracker_time)
-        logging.debug('Average feature extractor time: %f', avg_extractor_time)
-        logging.debug('Average preprocessing time: %f', avg_preproc_time)
-        logging.debug('Average detector time: %f', avg_detector_time)
-        logging.debug('Average association time: %f', avg_assoc_time)
+        logger.info('Average FPS: %d', avg_fps)
+        logger.debug('Average tracker time: %f', avg_tracker_time)
+        logger.debug('Average feature extractor time: %f', avg_extractor_time)
+        logger.debug('Average preprocessing time: %f', avg_preproc_time)
+        logger.debug('Average detector time: %f', avg_detector_time)
+        logger.debug('Average association time: %f', avg_assoc_time)
 
 
 if __name__ == '__main__':

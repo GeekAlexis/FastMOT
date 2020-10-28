@@ -8,6 +8,9 @@ from .utils.rect import to_tlbr, get_size, get_center
 from .utils.rect import mask_area, intersection, crop, transform
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 class Flow:
     """
     A KLT tracker based on optical flow feature point matching.
@@ -153,7 +156,7 @@ class Flow:
                                                            status, bg_begin, -1)
         if len(matched_bg_pts) == 0:
             self.bg_keypoints = np.empty((0, 2), np.float32)
-            logging.warning('Camera motion estimation failed')
+            LOGGER.warning('Camera motion estimation failed')
             return {}, None
         homography, inlier_mask = cv2.findHomography(prev_bg_pts, matched_bg_pts,
                                                      method=cv2.RANSAC,
@@ -163,7 +166,7 @@ class Flow:
                                                                       inlier_mask)
         if homography is None or len(self.bg_keypoints) < self.inlier_thresh:
             self.bg_keypoints = np.empty((0, 2), np.float32)
-            logging.warning('Camera motion estimation failed')
+            LOGGER.warning('Camera motion estimation failed')
             return {}, None
 
         # estimate target bounding boxes

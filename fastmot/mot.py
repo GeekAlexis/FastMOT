@@ -3,11 +3,13 @@ import logging
 import time
 import cv2
 
-
 from .detector import SSDDetector, YoloDetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils.visualization import draw_track, draw_detection, draw_bg_flow
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class DetectorType(Enum):
@@ -40,7 +42,7 @@ class Mot:
         self.detector_type = DetectorType[config['detector_type']]
         self.detector_frame_skip = config['detector_frame_skip']
 
-        logging.info('Loading detector model...')
+        LOGGER.info('Loading detector model...')
         if self.detector_type == DetectorType.SSD:
             self.detector = SSDDetector(self.size, config['ssd_detector'])
         elif self.detector_type == DetectorType.YOLO:
@@ -48,7 +50,7 @@ class Mot:
         elif self.detector_type == DetectorType.PUBLIC:
             self.detector = PublicDetector(self.size, config['public_detector'])
 
-        logging.info('Loading feature extractor model...')
+        LOGGER.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor(config['feature_extractor'])
         self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric,
                                     config['multi_tracker'])

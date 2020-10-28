@@ -18,7 +18,7 @@ class HostDeviceMem:
 
 class InferenceBackend:
     # initialize TensorRT
-    TRT_LOGGER = trt.Logger(trt.Logger.ERROR)
+    TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
     trt.init_libnvinfer_plugins(TRT_LOGGER, '')
 
     def __init__(self, model, batch_size):
@@ -42,7 +42,7 @@ class InferenceBackend:
                 self.engine = self.runtime.deserialize_cuda_engine(buf)
 
         if self.engine is None:
-            raise RuntimeError('Unable to load TensorRT engine')
+            raise RuntimeError('Unable to load the engine file')
         if self.engine.has_implicit_batch_dimension:
             assert self.batch_size <= self.engine.max_batch_size
 

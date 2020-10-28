@@ -7,6 +7,9 @@ import logging
 import cv2
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 class Protocol(Enum):
     FILE = 0
     CSI = 1
@@ -57,7 +60,7 @@ class VideoIO:
         if self.fps == 0:
             self.fps = self.camera_fps # fallback
         self.capture_dt = 1 / self.fps
-        logging.info('%dx%d stream @ %d FPS', *self.size, self.fps)
+        LOGGER.info('%dx%d stream @ %d FPS', *self.size, self.fps)
 
         output_fps = self.fps
         if self.protocol != Protocol.FILE:
