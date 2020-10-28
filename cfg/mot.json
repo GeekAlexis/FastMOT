@@ -55,8 +55,8 @@
                 "min_std_flow": [5, 5],
                 "std_factor_det": [0.08, 0.08],
                 "std_factor_flow": [0.14, 0.14],
-                "init_pos_std_factor": 24,
-                "init_vel_std_factor": 40,
+                "init_pos_std_factor": 10,
+                "init_vel_std_factor": 20,
                 "vel_coupling": 0.6,
                 "vel_half_life": 2
             },

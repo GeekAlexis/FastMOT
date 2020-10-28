@@ -51,16 +51,17 @@ class KalmanFilter:
         self.acc_cov[:4, 4:] = np.eye(4) * (0.5 * self.dt**3)
 
         self.meas_mat = np.eye(4, 8)
-        self.transition_mat = np.array([
-            [1, 0, 0, 0, self.vel_coupling * self.dt, 0, (1 - self.vel_coupling) * self.dt, 0],
-            [0, 1, 0, 0, 0, self.vel_coupling * self.dt, 0, (1 - self.vel_coupling) * self.dt],
-            [0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt, 0],
-            [0, 0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt],
-            [0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0, 0],
-            [0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0],
-            [0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0],
-            [0, 0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life)],
-        ], dtype=np.float)
+        self.transition_mat = np.array(
+            [[1, 0, 0, 0, self.vel_coupling * self.dt, 0, (1 - self.vel_coupling) * self.dt, 0],
+             [0, 1, 0, 0, 0, self.vel_coupling * self.dt, 0, (1 - self.vel_coupling) * self.dt],
+             [0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt, 0],
+             [0, 0, 0, 1, 0, (1 - self.vel_coupling) * self.dt, 0, self.vel_coupling * self.dt],
+             [0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0, 0],
+             [0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0, 0],
+             [0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life), 0],
+             [0, 0, 0, 0, 0, 0, 0, 0.5**(self.dt / self.vel_half_life)]],
+            dtype=np.float
+        )
 
     def initiate(self, det_meas):
         """
@@ -79,16 +80,16 @@ class KalmanFilter:
         mean_vel = np.zeros_like(mean_pos)
         mean = np.r_[mean_pos, mean_vel]
 
-        width, height = get_size(det_meas)
+        w, h = get_size(det_meas)
         std = np.array([
-            self.init_pos_std_factor * max(width * self.std_factor_det[0], self.std_factor_det[0]),
-            self.init_pos_std_factor * max(height * self.std_factor_det[1], self.std_factor_det[1]),
-            self.init_pos_std_factor * max(width * self.std_factor_det[0], self.std_factor_det[0]),
-            self.init_pos_std_factor * max(height * self.std_factor_det[1], self.std_factor_det[1]),
-            self.init_vel_std_factor * max(width * self.std_factor_det[0], self.std_factor_det[0]),
-            self.init_vel_std_factor * max(height * self.std_factor_det[1], self.std_factor_det[1]),
-            self.init_vel_std_factor * max(width * self.std_factor_det[0], self.std_factor_det[0]),
-            self.init_vel_std_factor * max(height * self.std_factor_det[1], self.std_factor_det[1]),
+            max(self.init_pos_std_factor * self.std_factor_det[0] * w, self.min_std_det[0]),
+            max(self.init_pos_std_factor * self.std_factor_det[1] * h, self.min_std_det[1]),
+            max(self.init_pos_std_factor * self.std_factor_det[0] * w, self.min_std_det[0]),
+            max(self.init_pos_std_factor * self.std_factor_det[1] * h, self.min_std_det[1]),
+            max(self.init_vel_std_factor * self.std_factor_det[0] * w, self.min_std_det[0]),
+            max(self.init_vel_std_factor * self.std_factor_det[1] * h, self.min_std_det[1]),
+            max(self.init_vel_std_factor * self.std_factor_det[0] * w, self.min_std_det[0]),
+            max(self.init_vel_std_factor * self.std_factor_det[1] * h, self.min_std_det[1])
         ], dtype=np.float)
         covariance = np.diag(np.square(std))
         return mean, covariance
@@ -269,10 +270,10 @@ class KalmanFilter:
     def _project(mean, covariance, std_factor, min_std, meas_mat, multiplier):
         w, h = mean[2:4] - mean[:2] + 1
         std = np.array([
-            max(w * std_factor[0], min_std[0]),
-            max(h * std_factor[1], min_std[1]),
-            max(w * std_factor[0], min_std[0]),
-            max(h * std_factor[1], min_std[1])
+            max(std_factor[0] * w, min_std[0]),
+            max(std_factor[1] * h, min_std[1]),
+            max(std_factor[0] * w, min_std[0]),
+            max(std_factor[1] * h, min_std[1])
         ])
         meas_cov = np.diag(np.square(std * multiplier))
 

@@ -7,7 +7,8 @@ import cv2
 
 from . import models
 from .utils import InferenceBackend
-from .utils.rect import *
+from .utils.rect import as_rect, to_tlbr, get_size, area
+from .utils.rect import union, multi_crop, nms
 
 
 DET_DTYPE = np.dtype(

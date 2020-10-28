@@ -54,13 +54,6 @@ def to_tlbr(tlwh):
 
 
 @nb.njit(cache=True)
-def contains(tlbr1, tlbr2):
-    tl1, br1 = tlbr1[:2], tlbr1[2:]
-    tl2, br2 = tlbr2[:2], tlbr2[2:]
-    return np.all((tl2 >= tl1) & (br2 <= br1))
-
-
-@nb.njit(cache=True)
 def intersection(tlbr1, tlbr2):
     tl1, br1 = tlbr1[:2], tlbr1[2:]
     tl2, br2 = tlbr2[:2], tlbr2[2:]
@@ -106,20 +99,6 @@ def iom(tlbr1, tlbr2):
     area_intersection = area(tlbr)
     area_minimum = min(area(tlbr1), area(tlbr2))
     return area_intersection / area_minimum
-
-
-@nb.njit(fastmath=True, cache=True)
-def warp(tlbr, m):
-    """
-    Warps bounding box with a 3x3 transformation matrix.
-    """
-    corners = get_corners(tlbr)
-    warped_corners = perspective_transform(corners, m)
-    xmin = min(warped_corners[:, 0])
-    ymin = min(warped_corners[:, 1])
-    xmax = max(warped_corners[:, 0])
-    ymax = max(warped_corners[:, 1])
-    return as_rect((xmin, ymin, xmax, ymax))
 
 
 @nb.njit(fastmath=True, cache=True)
