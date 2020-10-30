@@ -36,7 +36,7 @@ This means even though the tracker runs much faster, it is still highly accurate
 - PyCuda
 - Numpy >= 1.15
 - Scipy >= 1.5
-- TensorFlow <= 1.15.2 (for SSD)
+- TensorFlow <= 1.15.2 (for SSD support)
 - Numba >= 0.48
 - cython-bbox
 
@@ -95,7 +95,7 @@ Only required if you want to use SSD
   $ python3 app.py --input_uri video.mp4 --mot
   ```
 - Use `--gui` to visualize and `--output_uri` to save output
-- Set `WITH_GSTREAMER=False` [here]() to disable the GStreamer backend
+- Set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11) to disable the GStreamer backend
 - Note that the first run will be slow due to Numba compilation
 - More options can be configured in `cfg/mot.json` 
   - Set `camera_size` and `camera_fps` to match your camera setting. List all settings for your camera:
