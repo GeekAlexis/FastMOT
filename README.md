@@ -32,7 +32,7 @@ This means even though the tracker runs much faster, it is still highly accurate
 - CUDA >= 10
 - cuDNN >= 7
 - TensorRT >= 7
-- OpenCV >= 3.3 (with GStreamer)
+- OpenCV >= 3.3
 - PyCuda
 - Numpy >= 1.15
 - Scipy >= 1.5
@@ -52,8 +52,7 @@ Make sure to have [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-li
   ```
 Install UFF and Graph Surgeon for SSD support: https://github.com/GeekAlexis/FastMOT/issues/15#issuecomment-717045972
 
-Build OpenCV from source with GStreamer. Modify `ARCH_BIN=7.5` to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute)
-
+Build OpenCV from source with GStreamer (optional). Modify `ARCH_BIN=7.5` to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute)
   ```
   $ scripts/install_opencv.sh
   ```
@@ -95,7 +94,8 @@ Only required if you want to use SSD
   ```
   $ python3 app.py --input_uri video.mp4 --mot
   ```
-- Use `--gui` to visualize and `--output_uri out.mp4` to save output
+- Use `--gui` to visualize and `--output_uri` to save output
+- Set `WITH_GSTREAMER=False` [here]() to disable the GStreamer backend
 - Note that the first run will be slow due to Numba compilation
 - More options can be configured in `cfg/mot.json` 
   - Set `camera_size` and `camera_fps` to match your camera setting. List all settings for your camera:

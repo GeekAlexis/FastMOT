@@ -18,7 +18,7 @@ class HostDeviceMem:
 
 class InferenceBackend:
     # initialize TensorRT
-    TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+    TRT_LOGGER = trt.Logger(trt.Logger.ERROR)
     trt.init_libnvinfer_plugins(TRT_LOGGER, '')
 
     def __init__(self, model, batch_size):

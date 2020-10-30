@@ -17,7 +17,9 @@ sudo apt-get install -y build-essential \
     libtiff-dev \
     libavcodec-dev \
     libavformat-dev \
+    libavutil-dev \
     libswscale-dev \
+    libavresample-dev \
     libv4l-dev \
     libxvidcore-dev \
     libx264-dev \
@@ -32,13 +34,12 @@ sudo apt-get install -y build-essential \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly \
     libdc1394-22-dev \
-    libavresample-dev \
 
 # set up python
 curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
 sudo -H python3 get-pip.py --force-reinstall
 sudo -H pip3 install numpy
-    
+
 cd $DIR
 wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip
 unzip ${OPENCV_VERSION}.zip && rm ${OPENCV_VERSION}.zip
@@ -66,6 +67,7 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
     -D CUDA_FAST_MATH=ON \
     -D WITH_CUBLAS=ON \
     -D WITH_LIBV4L=ON \
+    -D WITH_FFMPEG=ON \
     -D WITH_GSTREAMER=ON \
     -D WITH_GSTREAMER_0_10=OFF \
     -D WITH_TBB=ON \

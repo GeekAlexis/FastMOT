@@ -211,7 +211,7 @@ class KalmanFilter:
         H1 = np.ascontiguousarray(H[:2, :2])
         h2 = np.ascontiguousarray(H[:2, 2])
         h3 = np.ascontiguousarray(H[2, :2])
-        h4 = 1
+        h4 = 1.
 
         E1 = np.eye(8, 2)
         E3 = np.eye(8, 2, -4)

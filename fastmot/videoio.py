@@ -8,6 +8,7 @@ import cv2
 
 
 LOGGER = logging.getLogger(__name__)
+WITH_GSTREAMER = True
 
 
 class Protocol(Enum):
@@ -20,22 +21,22 @@ class Protocol(Enum):
 class VideoIO:
     """
     Class for video capturing from video files or cameras, and writing video files.
-    Encoding and decoding are accelerated using the GStreamer backend.
+    Encoding and decoding can be accelerated using the GStreamer backend.
     Parameters
     ----------
     size : (int, int)
-        Width and height of each frame.
+        Width and height of each frame to output.
     config : Dict
-        Camera configuration.
+        Camera and buffer configuration.
     input_uri : string
         URI to an input video file or capturing device.
     output_uri : string
         URI to an output video file.
-    latency : float
-        Approximate video processing latency.
+    proc_fps : int
+        Estimated processing frame rate. This depends on device and application.
     """
 
-    def __init__(self, size, config, input_uri, output_uri=None, latency=1/30):
+    def __init__(self, size, config, input_uri, output_uri=None, proc_fps=30):
         self.size = size
         self.input_uri = input_uri
         self.output_uri = output_uri
@@ -45,7 +46,11 @@ class VideoIO:
         self.buffer_size = config['buffer_size']
 
         self.protocol = self._parse_uri(self.input_uri)
-        self.cap = cv2.VideoCapture(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
+        if WITH_GSTREAMER:
+            self.cap = cv2.VideoCapture(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
+        else:
+            self.cap = cv2.VideoCapture(self.input_uri)
+
         self.frame_queue = deque([], maxlen=self.buffer_size)
         self.cond = threading.Condition()
         self.exit_event = threading.Event()
@@ -56,21 +61,30 @@ class VideoIO:
             raise RuntimeError('Unable to read video stream')
         self.frame_queue.append(frame)
 
+        width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.stream_size = (width, height)
         if self.fps == 0:
             self.fps = self.camera_fps # fallback
-        self.capture_dt = 1 / self.fps
-        LOGGER.info('%dx%d stream @ %d FPS', *self.size, self.fps)
+        LOGGER.info('%dx%d stream @ %d FPS', width, height, self.fps)
 
-        output_fps = self.fps
-        if self.protocol != Protocol.FILE:
-            # limit capture interval at processing latency
-            self.capture_dt = max(self.capture_dt, latency)
-            output_fps = 1 / self.capture_dt
+        if self.protocol == Protocol.FILE:
+            self.capture_dt = 1 / self.fps
+        else:
+            # limit capture interval at processing latency for camera
+            self.capture_dt = 1 / min(self.fps, proc_fps)
+
         if self.output_uri is not None:
             Path(self.output_uri).parent.mkdir(parents=True, exist_ok=True)
-            self.writer = cv2.VideoWriter(self._gst_write_pipeline(), 0, output_fps,
-                                          self.size, True)
+            output_fps = 1 / self.capture_dt
+            if WITH_GSTREAMER:
+                self.writer = cv2.VideoWriter(self._gst_write_pipeline(), 0, output_fps,
+                                              self.size, True)
+            else:
+                fourcc = cv2.VideoWriter_fourcc(*'avc1')
+                self.writer = cv2.VideoWriter(self.output_uri, fourcc, output_fps,
+                                              self.size, True)
 
     def start_capture(self):
         """
@@ -103,6 +117,8 @@ class VideoIO:
                 return None
             frame = self.frame_queue.popleft()
             self.cond.notify()
+        if self.stream_size != self.size:
+            frame = cv2.resize(frame, self.size)
         return frame
 
     def write(self, frame):
