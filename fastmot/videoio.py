@@ -21,7 +21,7 @@ class Protocol(Enum):
 class VideoIO:
     """
     Class for video capturing from video files or cameras, and writing video files.
-    Encoding and decoding can be accelerated using the GStreamer backend.
+    Encoding, decoding, and scaling can be accelerated using the GStreamer backend.
     Parameters
     ----------
     size : (int, int)
@@ -33,7 +33,7 @@ class VideoIO:
     output_uri : string
         URI to an output video file.
     proc_fps : int
-        Estimated processing frame rate. This depends on device and application.
+        Estimated processing speed. This depends on compute and scene complexity.
     """
 
     def __init__(self, size, config, input_uri, output_uri=None, proc_fps=30):
@@ -79,12 +79,11 @@ class VideoIO:
             Path(self.output_uri).parent.mkdir(parents=True, exist_ok=True)
             output_fps = 1 / self.capture_dt
             if WITH_GSTREAMER:
-                self.writer = cv2.VideoWriter(self._gst_write_pipeline(), 0, output_fps,
-                                              self.size, True)
+                self.writer = cv2.VideoWriter(self._gst_write_pipeline(), cv2.CAP_GSTREAMER, 0,
+                                              output_fps, self.size, True)
             else:
                 fourcc = cv2.VideoWriter_fourcc(*'avc1')
-                self.writer = cv2.VideoWriter(self.output_uri, fourcc, output_fps,
-                                              self.size, True)
+                self.writer = cv2.VideoWriter(self.output_uri, fourcc, output_fps, self.size, True)
 
     def start_capture(self):
         """
