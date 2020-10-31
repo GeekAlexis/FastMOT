@@ -29,10 +29,9 @@ def draw_bg_flow(frame, tracker):
                         tracker.flow.prev_bg_keypoints, (0, 0, 255))
 
 
-def _get_color(idx, s=0.8, vmin=0.7):
-    idx *= 3
+def _get_color(idx, s=0.8, vmin=0.6):
     h = np.fmod(idx * GOLDEN_RATIO, 1.)
-    v = np.sqrt(1. - np.fmod(idx * GOLDEN_RATIO, 1 - vmin))
+    v = np.sqrt(1. - np.fmod(idx * GOLDEN_RATIO, 1. - vmin))
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
     return int(255 * b), int(255 * g), int(255 * r)
 
@@ -50,9 +49,10 @@ def _draw_bbox(frame, tlbr, color, thickness, text=None):
 
 def _draw_feature_match(frame, cur_pts, prev_pts, color):
     if len(cur_pts) > 0:
-        cur_pts = np.rint(cur_pts).astype(int)
-        [cv2.circle(frame, tuple(pt), 1, color, -1) for pt in cur_pts]
+        cur_pts = np.rint(cur_pts).astype(np.int32)
+        for pt in cur_pts:
+            cv2.circle(frame, tuple(pt), 1, color, cv2.FILLED)
         if len(prev_pts) > 0:
-            prev_pts = np.rint(prev_pts).astype(int)
-            [cv2.line(frame, tuple(pt1), tuple(pt2), color, 1, cv2.LINE_AA) for pt1, pt2 in
-             zip(prev_pts, cur_pts)]
+            prev_pts = np.rint(prev_pts).astype(np.int32)
+            for pt1, pt2 in zip(prev_pts, cur_pts):
+                cv2.line(frame, tuple(pt1), tuple(pt2), color, 1, cv2.LINE_AA)
