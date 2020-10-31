@@ -64,7 +64,7 @@ class VideoIO:
         width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.stream_size = (width, height)
+        self.do_resize = (width, height) != self.size
         if self.fps == 0:
             self.fps = self.camera_fps # fallback
         LOGGER.info('%dx%d stream @ %d FPS', width, height, self.fps)
@@ -116,7 +116,7 @@ class VideoIO:
                 return None
             frame = self.frame_queue.popleft()
             self.cond.notify()
-        if self.stream_size != self.size:
+        if self.do_resize:
             frame = cv2.resize(frame, self.size)
         return frame
 
@@ -141,7 +141,7 @@ class VideoIO:
         if 'nvvidconv' in gst_elements and self.protocol != Protocol.V4L2:
             # format conversion for hardware decoder
             cvt_pipeline = (
-                'nvvidconv ! '
+                'nvvidconv interpolation-method=5 ! '
                 'video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx !'
                 'videoconvert ! appsink'
                 % self.size
