@@ -51,8 +51,7 @@ class Flow:
 
         # preallocate
         self.ones = np.full(self.size[::-1], 255, np.uint8)
-        self.bg_mask = np.empty_like(self.ones)
-        self.fg_mask = self.bg_mask # alias
+        self.fg_mask = np.empty_like(self.ones)
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
     def initiate(self, frame):
@@ -94,29 +93,26 @@ class Flow:
 
         # detect target feature points
         all_prev_pts = []
-        np.copyto(self.bg_mask, self.ones)
+        np.copyto(self.fg_mask, self.ones)
         for track in tracks:
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
-            target_mask = crop(self.bg_mask, inside_tlbr)
+            target_mask = crop(self.fg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
-            if target_area == 0:
-                keypoints = np.empty((0, 2), np.float32)
-            else:
-                keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.bg_mask)
-                # only detect new keypoints when too few are propagated
-                if len(keypoints) / target_area < self.feature_density:
-                    img = crop(self.prev_frame_gray, inside_tlbr)
-                    feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
-                    keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask,
-                                                        minDistance=feature_dist,
-                                                        **self.target_feat_params)
-                    if keypoints is None:
-                        keypoints = np.empty((0, 2), np.float32)
-                    else:
-                        keypoints = self._ellipse_filter(keypoints, track.tlbr, inside_tlbr[:2])
+            keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.fg_mask)
+            # only detect new keypoints when too few are propagated
+            if len(keypoints) < self.feature_density * target_area:
+                img = crop(self.prev_frame_gray, inside_tlbr)
+                feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
+                keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask,
+                                                    minDistance=feature_dist,
+                                                    **self.target_feat_params)
+                if keypoints is None:
+                    keypoints = np.empty((0, 2), np.float32)
+                else:
+                    keypoints = self._ellipse_filter(keypoints, track.tlbr, inside_tlbr[:2])
             # batch target keypoints
             all_prev_pts.append(keypoints)
-            # zero out track in background mask
+            # zero out track in foreground mask
             target_mask[:] = 0
         target_ends = list(itertools.accumulate(len(pts) for pts in
                                                 all_prev_pts)) if all_prev_pts else [0]
@@ -126,14 +122,15 @@ class Flow:
         prev_frame_small_bg = cv2.resize(self.prev_frame_gray, None,
                                          fx=self.bg_feat_scale_factor[0],
                                          fy=self.bg_feat_scale_factor[1])
-        bg_mask_small = cv2.resize(self.bg_mask, None, fx=self.bg_feat_scale_factor[0],
+        bg_mask_small = cv2.resize(self.fg_mask, None, fx=self.bg_feat_scale_factor[0],
                                    fy=self.bg_feat_scale_factor[1], interpolation=cv2.INTER_NEAREST)
         keypoints = self.bg_feat_detector.detect(prev_frame_small_bg, mask=bg_mask_small)
-        if keypoints is None:
-            keypoints = np.empty((0, 2), np.float32)
-        else:
-            keypoints = np.float32([kp.pt for kp in keypoints])
-            keypoints = self._unscale_pts(keypoints, self.bg_feat_scale_factor, None)
+        if len(keypoints) == 0:
+            self.bg_keypoints = np.empty((0, 2), np.float32)
+            LOGGER.warning('Camera motion estimation failed')
+            return {}, None
+        keypoints = np.float32([kp.pt for kp in keypoints])
+        keypoints = self._unscale_pts(keypoints, self.bg_feat_scale_factor, None)
         bg_begin = target_ends[-1]
         all_prev_pts.append(keypoints)
 
@@ -219,13 +216,17 @@ class Flow:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _rect_filter(pts, tlbr, fg_mask):
-        if len(pts) == 0 or tlbr is None:
+        if len(pts) == 0:
             return np.empty((0, 2), np.float32)
-        quantized_pts = np.rint(pts).astype(np.int_)
-        mask = np.zeros_like(fg_mask)
-        crop(mask, tlbr)[:] = crop(fg_mask, tlbr)
-        keep = np.array([i for i in range(len(quantized_pts)) if
-                         mask[quantized_pts[i][1], quantized_pts[i][0]] != 0])
+        tl, br = tlbr[:2], tlbr[2:]
+        pts2i = np.rint(pts).astype(np.int32)
+        # filter out points outside the rectangle
+        ge_le = (pts2i >= tl) & (pts2i <= br)
+        inside = np.where(ge_le[:, 0] & ge_le[:, 1])
+        pts, pts2i = pts[inside], pts2i[inside]
+        # keep points inside the foreground area
+        keep = np.array([i for i in range(len(pts2i)) if
+                         fg_mask[pts2i[i][1], pts2i[i][0]] == 255])
         return pts[keep]
 
     @staticmethod
@@ -237,7 +238,7 @@ class Flow:
         center = get_center(tlbr)
         semi_axes = get_size(tlbr) * 0.5
         # filter out points outside the ellipse
-        keep = np.sum(((pts - center) / semi_axes)**2, axis=1) <= 1
+        keep = np.sum(((pts - center) / semi_axes)**2, axis=1) <= 1.
         return pts[keep]
 
     @staticmethod
@@ -246,15 +247,15 @@ class Flow:
         if len(cur_pts) == 0:
             return prev_pts, cur_pts
         size = np.asarray(frame_size)
-        quantized_pts = np.rint(cur_pts).astype(np.int_)
+        pts2i = np.rint(cur_pts).astype(np.int32)
         # filter out points outside the frame
-        lt = quantized_pts < size
+        lt = pts2i < size
         inside = lt[:, 0] & lt[:, 1]
         prev_pts, cur_pts = prev_pts[inside], cur_pts[inside]
-        quantized_pts = quantized_pts[inside]
-        # filter out points not in the foreground
-        keep = np.array([i for i in range(len(quantized_pts)) if
-                         fg_mask[quantized_pts[i][1], quantized_pts[i][0]] != 0])
+        pts2i = pts2i[inside]
+        # keep points inside the foreground area
+        keep = np.array([i for i in range(len(pts2i)) if
+                         fg_mask[pts2i[i][1], pts2i[i][0]] == 255])
         return prev_pts[keep], cur_pts[keep]
 
     @staticmethod

@@ -8,7 +8,7 @@ import cv2
 from . import models
 from .utils import InferenceBackend
 from .utils.rect import as_rect, to_tlbr, get_size, area
-from .utils.rect import union, multi_crop, nms
+from .utils.rect import union, multi_crop, iom, nms
 
 
 DET_DTYPE = np.dtype(
@@ -126,7 +126,7 @@ class SSDDetector(Detector):
                     tl = (det_out[offset + 3:offset + 5] * size + tile[:2]) * scale_factor
                     br = (det_out[offset + 5:offset + 7] * size + tile[:2]) * scale_factor
                     tlbr = as_rect(np.append(tl, br))
-                    if area(tlbr) <= max_area:
+                    if 0 < area(tlbr) <= max_area:
                         detections.append((tlbr, label, conf))
                         tile_ids.append(tile_idx)
         return detections, tile_ids
@@ -240,7 +240,7 @@ class YoloDetector(Detector):
             tlbr = np.minimum(tlbr, np.append(size, size))
             label = int(nms_dets[i, 5])
             conf = nms_dets[i, 4] * nms_dets[i, 6]
-            if area(tlbr) <= max_area:
+            if 0 < area(tlbr) <= max_area:
                 detections.append((tlbr, label, conf))
         return detections
 
