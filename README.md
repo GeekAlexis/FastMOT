@@ -52,7 +52,7 @@ Make sure to have [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-li
   ```
 Install UFF and Graph Surgeon for SSD support: https://github.com/GeekAlexis/FastMOT/issues/15#issuecomment-717045972
 
-Build OpenCV from source with GStreamer (optional). Modify `ARCH_BIN=7.5` to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute)
+Build OpenCV from source with GStreamer (optional). GStreamer is recommended for performance. Modify `ARCH_BIN` [here](https://github.com/GeekAlexis/FastMOT/blob/0e9cb21cef5e36b1b9b0c41ae22adeeb110166bc/scripts/install_opencv.sh#L4) to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute)
   ```
   $ scripts/install_opencv.sh
   ```
