@@ -110,9 +110,9 @@ class Flow:
                     keypoints = np.empty((0, 2), np.float32)
                 else:
                     keypoints = self._ellipse_filter(keypoints, track.tlbr, inside_tlbr[:2])
-            # batch target keypoints
+            # batch keypoints
             all_prev_pts.append(keypoints)
-            # zero out track in foreground mask
+            # zero out target in foreground mask
             target_mask[:] = 0
         target_ends = list(itertools.accumulate(len(pts) for pts in
                                                 all_prev_pts)) if all_prev_pts else [0]
@@ -176,6 +176,7 @@ class Flow:
             if len(matched_pts) == 0:
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
+            # model motion as partial affine
             affine_mat, inlier_mask = cv2.estimateAffinePartial2D(prev_pts, matched_pts,
                                                                   method=cv2.RANSAC,
                                                                   maxIters=self.ransac_max_iter,
@@ -183,7 +184,6 @@ class Flow:
             if affine_mat is None:
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
-            # delete track when it goes outside the frame
             est_tlbr = self._estimate_bbox(track.tlbr, affine_mat)
             track.prev_keypoints, track.keypoints = self._get_inliers(prev_pts, matched_pts,
                                                                       inlier_mask)
@@ -193,7 +193,7 @@ class Flow:
                 continue
             next_bboxes[track.trk_id] = est_tlbr
             track.inlier_ratio = len(track.keypoints) / len(matched_pts)
-            # zero out current track in foreground mask
+            # zero out predicted target in foreground mask
             target_mask = crop(self.fg_mask, est_tlbr)
             target_mask[:] = 0
         return next_bboxes, homography
@@ -208,7 +208,7 @@ class Flow:
     @nb.njit(fastmath=True, cache=True)
     def _estimate_bbox(tlbr, affine_mat):
         tl = transform(tlbr[:2], affine_mat).ravel()
-        scale = np.sqrt(affine_mat[0, 0]**2 + affine_mat[1, 0]**2)
+        scale = np.linalg.norm(affine_mat[:2, 0])
         scale = 1. if scale < 0.9 or scale > 1.1 else scale
         size = scale * get_size(tlbr)
         return to_tlbr(np.append(tl, size))
@@ -249,8 +249,8 @@ class Flow:
         size = np.asarray(frame_size)
         pts2i = np.rint(cur_pts).astype(np.int32)
         # filter out points outside the frame
-        lt = pts2i < size
-        inside = lt[:, 0] & lt[:, 1]
+        ge_lt = (pts2i >= 0) & (pts2i < size)
+        inside = ge_lt[:, 0] & ge_lt[:, 1]
         prev_pts, cur_pts = prev_pts[inside], cur_pts[inside]
         pts2i = pts2i[inside]
         # keep points inside the foreground area

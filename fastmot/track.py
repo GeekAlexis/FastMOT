@@ -40,7 +40,7 @@ class Track:
         if self.smooth_feature is None:
             self.smooth_feature = embedding
         else:
-            self.smooth_feature = self.alpha * self.smooth_feature + (1 - self.alpha) * embedding
+            self.smooth_feature = self.alpha * self.smooth_feature + (1. - self.alpha) * embedding
             self.smooth_feature /= np.linalg.norm(self.smooth_feature)
 
     def reactivate(self, frame_id, tlbr, embedding):
