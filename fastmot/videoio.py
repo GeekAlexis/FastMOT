@@ -143,14 +143,14 @@ class VideoIO:
             cvt_pipeline = (
                 'nvvidconv interpolation-method=5 ! '
                 'video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx !'
-                'videoconvert ! appsink'
+                'videoconvert ! appsink sync=false'
                 % self.size
             )
         else:
             cvt_pipeline = (
                 'videoscale ! '
                 'video/x-raw, width=(int)%d, height=(int)%d !'
-                'videoconvert ! appsink'
+                'videoconvert ! appsink sync=false'
                 % self.size
             )
 
