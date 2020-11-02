@@ -29,9 +29,9 @@ def draw_bg_flow(frame, tracker):
                         tracker.flow.prev_bg_keypoints, (0, 0, 255))
 
 
-def _get_color(idx, s=0.8, vmin=0.6):
+def _get_color(idx, s=0.8, vmin=0.7):
     h = np.fmod(idx * GOLDEN_RATIO, 1.)
-    v = np.sqrt(1. - np.fmod(idx * GOLDEN_RATIO, 1. - vmin))
+    v = 1. - np.fmod(idx * GOLDEN_RATIO, 1. - vmin)
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
     return int(255 * b), int(255 * g), int(255 * r)
 
@@ -41,10 +41,10 @@ def _draw_bbox(frame, tlbr, color, thickness, text=None):
     tl, br = tuple(tlbr[:2]), tuple(tlbr[2:])
     cv2.rectangle(frame, tl, br, color, thickness)
     if text is not None:
-        (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, 0.7, 1)
+        (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, 0.6, 1)
         cv2.rectangle(frame, tl, (tl[0] + text_width - 1, tl[1] - text_height + 1),
                       color, cv2.FILLED)
-        cv2.putText(frame, text, tl, cv2.FONT_HERSHEY_DUPLEX, 0.7, 0, 1, cv2.LINE_AA)
+        cv2.putText(frame, text, tl, cv2.FONT_HERSHEY_DUPLEX, 0.6, 0, 1, cv2.LINE_AA)
 
 
 def _draw_feature_match(frame, cur_pts, prev_pts, color):
