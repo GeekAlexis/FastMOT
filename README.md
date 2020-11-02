@@ -20,11 +20,11 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
 |:-------|:-------:|:-------:|:-------:|:-------:|:-----:|
-| MOT17-13 | 5 - 30  | 19.8% | 45.6% | 41.3%  | 30 |
+| MOT17-13 | 5 - 30  | 19.8% | 45.6% | 41.3%  | 38 |
 | MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 22 |
 | MOT17-03 | 50 - 80  | - | - | - | 15 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. The tracker can achieve **30 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS should be even higher. 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS should be even higher. 
 
 This means even though the tracker runs much faster, it is still highly accurate. More lightweight detector/feature extractor can potentially be used to obtain more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines. 
 
@@ -95,7 +95,7 @@ Only required if you want to use SSD
   $ python3 app.py --input_uri video.mp4 --mot
   ```
 - Use `--gui` to visualize and `--output_uri` to save output
-- Set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11) to disable the GStreamer backend
+- To disable the GStreamer backend, set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11) 
 - Note that the first run will be slow due to Numba compilation
 - More options can be configured in `cfg/mot.json` 
   - Set `camera_size` and `camera_fps` to match your camera setting. List all settings for your camera:
@@ -127,8 +127,8 @@ This repo does not support training but multi-class tracking is supported. To tr
             For YOLOv4-tiny, change to [1.05, 1.05]
     ANCHORS: anchors grouped by each yolo layer
     ```
-    Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask`.
-    For tiny and YOLOv3, the anchors are usually flipped.
+    Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask` in Darknet cfg.
+    Unlike YOLOv4, the anchors are usually in reverse for tiny and YOLOv3.
 2. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids`
 ### Add custom ReID
 1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/reid.py#L51
