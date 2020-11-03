@@ -110,7 +110,7 @@ Only required if you want to use SSD
  - Please star if you find this repo useful/interesting
   
  ## Track custom classes
-This repo does not support training but multi-class tracking is supported. To track custom classes (e.g. vehicle), you need to train both YOLO and a ReID model. You can refer to [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. Convert the model to ONNX format and place it under `fastmot/models`. You also need to change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py). To convert YOLO to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference.
+This repo supports multi-class tracking and thus can be easily extended to custom classes (e.g. vehicle). You need to train both YOLO and a ReID model on your object classes. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format and place it under `fastmot/models`. To convert YOLO to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference.
 ### Add custom YOLOv3/v4
 1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/4e946b85381ad807d5456f2ad57d1274d0e72f3d/fastmot/models/yolo.py#L94
     ```
@@ -128,8 +128,9 @@ This repo does not support training but multi-class tracking is supported. To tr
     ANCHORS: anchors grouped by each yolo layer
     ```
     Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask` in Darknet cfg.
-    Unlike YOLOv4, the anchors are usually in reverse for tiny and YOLOv3.
-2. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids`
+    Unlike YOLOv4, the anchors are usually in reverse for YOLOv3 and tiny
+2. Change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py) to your object classes
+3. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids` you want to detect. You may want to play with `conf_thresh` based on the accuracy of your model
 ### Add custom ReID
 1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/reid.py#L51
     ```
@@ -137,6 +138,6 @@ This repo does not support training but multi-class tracking is supported. To tr
     MODEL_PATH: path to ONNX model
     INPUT_SHAPE: input size in the format "(channel, height, width)"
     OUTPUT_LAYOUT: feature dimension output by the model (e.g. 512)
-    METRIC: distance metric used to match features (e.g. 'euclidean')
+    METRIC: distance metric used to match features ('euclidean' or 'cosine')
     ```
-2. Modify `cfg/mot.json`: under `feature_extractor`, set `model` to the added Python class and set `class_ids`. You may want to play with `max_feat_cost` and `max_reid_cost` for your model
+2. Modify `cfg/mot.json`: under `feature_extractor`, set `model` to the added Python class. You may want to play with `max_feat_cost` and `max_reid_cost` - float values from `0` to `2`, based on the accuracy of your model
