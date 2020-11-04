@@ -1,5 +1,5 @@
 # Fast MOT
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![HitCount](http://hits.dwyl.com/{GeekAlexis}/{FastMOT}.svg)](http://hits.dwyl.com/{GeekAlexis}/{FastMOT}) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <img src="assets/demo.gif" />
 
