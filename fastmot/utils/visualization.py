@@ -41,10 +41,11 @@ def _draw_bbox(frame, tlbr, color, thickness, text=None):
     tl, br = tuple(tlbr[:2]), tuple(tlbr[2:])
     cv2.rectangle(frame, tl, br, color, thickness)
     if text is not None:
-        (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, 0.6, 1)
-        cv2.rectangle(frame, tl, (tl[0] + text_width - 1, tl[1] - text_height + 1),
+        (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, 0.5, 1)
+        cv2.rectangle(frame, tl, (tl[0] + text_width - 1, tl[1] + text_height - 1),
                       color, cv2.FILLED)
-        cv2.putText(frame, text, tl, cv2.FONT_HERSHEY_DUPLEX, 0.6, 0, 1, cv2.LINE_AA)
+        cv2.putText(frame, text, (tl[0], tl[1] + text_height - 1), cv2.FONT_HERSHEY_DUPLEX,
+                    0.5, 0, 1, cv2.LINE_AA)
 
 
 def _draw_feature_match(frame, cur_pts, prev_pts, color):

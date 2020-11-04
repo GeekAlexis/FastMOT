@@ -10,7 +10,7 @@ from cython_bbox import bbox_overlaps
 from .track import Track
 from .flow import Flow
 from .kalman_filter import MeasType, KalmanFilter
-from .utils.rect import as_rect, to_tlbr, intersection
+from .utils.rect import as_rect, to_tlbr, intersection, area
 
 
 LOGGER = logging.getLogger(__name__)
@@ -121,7 +121,8 @@ class MultiTracker:
             next_tlbr = as_rect(mean[:4])
             track.state = (mean, cov)
             track.tlbr = next_tlbr
-            if intersection(next_tlbr, self.frame_rect) is None:
+            inside_tlbr = intersection(next_tlbr, self.frame_rect)
+            if inside_tlbr is None or area(inside_tlbr) / area(next_tlbr) < 0.5:
                 LOGGER.info('Out: %s', track)
                 if track.confirmed:
                     self._mark_lost(trk_id)
