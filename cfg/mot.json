@@ -49,10 +49,10 @@
             "lost_buf_size": 50,
 
             "kalman_filter": {
-                "small_std_acc": [32, 150],
-                "large_std_acc": [256, 650],
-                "min_std_det": [4, 4],
-                "min_std_flow": [5, 5],
+                "std_acc_factor": 2.25,
+                "std_acc_offset": 78.5,
+                "min_std_det": [4.0, 4.0],
+                "min_std_flow": [5.0, 5.0],
                 "std_factor_det": [0.08, 0.08],
                 "std_factor_flow": [0.14, 0.14],
                 "init_pos_std_factor": 5,

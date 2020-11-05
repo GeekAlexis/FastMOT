@@ -10,7 +10,7 @@ from cython_bbox import bbox_overlaps
 from .track import Track
 from .flow import Flow
 from .kalman_filter import MeasType, KalmanFilter
-from .utils.rect import as_rect, to_tlbr, intersection, area
+from .utils.rect import as_rect, to_tlbr, iom
 
 
 LOGGER = logging.getLogger(__name__)
@@ -121,8 +121,7 @@ class MultiTracker:
             next_tlbr = as_rect(mean[:4])
             track.state = (mean, cov)
             track.tlbr = next_tlbr
-            inside_tlbr = intersection(next_tlbr, self.frame_rect)
-            if inside_tlbr is None or area(inside_tlbr) / area(next_tlbr) < 0.5:
+            if iom(next_tlbr, self.frame_rect) < 0.5:
                 LOGGER.info('Out: %s', track)
                 if track.confirmed:
                     self._mark_lost(trk_id)
@@ -186,7 +185,7 @@ class MultiTracker:
             if not track.confirmed:
                 track.confirmed = True
                 LOGGER.info('Found: %s', track)
-            if intersection(next_tlbr, self.frame_rect) is None:
+            if iom(next_tlbr, self.frame_rect) < 0.5:
                 LOGGER.info('Out: %s', track)
                 self._mark_lost(trk_id)
             else:
@@ -265,8 +264,8 @@ class MultiTracker:
         if len(self.lost) == 0 or len(detections) == 0:
             return np.empty((len(self.lost), len(detections)))
 
-        features = [track.smooth_feature for track in self.lost.values()]
         trk_labels = np.array([track.label for track in self.lost.values()])
+        features = [track.smooth_feature for track in self.lost.values()]
         cost = cdist(features, embeddings, self.metric)
         cost = self._gate_cost(cost, trk_labels, detections.label, self.max_reid_cost, False)
         return cost
