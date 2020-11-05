@@ -30,19 +30,19 @@ class KalmanFilter:
 
     def __init__(self, dt, config):
         self.dt = dt
-        self.std_acc_factor = config['std_acc_factor']
-        self.std_acc_offset = config['std_acc_offset']
-        self.min_std_det = config['min_std_det']
-        self.min_std_flow = config['min_std_flow']
+        self.std_factor_acc = config['std_factor_acc']
+        self.std_offset_acc = config['std_offset_acc']
         self.std_factor_det = config['std_factor_det']
         self.std_factor_flow = config['std_factor_flow']
-        self.init_pos_std_factor = config['init_pos_std_factor']
-        self.init_vel_std_factor = config['init_vel_std_factor']
+        self.min_std_det = config['min_std_det']
+        self.min_std_flow = config['min_std_flow']
+        self.init_pos_weight = config['init_pos_weight']
+        self.init_vel_weight = config['init_vel_weight']
         self.vel_coupling = config['vel_coupling']
         self.vel_half_life = config['vel_half_life']
 
         # acceleration-based process noise
-        self.acc_cov = np.diag(np.array([0.25 * self.dt**4] * 4 + [self.dt**2] * 4))
+        self.acc_cov = np.diag([0.25 * self.dt**4] * 4 + [self.dt**2] * 4)
         self.acc_cov[4:, :4] = np.eye(4) * (0.5 * self.dt**3)
         self.acc_cov[:4, 4:] = np.eye(4) * (0.5 * self.dt**3)
 
@@ -72,15 +72,15 @@ class KalmanFilter:
 
         w, h = get_size(det_meas)
         std = np.array([
-            max(self.init_pos_std_factor * self.std_factor_det[0] * w, self.min_std_det[0]),
-            max(self.init_pos_std_factor * self.std_factor_det[1] * h, self.min_std_det[1]),
-            max(self.init_pos_std_factor * self.std_factor_det[0] * w, self.min_std_det[0]),
-            max(self.init_pos_std_factor * self.std_factor_det[1] * h, self.min_std_det[1]),
-            max(self.init_vel_std_factor * self.std_factor_det[0] * w, self.min_std_det[0]),
-            max(self.init_vel_std_factor * self.std_factor_det[1] * h, self.min_std_det[1]),
-            max(self.init_vel_std_factor * self.std_factor_det[0] * w, self.min_std_det[0]),
-            max(self.init_vel_std_factor * self.std_factor_det[1] * h, self.min_std_det[1])
-        ], dtype=np.float)
+            max(self.init_pos_weight * self.std_factor_det[0] * w, self.min_std_det[0]),
+            max(self.init_pos_weight * self.std_factor_det[1] * h, self.min_std_det[1]),
+            max(self.init_pos_weight * self.std_factor_det[0] * w, self.min_std_det[0]),
+            max(self.init_pos_weight * self.std_factor_det[1] * h, self.min_std_det[1]),
+            max(self.init_vel_weight * self.std_factor_det[0] * w, self.min_std_det[0]),
+            max(self.init_vel_weight * self.std_factor_det[1] * h, self.min_std_det[1]),
+            max(self.init_vel_weight * self.std_factor_det[0] * w, self.min_std_det[0]),
+            max(self.init_vel_weight * self.std_factor_det[1] * h, self.min_std_det[1])
+        ], dtype=np.float64)
         covariance = np.diag(np.square(std))
         return mean, covariance
 
@@ -102,7 +102,7 @@ class KalmanFilter:
             state.
         """
         return self._predict(mean, covariance, self.motion_mat, self.acc_cov,
-                             self.std_acc_factor, self.std_acc_offset)
+                             self.std_factor_acc, self.std_offset_acc)
 
     def project(self, mean, covariance, meas_type, multiplier=1.):
         """
@@ -246,10 +246,10 @@ class KalmanFilter:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _predict(mean, covariance, motion_mat, acc_cov, std_acc_factor, std_acc_offset):
+    def _predict(mean, covariance, motion_mat, acc_cov, std_factor_acc, std_offset_acc):
         size = max(mean[2:4] - mean[:2] + 1) # max(w, h)
-        std_acc = size * std_acc_factor + std_acc_offset
-        motion_cov = acc_cov * std_acc**2
+        std = std_factor_acc * size + std_offset_acc
+        motion_cov = acc_cov * std**2
 
         mean = motion_mat @ mean
         covariance = motion_mat @ covariance @ motion_mat.T + motion_cov
@@ -264,7 +264,7 @@ class KalmanFilter:
             max(std_factor[1] * h, min_std[1]),
             max(std_factor[0] * w, min_std[0]),
             max(std_factor[1] * h, min_std[1])
-        ])
+        ], dtype=np.float64)
         meas_cov = np.diag(np.square(std * multiplier))
 
         mean = meas_mat @ mean

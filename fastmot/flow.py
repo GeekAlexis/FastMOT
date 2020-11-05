@@ -29,10 +29,10 @@ class Flow:
         self.bg_feat_scale_factor = config['bg_feat_scale_factor']
         self.opt_flow_scale_factor = config['opt_flow_scale_factor']
         self.feature_density = config['feature_density']
-        self.max_error = config['max_error']
         self.feat_dist_factor = config['feat_dist_factor']
         self.ransac_max_iter = config['ransac_max_iter']
         self.ransac_conf = config['ransac_conf']
+        self.max_error = config['max_error']
         self.inlier_thresh = config['inlier_thresh']
 
         self.bg_feat_thresh = config['bg_feat_thresh']

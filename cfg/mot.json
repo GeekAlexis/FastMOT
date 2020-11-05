@@ -49,14 +49,14 @@
             "lost_buf_size": 50,
 
             "kalman_filter": {
-                "std_acc_factor": 2.25,
-                "std_acc_offset": 78.5,
-                "min_std_det": [4.0, 4.0],
-                "min_std_flow": [5.0, 5.0],
+                "std_factor_acc": 2.25,
+                "std_offset_acc": 78.5,
                 "std_factor_det": [0.08, 0.08],
                 "std_factor_flow": [0.14, 0.14],
-                "init_pos_std_factor": 5,
-                "init_vel_std_factor": 10,
+                "min_std_det": [4.0, 4.0],
+                "min_std_flow": [5.0, 5.0],
+                "init_pos_weight": 5,
+                "init_vel_weight": 10,
                 "vel_coupling": 0.6,
                 "vel_half_life": 2
             },
@@ -66,9 +66,9 @@
                 "opt_flow_scale_factor": [0.5, 0.5],
                 "feature_density": 0.005,
                 "feat_dist_factor": 0.06,
-                "max_error": 100,
                 "ransac_max_iter": 500,
                 "ransac_conf": 0.99,
+                
                 "inlier_thresh": 4,
                 "bg_feat_thresh": 15,
                 "target_feat_params": {
