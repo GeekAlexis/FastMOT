@@ -68,7 +68,7 @@
                 "feat_dist_factor": 0.06,
                 "ransac_max_iter": 500,
                 "ransac_conf": 0.99,
-                
+                "max_error": 100,
                 "inlier_thresh": 4,
                 "bg_feat_thresh": 15,
                 "target_feat_params": {
