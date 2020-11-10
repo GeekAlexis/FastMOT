@@ -113,11 +113,11 @@ class MultiTracker:
             mean, cov = self.kf.warp(mean, cov, self.homography)
             mean, cov = self.kf.predict(mean, cov)
             if trk_id in self.flow_bboxes:
-                flow_bbox = self.flow_bboxes[trk_id]
+                flow_tlbr = self.flow_bboxes[trk_id]
                 # give large flow uncertainty for occluded tracks
                 # usually these with high age and low inlier ratio
                 std_multiplier = max(self.age_factor * track.age, 1) / track.inlier_ratio
-                mean, cov = self.kf.update(mean, cov, flow_bbox, MeasType.FLOW, std_multiplier)
+                mean, cov = self.kf.update(mean, cov, flow_tlbr, MeasType.FLOW, std_multiplier)
             next_tlbr = as_rect(mean[:4])
             track.state = (mean, cov)
             track.tlbr = next_tlbr

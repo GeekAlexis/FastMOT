@@ -6,7 +6,8 @@ import cv2
 from .detector import SSDDetector, YoloDetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
-from .utils.visualization import draw_track, draw_detection, draw_bg_flow
+from .utils.visualization import draw_tracks, draw_detections
+from .utils.visualization import draw_flow_bboxes, draw_background_flow
 
 
 LOGGER = logging.getLogger(__name__)
@@ -116,11 +117,10 @@ class Mot:
         self.frame_count += 1
 
     def _draw(self, frame, detections):
-        for track in self.visible_tracks:
-            draw_track(frame, track, draw_flow=self.verbose)
+        draw_tracks(frame, self.visible_tracks, draw_flow=self.verbose)
         if self.verbose:
-            for det in detections:
-                draw_detection(frame, det)
-            draw_bg_flow(frame, self.tracker)
+            draw_detections(frame, detections)
+            draw_flow_bboxes(frame, self.tracker)
+            draw_background_flow(frame, self.tracker)
         cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

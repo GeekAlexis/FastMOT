@@ -34,12 +34,6 @@ def get_center(tlbr):
 
 
 @nb.njit(cache=True)
-def get_corners(tlbr):
-    xmin, ymin, xmax, ymax = tlbr
-    return np.array([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
-
-
-@nb.njit(cache=True)
 def to_tlwh(tlbr):
     return np.append(tlbr[:2], get_size(tlbr))
 
@@ -83,9 +77,9 @@ def crop(img, tlbr):
 
 @nb.njit(cache=True)
 def multi_crop(img, tlbrs):
-    _tlbrs = tlbrs.astype(np.int_)
-    return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1]
-            for i in range(len(_tlbrs))]
+    tlbrs_ = tlbrs.astype(np.int_)
+    return [img[tlbrs_[i][1]:tlbrs_[i][3] + 1, tlbrs_[i][0]:tlbrs_[i][2] + 1]
+            for i in range(len(tlbrs_))]
 
 
 @nb.njit(fastmath=True, cache=True)
