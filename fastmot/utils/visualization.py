@@ -6,11 +6,13 @@ import cv2
 GOLDEN_RATIO = 0.618033988749895
 
 
-def draw_tracks(frame, tracks, draw_flow=False):
+def draw_tracks(frame, tracks, show_flow=False, show_cov=False):
     for track in tracks:
         draw_bbox(frame, track.tlbr, get_color(track.trk_id), 2, str(track.trk_id))
-        if draw_flow:
+        if show_flow:
             draw_feature_match(frame, track.prev_keypoints, track.keypoints, (0, 255, 255))
+        if show_cov:
+            draw_covariance(frame, track.tlbr, track.state[1])
 
 
 def draw_detections(frame, detections):
@@ -79,6 +81,6 @@ def draw_covariance(frame, tlbr, covariance):
         return axes, angle
 
     axes, angle = ellipse(covariance[:2, :2])
-    cv2.ellipse(frame, tl, axes, angle, 0, 360, (255, 255, 255), 1)
+    cv2.ellipse(frame, tl, axes, angle, 0, 360, (255, 255, 255), 1, cv2.LINE_AA)
     axes, angle = ellipse(covariance[2:4, 2:4])
-    cv2.ellipse(frame, br, axes, angle, 0, 360, (255, 255, 255), 1)
+    cv2.ellipse(frame, br, axes, angle, 0, 360, (255, 255, 255), 1, cv2.LINE_AA)

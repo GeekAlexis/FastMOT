@@ -117,7 +117,7 @@ class Mot:
         self.frame_count += 1
 
     def _draw(self, frame, detections):
-        draw_tracks(frame, self.visible_tracks, draw_flow=self.verbose)
+        draw_tracks(frame, self.visible_tracks, show_flow=self.verbose)
         if self.verbose:
             draw_detections(frame, detections)
             draw_flow_bboxes(frame, self.tracker)
