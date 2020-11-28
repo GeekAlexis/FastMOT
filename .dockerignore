@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.o
+
+# Mac temporary files
+.DS_Store
+._.DS_Store
+._*
+
+# model files
+*.pb
+*.onnx
+
+# TensorRT stuff
+*.trt
+*calib_cache
+
+# video and image files
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tif
+*.tiff
+*.heic
+*.JPG
+*.JPEG
+*.PNG
+*.BMP
+*.TIF
+*.TIFF
+*.HEIC
+*.mp4
+*.mov
+*.MOV
+*.avi
+
+# dataset
+VOCdevkit/
+
+# vscode stuff
+.vscode/
