@@ -60,7 +60,7 @@ This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
   $ scripts/download_models.sh
   ```
 ### Build YOLOv4 TensorRT plugin
-Modify `compute` [here](https://github.com/GeekAlexis/FastMOT/blob/2296fe414ca6a9515accb02ff88e8aa563ed2a05/fastmot/plugins/Makefile#L21) to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute)
+Modify `compute` [here](https://github.com/GeekAlexis/FastMOT/blob/2296fe414ca6a9515accb02ff88e8aa563ed2a05/fastmot/plugins/Makefile#L21) to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute) for x86 PC
   ```
   $ cd fastmot/plugins
   $ make
