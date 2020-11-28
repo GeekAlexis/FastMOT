@@ -1,5 +1,5 @@
 # Fast MOT
-[![HitCount](http://hits.dwyl.com/GeekAlexis/FastMOT.svg)](http://hits.dwyl.com/GeekAlexis/FastMOT) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![HitCount](http://hits.dwyl.com/GeekAlexis/FastMOT.svg)](http://hits.dwyl.com/GeekAlexis/FastMOT) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![DOI](https://zenodo.org/badge/237143671.svg)](https://zenodo.org/badge/latestdoi/237143671)
 
 <img src="assets/demo.gif" />
 
