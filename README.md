@@ -3,6 +3,9 @@
 
 <img src="assets/demo.gif" />
 
+## News
+  - (2020.11.28) Docker container is now supported on Ubuntu 18.04!
+
 ## Description
 Fast MOT is a multiple object tracker that implements:
   - YOLO detector
@@ -36,30 +39,20 @@ This means even though the tracker runs much faster, it is still highly accurate
 - PyCuda
 - Numpy >= 1.15
 - Scipy >= 1.5
-- TensorFlow <= 1.15.2 (for SSD support)
-- Numba >= 0.48
+- TensorFlow < 2.0 (for SSD support)
+- Numba == 0.48
 - cython-bbox
 
 ### Install for Jetson (TX2/Xavier NX/Xavier)
-Make sure to have [JetPack 4.4](https://developer.nvidia.com/embedded/jetpack) installed and run the script
+Make sure to have [JetPack 4.4](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
   ```
   $ scripts/install_jetson.sh
   ```
 ### Install for Ubuntu 18.04
-Make sure to have [CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html), [cuDNN](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html), and [TensorRT](https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html#downloading) (including Python API) installed. You can optionally use my script to install from scratch
+Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires an NVIDIA Driver version >= 450. Build and run the docker image:
   ```
-  $ scripts/install_tensorrt.sh
-  ```
-Install UFF and Graph Surgeon for SSD support: https://github.com/GeekAlexis/FastMOT/issues/15#issuecomment-717045972
-
-Build OpenCV from source with GStreamer (optional). GStreamer is recommended for performance. Modify `ARCH_BIN` [here](https://github.com/GeekAlexis/FastMOT/blob/0e9cb21cef5e36b1b9b0c41ae22adeeb110166bc/scripts/install_opencv.sh#L4) to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute)
-  ```
-  $ scripts/install_opencv.sh
-  ```
-
-Install Python dependencies
-  ```
-  $ pip3 install -r requirements.txt
+  $ docker build -t fastmot:latest .
+  $ docker run --rm --gpus all -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY fastmot:latest
   ```
 ### Download models
 This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
@@ -67,6 +60,7 @@ This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
   $ scripts/download_models.sh
   ```
 ### Build YOLOv4 TensorRT plugin
+Modify `compute` [here](https://github.com/GeekAlexis/FastMOT/blob/2296fe414ca6a9515accb02ff88e8aa563ed2a05/fastmot/plugins/Makefile#L21) to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute)
   ```
   $ cd fastmot/plugins
   $ make
