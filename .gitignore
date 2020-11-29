@@ -129,7 +129,6 @@ dmypy.json
 
 # Mac temporary files
 .DS_Store
-._.DS_Store
 ._*
 
 # model files
