@@ -1,4 +1,4 @@
-# Fast MOT
+# FastMOT
 [![HitCount](http://hits.dwyl.com/GeekAlexis/FastMOT.svg)](http://hits.dwyl.com/GeekAlexis/FastMOT) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![DOI](https://zenodo.org/badge/237143671.svg)](https://zenodo.org/badge/latestdoi/237143671)
 
 <img src="assets/demo.gif" />
@@ -7,14 +7,14 @@
   - (2020.11.28) Docker container is now supported on Ubuntu 18.04!
 
 ## Description
-Fast MOT is a multiple object tracker that implements:
+FastMOT is a custom multiple object tracker that implements:
   - YOLO detector
   - SSD detector
   - Deep SORT + OSNet ReID
   - KLT optical flow tracking
   - Camera motion compensation
   
-Deep learning models are usually the bottleneck in Deep SORT, which makes Deep SORT unscalable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to customize the speed-accuracy tradeoff without a lightweight model.
+Deep learning models are usually the bottleneck in Deep SORT, which makes Deep SORT unscalable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
 
 To achieve faster processing, the tracker only runs detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify targets that moved out of frame so that the tracker can keep the same IDs. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow.
 
