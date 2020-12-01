@@ -253,6 +253,8 @@ class KalmanFilter:
 
         mean = motion_mat @ mean
         covariance = motion_mat @ covariance @ motion_mat.T + motion_cov
+        # ensure positive definiteness
+        covariance = 0.5 * (covariance + covariance.T)
         return mean, covariance
 
     @staticmethod
@@ -277,9 +279,9 @@ class KalmanFilter:
     def _update(mean, covariance, proj_mean, proj_cov, measurement, meas_mat):
         kalman_gain = np.linalg.solve(proj_cov, (covariance @ meas_mat.T).T).T
         innovation = measurement - proj_mean
-        new_mean = mean + innovation @ kalman_gain.T
-        new_covariance = covariance - kalman_gain @ proj_cov @ kalman_gain.T
-        return new_mean, new_covariance
+        mean = mean + innovation @ kalman_gain.T
+        covariance = covariance - kalman_gain @ proj_cov @ kalman_gain.T
+        return mean, covariance
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
