@@ -1,7 +1,7 @@
 # FastMOT
 [![HitCount](http://hits.dwyl.com/GeekAlexis/FastMOT.svg)](http://hits.dwyl.com/GeekAlexis/FastMOT) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![DOI](https://zenodo.org/badge/237143671.svg)](https://zenodo.org/badge/latestdoi/237143671)
 
-<img src="assets/dense_demo.gif" width="425"/> <img src="assets/aerial_demo.gif" width="425"/>
+<img src="assets/dense_demo.gif" width="400"/> <img src="assets/aerial_demo.gif" width="400"/>
 
 ## News
   - (2020.11.28) Docker container is now supported on Ubuntu 18.04!
