@@ -14,9 +14,9 @@ FastMOT is a custom multiple object tracker that implements:
   - KLT optical flow tracking
   - Camera motion compensation
   
-Deep learning models are usually the bottleneck in Deep SORT, which makes Deep SORT unscalable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
+Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT unusable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
 
-To achieve faster processing, the tracker only runs detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify targets that moved out of frame so that the tracker can keep the same IDs. I trained YOLOv4 on CrowdHuman while SSD's are pretrained COCO models from TensorFlow.
+To achieve faster processing, the tracker only runs the detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify targets that moved out of frame so that the tracker can keep the same IDs. I trained YOLOv4 on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow.
 
 Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba. 
 
