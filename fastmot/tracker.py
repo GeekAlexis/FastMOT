@@ -72,10 +72,10 @@ class MultiTracker:
             self.tracks.clear()
         self.flow.initiate(frame)
         for det in detections:
-            new_track = Track(0, self.next_id, det.tlbr, det.label)
-            new_track.state = self.kf.initiate(det.tlbr)
-            self.tracks[self.next_id] = new_track
-            LOGGER.debug('Detected: %s', new_track)
+            state = self.kf.initiate(det.tlbr)
+            new_trk = Track(0, self.next_id, det.tlbr, state, det.label)
+            self.tracks[self.next_id] = new_trk
+            LOGGER.debug('Detected: %s', new_trk)
             self.next_id += 1
 
     def track(self, frame):
@@ -119,8 +119,7 @@ class MultiTracker:
                 std_multiplier = max(self.age_factor * track.age, 1) / track.inlier_ratio
                 mean, cov = self.kf.update(mean, cov, flow_tlbr, MeasType.FLOW, std_multiplier)
             next_tlbr = as_rect(mean[:4])
-            track.state = (mean, cov)
-            track.tlbr = next_tlbr
+            track.update(next_tlbr, (mean, cov))
             if iom(next_tlbr, self.frame_rect) < 0.5:
                 if track.confirmed:
                     LOGGER.info('Out: %s', track)
@@ -178,12 +177,8 @@ class MultiTracker:
             det = detections[det_id]
             mean, cov = self.kf.update(*track.state, det.tlbr, MeasType.DETECTOR)
             next_tlbr = as_rect(mean[:4])
-            track.state = (mean, cov)
-            track.tlbr = next_tlbr
-            track.update_feature(embeddings[det_id])
-            track.age = 0
-            if not track.confirmed:
-                track.confirmed = True
+            track.update(next_tlbr, (mean, cov), embeddings[det_id])
+            if track.hits == 1:
                 LOGGER.info('Found: %s', track)
             if iom(next_tlbr, self.frame_rect) < 0.5:
                 LOGGER.info('Out: %s', track)
@@ -196,8 +191,8 @@ class MultiTracker:
             track = self.lost[trk_id]
             det = detections[det_id]
             LOGGER.info('Re-identified: %s', track)
-            track.reactivate(frame_id, det.tlbr, embeddings[det_id])
-            track.state = self.kf.initiate(det.tlbr)
+            state = self.kf.initiate(det.tlbr)
+            track.reactivate(frame_id, det.tlbr, state, embeddings[det_id])
             self.tracks[trk_id] = track
             del self.lost[trk_id]
             updated.append(trk_id)
@@ -209,7 +204,7 @@ class MultiTracker:
                 LOGGER.debug('Unconfirmed: %s', track)
                 del self.tracks[trk_id]
                 continue
-            track.age += 1
+            track.mark_missed()
             if track.age > self.max_age:
                 LOGGER.info('Lost: %s', track)
                 self._mark_lost(trk_id)
@@ -219,10 +214,10 @@ class MultiTracker:
         # register new detections
         for det_id in u_det_ids:
             det = detections[det_id]
-            new_track = Track(frame_id, self.next_id, det.tlbr, det.label)
-            new_track.state = self.kf.initiate(det.tlbr)
-            self.tracks[self.next_id] = new_track
-            LOGGER.debug('Detected: %s', new_track)
+            state = self.kf.initiate(det.tlbr)
+            new_trk = Track(frame_id, self.next_id, det.tlbr, state, det.label)
+            self.tracks[self.next_id] = new_trk
+            LOGGER.debug('Detected: %s', new_trk)
             updated.append(self.next_id)
             self.next_id += 1
 
