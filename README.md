@@ -101,7 +101,6 @@ Only required if you want to use SSD
   - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]`, `[2, 1]`, or `[1, 1]` if a smaller batch size is preferred
   - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy. You may also want to change `max_age` such that `max_age * detector_frame_skip` is around `30-40` 
- - Please star if you find this repo useful/interesting
   
  ## Track custom classes
 This repo supports multi-class tracking and thus can be easily extended to custom classes (e.g. vehicle). You need to train both YOLO and a ReID model on your object classes. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format and place it under `fastmot/models`. To convert YOLO to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference.
@@ -135,3 +134,18 @@ This repo supports multi-class tracking and thus can be easily extended to custo
     METRIC: distance metric used to match features ('euclidean' or 'cosine')
     ```
 2. Modify `cfg/mot.json`: under `feature_extractor`, set `model` to the added Python class. You may want to play with `max_feat_cost` and `max_reid_cost` - float values from `0` to `2`, based on the accuracy of your model
+
+ ## Citation
+ If you find this repo useful in your project or research, please star and consider citing it:
+ ```bibtex
+@software{yukai_yang_2020_4294717,
+  author       = {Yukai Yang},
+  title        = {GeekAlexis/FastMOT: v1.0.0},
+  month        = nov,
+  year         = 2020,
+  publisher    = {Zenodo},
+  version      = {v1.0.0},
+  doi          = {10.5281/zenodo.4294717},
+  url          = {https://doi.org/10.5281/zenodo.4294717}
+}
+```
