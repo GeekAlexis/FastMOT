@@ -140,7 +140,8 @@ This repo supports multi-class tracking and thus can be easily extended to custo
  ```bibtex
 @software{yukai_yang_2020_4294717,
   author       = {Yukai Yang},
-  title        = {GeekAlexis/FastMOT: v1.0.0},
+  title        = {{FastMOT: High-Performance Multiple Object Tracking 
+                   Based on YOLO, Deep SORT, and Optical Flow}},
   month        = nov,
   year         = 2020,
   publisher    = {Zenodo},
