@@ -262,7 +262,7 @@ class MultiTracker:
         trk_labels = np.array([track.label for track in self.lost.values()])
         features = [track.smooth_feature for track in self.lost.values()]
         cost = cdist(features, embeddings, self.metric)
-        cost = self._gate_cost(cost, trk_labels, detections.label, self.max_reid_cost, False)
+        cost = self._gate_cost(cost, trk_labels, detections.label, self.max_reid_cost)
         return cost
 
     def _remove_duplicate(self, updated, aged):
@@ -319,7 +319,7 @@ class MultiTracker:
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
-    def _gate_cost(cost, trk_labels, det_labels, thresh, maximize):
+    def _gate_cost(cost, trk_labels, det_labels, thresh, maximize=False):
         for i in nb.prange(len(cost)):
             if maximize:
                 gate = (cost[i] < thresh) | (trk_labels[i] != det_labels)

@@ -130,7 +130,7 @@ class Flow:
             LOGGER.warning('Camera motion estimation failed')
             return {}, None
         keypoints = np.float32([kp.pt for kp in keypoints])
-        keypoints = self._unscale_pts(keypoints, self.bg_feat_scale_factor, None)
+        keypoints = self._unscale_pts(keypoints, self.bg_feat_scale_factor)
         bg_begin = target_ends[-1]
         all_prev_pts.append(keypoints)
 
@@ -268,7 +268,7 @@ class Flow:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _unscale_pts(pts, scale_factor, mask):
+    def _unscale_pts(pts, scale_factor, mask=None):
         scale_factor = np.asarray(scale_factor, np.float32)
         pts = pts.reshape(-1, 2)
         if mask is None:
