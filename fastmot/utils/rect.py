@@ -170,7 +170,7 @@ def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
 
     tl = tlwhs[:, :2]
     br = tlwhs[:, :2] + tlwhs[:, 2:] - 1
-    center = (tl + br) / 2
+    centers = (tl + br) / 2
 
     keep = []
     while ordered.size > 0:
@@ -180,7 +180,6 @@ def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
 
         other_tl = tl[ordered[1:]]
         other_br = br[ordered[1:]]
-        other_center = center[ordered[1:]]
 
         # compute IoU
         inter_xmin = np.maximum(tl[i, 0], other_tl[:, 0])
@@ -203,7 +202,7 @@ def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
         union_w = union_xmax - union_xmin + 1
         union_h = union_ymax - union_ymin + 1
         c = union_w**2 + union_h**2
-        d = np.sum((center[i] - other_center)**2, axis=1)
+        d = np.sum((centers[i] - centers[ordered[1:]])**2, axis=1)
         diou = iou - (d / c)**beta
 
         idx = np.where(diou <= nms_thresh)[0]
