@@ -124,9 +124,8 @@ def perspective_transform(pts, m):
 @nb.njit(fastmath=True, cache=True)
 def nms(tlwhs, scores, nms_thresh):
     """
-    Applies the Non-Maximum Suppression algorithm on the bounding boxes [x, y, w, h]
-    with their confidence scores and return an array with the indexes of the bounding
-    boxes we want to keep
+    Applies Non-Maximum Suppression on the bounding boxes [x, y, w, h].
+    Returns an array with the indexes of the bounding boxes we want to keep.
     """
     areas = tlwhs[:, 2] * tlwhs[:, 3]
     ordered = scores.argsort()[::-1]
@@ -140,22 +139,74 @@ def nms(tlwhs, scores, nms_thresh):
         i = ordered[0]
         keep.append(i)
 
-        # compute IOU
-        candidate_tl = tl[ordered[1:]]
-        candidate_br = br[ordered[1:]]
+        other_tl = tl[ordered[1:]]
+        other_br = br[ordered[1:]]
 
-        overlap_xmin = np.maximum(tl[i, 0], candidate_tl[:, 0])
-        overlap_ymin = np.maximum(tl[i, 1], candidate_tl[:, 1])
-        overlap_xmax = np.minimum(br[i, 0], candidate_br[:, 0])
-        overlap_ymax = np.minimum(br[i, 1], candidate_br[:, 1])
+        # compute IoU
+        inter_xmin = np.maximum(tl[i, 0], other_tl[:, 0])
+        inter_ymin = np.maximum(tl[i, 1], other_tl[:, 1])
+        inter_xmax = np.minimum(br[i, 0], other_br[:, 0])
+        inter_ymax = np.minimum(br[i, 1], other_br[:, 1])
 
-        width = np.maximum(0, overlap_xmax - overlap_xmin + 1)
-        height = np.maximum(0, overlap_ymax - overlap_ymin + 1)
-        area_intersection = width * height
-        area_union = areas[i] + areas[ordered[1:]] - area_intersection
-        iou = area_intersection / area_union
+        inter_w = np.maximum(0, inter_xmax - inter_xmin + 1)
+        inter_h = np.maximum(0, inter_ymax - inter_ymin + 1)
+        inter_area = inter_w * inter_h
+        union_area = areas[i] + areas[ordered[1:]] - inter_area
+        iou = inter_area / union_area
 
         idx = np.where(iou <= nms_thresh)[0]
+        ordered = ordered[idx + 1]
+    keep = np.asarray(keep)
+    return keep
+
+
+@nb.njit(fastmath=True, cache=True)
+def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
+    """
+    Applies Non-Maximum Suppression using the DIoU metric.
+    """
+    areas = tlwhs[:, 2] * tlwhs[:, 3]
+    ordered = scores.argsort()[::-1]
+
+    tl = tlwhs[:, :2]
+    br = tlwhs[:, :2] + tlwhs[:, 2:] - 1
+    center = (tl + br) / 2
+
+    keep = []
+    while ordered.size > 0:
+        # index of the current element
+        i = ordered[0]
+        keep.append(i)
+
+        other_tl = tl[ordered[1:]]
+        other_br = br[ordered[1:]]
+        other_center = center[ordered[1:]]
+
+        # compute IoU
+        inter_xmin = np.maximum(tl[i, 0], other_tl[:, 0])
+        inter_ymin = np.maximum(tl[i, 1], other_tl[:, 1])
+        inter_xmax = np.minimum(br[i, 0], other_br[:, 0])
+        inter_ymax = np.minimum(br[i, 1], other_br[:, 1])
+
+        inter_w = np.maximum(0, inter_xmax - inter_xmin + 1)
+        inter_h = np.maximum(0, inter_ymax - inter_ymin + 1)
+        inter_area = inter_w * inter_h
+        union_area = areas[i] + areas[ordered[1:]] - inter_area
+        iou = inter_area / union_area
+
+        # compute DIoU
+        union_xmin = np.minimum(tl[i, 0], other_tl[:, 0])
+        union_ymin = np.minimum(tl[i, 1], other_tl[:, 1])
+        union_xmax = np.maximum(br[i, 0], other_br[:, 0])
+        union_ymax = np.maximum(br[i, 1], other_br[:, 1])
+
+        union_w = union_xmax - union_xmin + 1
+        union_h = union_ymax - union_ymin + 1
+        c = union_w**2 + union_h**2
+        d = np.sum((center[i] - other_center)**2, axis=1)
+        diou = iou - (d / c)**beta
+
+        idx = np.where(diou <= nms_thresh)[0]
         ordered = ordered[idx + 1]
     keep = np.asarray(keep)
     return keep

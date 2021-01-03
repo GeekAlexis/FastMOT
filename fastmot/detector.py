@@ -8,7 +8,7 @@ import cv2
 from . import models
 from .utils import InferenceBackend
 from .utils.rect import as_rect, to_tlbr, get_size, area
-from .utils.rect import union, multi_crop, iom, nms
+from .utils.rect import union, multi_crop, iom, diou_nms
 
 
 DET_DTYPE = np.dtype(
@@ -227,7 +227,7 @@ class YoloDetector(Detector):
         for class_id in class_ids:
             class_idx = np.where(det_out[:, 5] == class_id)[0]
             class_dets = det_out[class_idx]
-            class_keep = nms(class_dets[:, :4], class_dets[:, 4], nms_thresh)
+            class_keep = diou_nms(class_dets[:, :4], class_dets[:, 4], nms_thresh)
             keep.extend(class_idx[class_keep])
         keep = np.asarray(keep)
         nms_dets = det_out[keep]
