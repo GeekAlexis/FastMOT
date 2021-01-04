@@ -19,9 +19,10 @@ class DetectorType(Enum):
     PUBLIC = 2
 
 
-class Mot:
+class MOT:
     """
-    This is the top level module that integrates detection and tracking together.
+    This is the top level module that integrates detection, feature extraction,
+    and tracking together.
     Parameters
     ----------
     size : (int, int)
@@ -100,7 +101,7 @@ class Mot:
                 self.detector_time += time.perf_counter() - tic
                 tic = time.perf_counter()
                 self.extractor.extract_async(frame, detections)
-                self.tracker.step_kalman_filter()
+                self.tracker.apply_kalman()
                 embeddings = self.extractor.postprocess()
                 self.extractor_time += time.perf_counter() - tic
                 tic = time.perf_counter()

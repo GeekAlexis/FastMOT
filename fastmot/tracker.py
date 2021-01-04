@@ -20,7 +20,7 @@ INF_COST = 1e5
 
 class MultiTracker:
     """
-    Uses optical flow and kalman filter to track multiple objects and
+    Uses optical flow and Kalman filter to track multiple objects and
     associates detections to tracklets based on motion and appearance.
     Parameters
     ----------
@@ -80,14 +80,14 @@ class MultiTracker:
 
     def track(self, frame):
         """
-        Convenience function that combines `compute_flow` and `step_kalman_filter`.
+        Convenience function that combines `compute_flow` and `apply_kalman`.
         Parameters
         ----------
         frame : ndarray
             The next frame.
         """
         self.compute_flow(frame)
-        self.step_kalman_filter()
+        self.apply_kalman()
 
     def compute_flow(self, frame):
         """
@@ -103,7 +103,7 @@ class MultiTracker:
             # clear tracks when camera motion cannot be estimated
             self.tracks.clear()
 
-    def step_kalman_filter(self):
+    def apply_kalman(self):
         """
         Performs kalman filter prediction and update from flow measurements.
         The function should be called after `compute_flow`.

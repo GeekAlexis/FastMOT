@@ -43,7 +43,7 @@ def main():
 
     if args.mot:
         draw = args.gui or args.output_uri is not None
-        mot = fastmot.Mot(config['size'], stream.capture_dt, config['mot'],
+        mot = fastmot.MOT(config['size'], stream.capture_dt, config['mot'],
                           draw=draw, verbose=args.verbose)
         if args.log is not None:
             Path(args.log).parent.mkdir(parents=True, exist_ok=True)

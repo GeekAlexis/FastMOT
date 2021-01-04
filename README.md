@@ -4,7 +4,8 @@
 <img src="assets/dense_demo.gif" width="400"/> <img src="assets/aerial_demo.gif" width="400"/>
 
 ## News
-  - (2020.11.28) Docker container is now supported on Ubuntu 18.04!
+  - (2021.1.3) Support DIoU-NMS for YOLO (+1% MOTA)
+  - (2020.11.28) Docker container provided on Ubuntu 18.04
 
 ## Description
 FastMOT is a custom multiple object tracker that implements:
