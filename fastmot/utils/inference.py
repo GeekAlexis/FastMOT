@@ -21,7 +21,7 @@ class InferenceBackend:
     TRT_LOGGER = trt.Logger(trt.Logger.ERROR)
     trt.init_libnvinfer_plugins(TRT_LOGGER, '')
 
-    def __init__(self, model, batch_size, ctx=None):
+    def __init__(self, model, batch_size):
         self.model = model
         self.batch_size = batch_size
 
