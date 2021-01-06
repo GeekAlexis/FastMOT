@@ -21,10 +21,9 @@ class InferenceBackend:
     TRT_LOGGER = trt.Logger(trt.Logger.ERROR)
     trt.init_libnvinfer_plugins(TRT_LOGGER, '')
 
-    def __init__(self, model, batch_size):
+    def __init__(self, model, batch_size, ctx=None):
         self.model = model
         self.batch_size = batch_size
-        self.runtime = trt.Runtime(InferenceBackend.TRT_LOGGER)
 
         # load plugin if the model requires one
         if self.model.PLUGIN_PATH is not None:
@@ -37,10 +36,10 @@ class InferenceBackend:
         if not self.model.ENGINE_PATH.exists():
             self.engine = self.model.build_engine(InferenceBackend.TRT_LOGGER, self.batch_size)
         else:
+            runtime = trt.Runtime(InferenceBackend.TRT_LOGGER)
             with open(self.model.ENGINE_PATH, 'rb') as engine_file:
                 buf = engine_file.read()
-                self.engine = self.runtime.deserialize_cuda_engine(buf)
-
+                self.engine = runtime.deserialize_cuda_engine(buf)
         if self.engine is None:
             raise RuntimeError('Unable to load the engine file')
         if self.engine.has_implicit_batch_dimension:
@@ -66,9 +65,8 @@ class InferenceBackend:
                 self.input = HostDeviceMem(host_mem, device_mem)
             else:
                 self.outputs.append(HostDeviceMem(host_mem, device_mem))
-
-        self.stream = cuda.Stream()
         self.context = self.engine.create_execution_context()
+        self.stream = cuda.Stream()
 
     def infer(self):
         self.infer_async()
