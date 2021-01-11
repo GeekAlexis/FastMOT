@@ -13,6 +13,8 @@ class YOLO:
     ENGINE_PATH = None
     MODEL_PATH = None
     NUM_CLASSES = None
+    LETTER_BOX = False
+    NEW_COORDS = False
     INPUT_SHAPE = ()
     LAYER_FACTORS = []
     SCALES = []
@@ -45,8 +47,8 @@ class YOLO:
                 plugin_creator.create_plugin('YoloLayer_TRT', trt.PluginFieldCollection([
                     trt.PluginField("yoloWidth", np.array(yolo_width, dtype=np.int32), trt.PluginFieldType.INT32),
                     trt.PluginField("yoloHeight", np.array(yolo_height, dtype=np.int32), trt.PluginFieldType.INT32),
-                    trt.PluginField("inputWidth", np.array(cls.INPUT_SHAPE[2], dtype=np.int32), trt.PluginFieldType.INT32),
-                    trt.PluginField("inputHeight", np.array(cls.INPUT_SHAPE[1], dtype=np.int32), trt.PluginFieldType.INT32),
+                    trt.PluginField("inputMultiplier", np.array(cls.LAYER_FACTORS[i], dtype=np.int32), trt.PluginFieldType.INT32),
+                    trt.PluginField("newCoords", np.array(cls.NEW_COORDS, dtype=np.int32), trt.PluginFieldType.INT32),
                     trt.PluginField("numClasses", np.array(cls.NUM_CLASSES, dtype=np.int32), trt.PluginFieldType.INT32),
                     trt.PluginField("numAnchors", np.array(num_anchors, dtype=np.int32), trt.PluginFieldType.INT32),
                     trt.PluginField("anchors", np.array(cls.ANCHORS[i], dtype=np.float32), trt.PluginFieldType.FLOAT32),
@@ -108,3 +110,17 @@ class YOLOv4(YOLO):
     ANCHORS = [[11, 22, 24, 60, 37, 116],
                [54, 186, 69, 268, 89, 369],
                [126, 491, 194, 314, 278, 520]]
+
+
+class YOLOv4CSP(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov4_csp_crowdhuman.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov4_csp_crowdhuman.onnx'
+    NUM_CLASSES = 1
+    LETTER_BOX = True
+    NEW_COORDS = True
+    INPUT_SHAPE = (3, 512, 512)
+    LAYER_FACTORS = [8, 16, 32]
+    SCALES = [2.0, 2.0, 2.0]
+    ANCHORS = [[10, 24, 23, 55, 37, 92],
+               [53, 135, 67, 188, 98, 251],
+               [138, 168, 138, 341, 241, 283]]
