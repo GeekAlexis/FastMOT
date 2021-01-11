@@ -8,7 +8,7 @@ import cv2
 from . import models
 from .utils import InferenceBackend
 from .utils.rect import as_rect, to_tlbr, get_size, area
-from .utils.rect import union, multi_crop, iom, diou_nms
+from .utils.rect import union, crop, multi_crop, iom, diou_nms
 
 
 DET_DTYPE = np.dtype(
@@ -56,14 +56,13 @@ class SSDDetector(Detector):
         self.merge_thresh = config['merge_thresh']
 
         self.batch_size = int(np.prod(self.tiling_grid))
-        self.input_size = np.prod(self.model.INPUT_SHAPE)
+        self.input_volume = np.prod(self.model.INPUT_SHAPE)
         self.tiles, self.tiling_region_size = self._generate_tiles()
         self.scale_factor = np.asarray(self.size) / self.tiling_region_size
         self.backend = InferenceBackend(self.model, self.batch_size)
 
     def detect_async(self, frame_id, frame):
-        frame = cv2.resize(frame, self.tiling_region_size)
-        self._preprocess(frame, self.tiles, self.backend.input.host, self.input_size)
+        self._preprocess(frame)
         self.backend.infer_async()
 
     def postprocess(self):
@@ -73,6 +72,10 @@ class SSDDetector(Detector):
                                                  self.conf_thresh, self.scale_factor)
         detections = self._merge_dets(detections, tile_ids)
         return detections
+
+    def _preprocess(self, frame):
+        frame = cv2.resize(frame, self.tiling_region_size)
+        self._normalize(frame, self.tiles, self.backend.input.host, self.input_volume)
 
     def _generate_tiles(self):
         tile_size = np.asarray(self.model.INPUT_SHAPE[:0:-1])
@@ -94,7 +97,7 @@ class SSDDetector(Detector):
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
-    def _preprocess(frame, tiles, out, size):
+    def _normalize(frame, tiles, out, size):
         imgs = multi_crop(frame, tiles)
         for i in nb.prange(len(imgs)):
             offset = i * size
@@ -179,23 +182,45 @@ class YoloDetector(Detector):
 
         self.batch_size = 1
         self.backend = InferenceBackend(self.model, self.batch_size)
+        self.backend.input.host[:] = 0.5 # for letterbox
+        self.orig_size, self.new_size, self.insert_roi, self.bbox_offset = self._get_letterbox()
 
     def detect_async(self, frame_id, frame):
-        frame = cv2.resize(frame, self.model.INPUT_SHAPE[:0:-1])
-        self._preprocess(frame, self.backend.input.host)
+        self._preprocess(frame)
         self.backend.infer_async()
 
     def postprocess(self):
         det_out = self.backend.synchronize()
         det_out = np.concatenate(det_out).reshape(-1, 7)
-        detections = self._filter_dets(det_out, self.size, self.class_ids, self.conf_thresh,
-                                       self.nms_thresh, self.max_area)
+        detections = self._filter_dets(det_out, self.orig_size, self.class_ids, self.conf_thresh,
+                                       self.nms_thresh, self.max_area, self.bbox_offset)
         detections = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
         return detections
 
+    def _preprocess(self, frame):
+        frame = cv2.resize(frame, self.new_size)
+        self._normalize(frame, crop(self.backend.input.host, self.insert_roi))
+
+    def _get_letterbox(self):
+        frame_size = np.asarray(self.size)
+        model_size = np.asarray(self.model.INPUT_SHAPE[:0:-1])
+        if self.model.LETTER_BOX:
+            scale_factor = min(model_size / frame_size)
+            new_size = (frame_size * scale_factor).astype(int)
+            img_offset = (model_size - new_size) // 2 # float
+            insert_roi = to_tlbr((*img_offset, *new_size))
+            orig_size = (model_size / scale_factor).astype(int)
+            bbox_offset = (orig_size - frame_size) // 2
+        else:
+            orig_size = frame_size
+            new_size = model_size
+            insert_roi = to_tlbr((0, 0, *model_size))
+            bbox_offset = np.zeros(2)
+        return tuple(orig_size), tuple(new_size), insert_roi, bbox_offset
+
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _preprocess(frame, out):
+    def _normalize(frame, out):
         # BGR to RGB
         rgb = frame[..., ::-1]
         # HWC -> CHW
@@ -206,7 +231,7 @@ class YoloDetector(Detector):
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _filter_dets(det_out, size, class_ids, conf_thresh, nms_thresh, max_area):
+    def _filter_dets(det_out, size, class_ids, conf_thresh, nms_thresh, max_area, offset):
         """
         det_out: a list of 3 tensors, where each tensor
                  contains a multiple of 7 float32 numbers in
@@ -221,6 +246,7 @@ class YoloDetector(Detector):
 
         # scale to pixel values
         det_out[:, :2] *= size
+        det_out[:, :2] -= offset
         det_out[:, 2:4] *= size
 
         keep = []
