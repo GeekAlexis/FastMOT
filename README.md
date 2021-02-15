@@ -20,7 +20,7 @@ Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT u
 
 To achieve faster processing, the tracker only runs the detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify targets that moved out of frame so that the tracker can keep the same IDs. I trained YOLOv4 on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow.
 
-Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba. 
+Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized and multithreaded using Numba. 
 
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
@@ -113,16 +113,20 @@ This repo supports multi-class tracking and thus can be easily extended to custo
     MODEL_PATH: path to ONNX model
     NUM_CLASSES: total number of classes
     LETTERBOX: keep aspect ratio when resizing
+               For YOLOv4-csp/YOLOv4x-mish, set to True
     NEW_COORDS: new_coords parameter for each yolo layer
+                For YOLOv4-csp/YOLOv4x-mish, set to True
     INPUT_SHAPE: input size in the format "(channel, height, width)"
     LAYER_FACTORS: scale factors with respect to the input size for each yolo layer
-                   For YOLOv3, change to [32, 16, 8]
-                   For YOLOv3/v4-tiny, change to [32, 16]
+                   For YOLOv4/YOLOv4-csp/YOLOv4x-mish, set to [8, 16, 32]
+                   For YOLOv3, set to [32, 16, 8]
+                   For YOLOv4-tiny/YOLOv3-tiny, set to [32, 16]
     SCALES: scale_x_y parameter for each yolo layer
-            For YOLOv3, change to [1., 1., 1.]
-            For YOLOv3-tiny, change to [1., 1.]
-            For YOLOv4-tiny, change to [1.05, 1.05]
-            For YOLOv4-csp or YOLOv4x-mish, change to [2.0, 2.0, 2.0]
+            For YOLOv4-csp/YOLOv4x-mish, set to [2.0, 2.0, 2.0]
+            For YOLOv4, set to [1.2, 1.1, 1.05]
+            For YOLOv4-tiny, set to [1.05, 1.05]
+            For YOLOv3, set to [1., 1., 1.]
+            For YOLOv3-tiny, set to [1., 1.]
     ANCHORS: anchors grouped by each yolo layer
     ```
     Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask` in Darknet cfg.
