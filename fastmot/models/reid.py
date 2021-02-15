@@ -47,14 +47,6 @@ class ReID:
             return engine
 
 
-class OSNetAIN(ReID):
-    ENGINE_PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17.trt'
-    MODEL_PATH = Path(__file__).parent / 'osnet_ain_x1_0_msmt17.onnx'
-    INPUT_SHAPE = (3, 256, 128)
-    OUTPUT_LAYOUT = 512
-    METRIC = 'cosine'
-
-
 class OSNet025(ReID):
     ENGINE_PATH = Path(__file__).parent / 'osnet_x0_25_msmt17.trt'
     MODEL_PATH = Path(__file__).parent / 'osnet_x0_25_msmt17.onnx'
