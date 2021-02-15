@@ -38,7 +38,7 @@ namespace nvinfer1
     class YoloLayerPlugin: public IPluginV2IOExt
     {
         public:
-            YoloLayerPlugin(int yolo_width, int yolo_height, int num_anchors, float* anchors, int num_classes, int input_width, int input_height, float scale_x_y);
+            YoloLayerPlugin(int yolo_width, int yolo_height, int num_anchors, float* anchors, int num_classes, int input_width, int input_height, float scale_x_y, int new_coords);
             YoloLayerPlugin(const void* data, size_t length);
 
             ~YoloLayerPlugin() override = default;
@@ -78,7 +78,7 @@ namespace nvinfer1
 
             const char* getPluginNamespace() const override;
 
-            DataType getOutputDataType(int index, const nvinfer1::DataType* inputTypes, int nbInputs) const override;
+            DataType getOutputDataType(int index, const DataType* inputTypes, int nbInputs) const override;
 
             bool isOutputBroadcastAcrossBatch(int outputIndex, const bool* inputIsBroadcasted, int nbInputs) const override;
 
@@ -100,8 +100,12 @@ namespace nvinfer1
             int mNumClasses;
             int mInputWidth, mInputHeight;
             float mScaleXY;
+            int mNewCoords = 0;
 
             const char* mPluginNamespace;
+
+        protected:
+            using IPluginV2IOExt::configurePlugin;
     };
 
     class YoloPluginCreator : public IPluginCreator
