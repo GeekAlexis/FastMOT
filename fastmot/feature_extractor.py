@@ -13,7 +13,7 @@ class FeatureExtractor:
         self.model = getattr(models, config['model'])
         self.batch_size = config['batch_size']
 
-        self.input_size = np.prod(self.model.INPUT_SHAPE)
+        self.inp_stride = np.prod(self.model.INPUT_SHAPE)
         self.feature_dim = self.model.OUTPUT_LAYOUT
         self.backend = InferenceBackend(self.model, self.batch_size)
         self.pool = ThreadPool()
@@ -62,12 +62,12 @@ class FeatureExtractor:
 
     def _preprocess(self, idx, img):
         img = cv2.resize(img, self.model.INPUT_SHAPE[:0:-1])
-        self._normalize(img, idx, self.backend.input.host, self.input_size)
+        self._normalize(img, idx, self.backend.input.host, self.inp_stride)
 
     @staticmethod
     @nb.njit(fastmath=True, nogil=True, cache=True)
-    def _normalize(img, idx, out, size):
-        offset = idx * size
+    def _normalize(img, idx, out, stride):
+        offset = idx * stride
         # BGR to RGB
         img = img[..., ::-1]
         # HWC -> CHW
@@ -77,4 +77,4 @@ class FeatureExtractor:
         img[0, ...] = (img[0, ...] - 0.485) / 0.229
         img[1, ...] = (img[1, ...] - 0.456) / 0.224
         img[2, ...] = (img[2, ...] - 0.406) / 0.225
-        out[offset:offset + size] = img.ravel()
+        out[offset:offset + stride] = img.ravel()

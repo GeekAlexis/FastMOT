@@ -68,6 +68,14 @@ class InferenceBackend:
         self.context = self.engine.create_execution_context()
         self.stream = cuda.Stream()
 
+    @property
+    def input_handle(self):
+        return self.input.host
+
+    @input_handle.setter
+    def input_handle(self, val):
+        self.input.host[:] = val
+
     def infer(self):
         self.infer_async()
         return self.synchronize()
