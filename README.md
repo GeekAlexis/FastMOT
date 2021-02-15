@@ -4,7 +4,8 @@
 <img src="assets/dense_demo.gif" width="400"/> <img src="assets/aerial_demo.gif" width="400"/>
 
 ## News
-  - (2021.1.3) Support DIoU-NMS for YOLO (+1% MOTA)
+  - (2021.2.13) Support Scaled-YOLOv4 models
+  - (2021.1.3) Add DIoU-NMS for YOLO (+1% MOTA)
   - (2020.11.28) Docker container provided on Ubuntu 18.04
 
 ## Description
@@ -111,6 +112,8 @@ This repo supports multi-class tracking and thus can be easily extended to custo
     ENGINE_PATH: path to TensorRT engine (converted at runtime)
     MODEL_PATH: path to ONNX model
     NUM_CLASSES: total number of classes
+    LETTERBOX: keep aspect ratio when resizing
+    NEW_COORDS: new_coords parameter for each yolo layer
     INPUT_SHAPE: input size in the format "(channel, height, width)"
     LAYER_FACTORS: scale factors with respect to the input size for each yolo layer
                    For YOLOv3, change to [32, 16, 8]
@@ -119,6 +122,7 @@ This repo supports multi-class tracking and thus can be easily extended to custo
             For YOLOv3, change to [1., 1., 1.]
             For YOLOv3-tiny, change to [1., 1.]
             For YOLOv4-tiny, change to [1.05, 1.05]
+            For YOLOv4-csp or YOLOv4x-mish, change to [2.0, 2.0, 2.0]
     ANCHORS: anchors grouped by each yolo layer
     ```
     Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask` in Darknet cfg.
