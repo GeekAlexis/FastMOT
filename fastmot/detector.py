@@ -211,7 +211,7 @@ class YoloDetector(Detector):
             bbox_offset = (upscaled_sz - src_size) / 2
             self.backend.input_handle = 0.5
         else:
-            upscaled_sz = dst_size
+            upscaled_sz = src_size
             insert_roi = to_tlbr(np.r_[0, 0, dst_size])
             bbox_offset = np.zeros(2)
 
