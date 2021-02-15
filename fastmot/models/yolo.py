@@ -13,7 +13,7 @@ class YOLO:
     ENGINE_PATH = None
     MODEL_PATH = None
     NUM_CLASSES = None
-    LETTER_BOX = False
+    LETTERBOX = False
     NEW_COORDS = False
     INPUT_SHAPE = ()
     LAYER_FACTORS = []
@@ -110,17 +110,3 @@ class YOLOv4(YOLO):
     ANCHORS = [[11, 22, 24, 60, 37, 116],
                [54, 186, 69, 268, 89, 369],
                [126, 491, 194, 314, 278, 520]]
-
-
-class YOLOv4CSP(YOLO):
-    ENGINE_PATH = Path(__file__).parent / 'yolov4_csp_crowdhuman.trt'
-    MODEL_PATH = Path(__file__).parent /  'yolov4_csp_crowdhuman.onnx'
-    NUM_CLASSES = 1
-    LETTER_BOX = True
-    NEW_COORDS = True
-    INPUT_SHAPE = (3, 512, 512)
-    LAYER_FACTORS = [8, 16, 32]
-    SCALES = [2.0, 2.0, 2.0]
-    ANCHORS = [[10, 24, 23, 55, 37, 92],
-               [53, 135, 67, 188, 98, 251],
-               [138, 168, 138, 341, 241, 283]]

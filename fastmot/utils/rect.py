@@ -74,8 +74,7 @@ def crop(img, tlbr, chw=False):
     xmin, ymin, xmax, ymax = tlbr.astype(np.int_)
     if chw:
         return img[..., ymin:ymax + 1, xmin:xmax + 1]
-    else:
-        return img[ymin:ymax + 1, xmin:xmax + 1]
+    return img[ymin:ymax + 1, xmin:xmax + 1]
 
 
 @nb.njit(cache=True)
