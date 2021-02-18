@@ -151,7 +151,7 @@ class Flow:
         homography = None
         prev_bg_pts, matched_bg_pts = self._get_good_match(all_prev_pts, all_cur_pts,
                                                            status, bg_begin, -1)
-        if len(matched_bg_pts) == 0:
+        if len(matched_bg_pts) < 4:
             self.bg_keypoints = np.empty((0, 2), np.float32)
             LOGGER.warning('Camera motion estimation failed')
             return {}, None
@@ -173,7 +173,7 @@ class Flow:
             prev_pts, matched_pts = self._get_good_match(all_prev_pts, all_cur_pts,
                                                          status, begin, end)
             prev_pts, matched_pts = self._fg_filter(prev_pts, matched_pts, self.fg_mask, self.size)
-            if len(matched_pts) == 0:
+            if len(matched_pts) < 3:
                 track.keypoints = np.empty((0, 2), np.float32)
                 continue
             # model motion as partial affine
