@@ -15,12 +15,12 @@ FastMOT is a custom multiple object tracker that implements:
   - Deep SORT + OSNet ReID
   - KLT optical flow tracking
   - Camera motion compensation
-  
+
 Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT unusable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
 
 To achieve faster processing, the tracker only runs the detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify targets that moved out of frame so that the tracker can keep the same IDs. I trained YOLOv4 on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow.
 
-Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized and multithreaded using Numba. 
+Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized and multithreaded using Numba.
 
 ## Performance
 | Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
@@ -29,9 +29,9 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 | MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 22 |
 | MOT17-03 | 50 - 80  | - | - | - | 15 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS should be even higher. 
+Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS should be even higher.
 
-This means even though the tracker runs much faster, it is still highly accurate. More lightweight detector/feature extractor can potentially be used to obtain more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines. 
+This means even though the tracker runs much faster, it is still highly accurate. More lightweight detector/feature extractor can potentially be used to obtain more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines.
 
 ## Requirements
 - CUDA >= 10
@@ -74,36 +74,44 @@ Only required if you want to use SSD
   ```
 
 ## Usage
-- USB Camera: 
+- USB Webcam:
   ```
   $ python3 app.py --input_uri /dev/video0 --mot
   ```
-- CSI Camera: 
+- MIPI CSI Camera:
   ```
   $ python3 app.py --input_uri csi://0 --mot
   ```
-- RTSP IP Camera: 
+- RTSP Stream:
   ```
-  $ python3 app.py --input_uri rtsp://<user>:<password>@<ip>:<port> --mot
+  $ python3 app.py --input_uri rtsp://<user>:<password>@<ip>:<port>/<path> --mot
   ```
-- Video file: 
+- HTTP Stream:
+  ```
+  $ python3 app.py --input_uri http://<user>:<password>@<ip>:<port>/<path> --mot
+  ```
+- Image sequence:
+  ```
+  $ python3 app.py --input_uri img_%06d.jpg --mot
+  ```
+- Video file:
   ```
   $ python3 app.py --input_uri video.mp4 --mot
   ```
 - Use `--gui` to visualize and `--output_uri` to save output
-- To disable the GStreamer backend, set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11) 
+- To disable the GStreamer backend, set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11)
 - Note that the first run will be slow due to Numba compilation
-- More options can be configured in `cfg/mot.json` 
-  - Set `camera_size` and `camera_fps` to match your camera setting. List all settings for your camera:
+- More options can be configured in `cfg/mot.json`
+  - Set `camera_resolution` and `frame_rate` to match your camera setting. List all settings for your camera:
     ```
     $ v4l2-ctl -d /dev/video0 --list-formats-ext
-    ``` 
+    ```
   - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
   - To change classes, set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
   - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]`, `[2, 1]`, or `[1, 1]` if a smaller batch size is preferred
-  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy. You may also want to change `max_age` such that `max_age * detector_frame_skip` is around `30-40` 
-  
+  - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy. You may also want to change `max_age` such that `max_age * detector_frame_skip` is around `30-40`
+
  ## Track custom classes
 This repo supports multi-class tracking and thus can be easily extended to custom classes (e.g. vehicle). You need to train both YOLO and a ReID model on your object classes. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format and place it under `fastmot/models`. To convert YOLO to ONNX, [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos) is a great reference.
 ### Add custom YOLOv3/v4
@@ -149,7 +157,7 @@ This repo supports multi-class tracking and thus can be easily extended to custo
  ```bibtex
 @software{yukai_yang_2020_4294717,
   author       = {Yukai Yang},
-  title        = {{FastMOT: High-Performance Multiple Object Tracking 
+  title        = {{FastMOT: High-Performance Multiple Object Tracking
                    Based on YOLO, Deep SORT, and Optical Flow}},
   month        = nov,
   year         = 2020,
