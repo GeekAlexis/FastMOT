@@ -2,8 +2,8 @@
     "size": [1280, 720],
 
     "video_io": {
-        "camera_size": [1920, 1080],
-        "camera_fps": 30,
+        "camera_resolution": [1920, 1080],
+        "frame_rate": 30,
         "buffer_size": 10
     },
 

@@ -27,7 +27,7 @@ class MOT:
     ----------
     size : (int, int)
         Width and height of each frame.
-    capture_dt : float
+    cap_dt : float
         Time interval in seconds between each captured frame.
     config : Dict
         Tracker configuration.
@@ -37,7 +37,7 @@ class MOT:
         Flag to toggle output verbosity.
     """
 
-    def __init__(self, size, capture_dt, config, draw=False, verbose=False):
+    def __init__(self, size, cap_dt, config, draw=False, verbose=False):
         self.size = size
         self.draw = draw
         self.verbose = verbose
@@ -54,7 +54,7 @@ class MOT:
 
         LOGGER.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor(config['feature_extractor'])
-        self.tracker = MultiTracker(self.size, capture_dt, self.extractor.metric,
+        self.tracker = MultiTracker(self.size, cap_dt, self.extractor.metric,
                                     config['multi_tracker'])
 
         # reset counters
