@@ -74,19 +74,19 @@ Only required if you want to use SSD
   ```
 
 ## Usage
-- USB Webcam:
+- USB webcam:
   ```
   $ python3 app.py --input_uri /dev/video0 --mot
   ```
-- MIPI CSI Camera:
+- MIPI CSI camera:
   ```
   $ python3 app.py --input_uri csi://0 --mot
   ```
-- RTSP Stream:
+- RTSP stream:
   ```
   $ python3 app.py --input_uri rtsp://<user>:<password>@<ip>:<port>/<path> --mot
   ```
-- HTTP Stream:
+- HTTP stream:
   ```
   $ python3 app.py --input_uri http://<user>:<password>@<ip>:<port>/<path> --mot
   ```
