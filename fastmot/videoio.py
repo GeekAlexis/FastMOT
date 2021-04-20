@@ -160,9 +160,10 @@ class VideoIO:
 
         if self.protocol == Protocol.IMAGE:
             pipeline = (
-                'imagesequencesrc location=%s framerate=%d/1 ! decodebin ! ' 
+                'multifilesrc location=%s index=1 caps="image/%s,framerate=%d/1" ! decodebin ! '
                 % (
                     self.input_uri,
+                    self._img_format(self.input_uri),
                     self.frame_rate
                 )
             )
@@ -253,3 +254,8 @@ class VideoIO:
             else:
                 protocol = Protocol.VIDEO
         return protocol
+
+    @staticmethod
+    def _img_format(uri):
+        suffix = Path(uri).suffix[1:]
+        return 'jpeg' if suffix == 'jpg' else suffix

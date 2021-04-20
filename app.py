@@ -15,7 +15,7 @@ def main():
     parser.add_argument('-m', '--mot', action='store_true', help='run multiple object tracker')
     parser.add_argument('-i', '--input_uri', metavar="URI", required=True, help=
                         'URI to input stream\n'
-                        '1) image sequence (e.g. img_%%05d.jpg)\n'
+                        '1) image sequence (e.g. img_%%06d.jpg)\n'
                         '2) video file (e.g. video.mp4)\n'
                         '3) MIPI CSI camera (e.g. csi://0)\n'
                         '4) USB/V4L2 camera (e.g. /dev/video0)\n'
