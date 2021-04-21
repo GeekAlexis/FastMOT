@@ -50,25 +50,25 @@ class VideoIO:
         self.buffer_size = config['buffer_size']
 
         self.protocol = self._parse_uri(self.input_uri)
-        self.is_file = self.protocol == Protocol.IMAGE or self.protocol == Protocol.VIDEO
+        self.is_live = self.protocol != Protocol.IMAGE and self.protocol != Protocol.VIDEO
         if WITH_GSTREAMER:
-            self.cap = cv2.VideoCapture(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
+            self.source = cv2.VideoCapture(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
         else:
-            self.cap = cv2.VideoCapture(self.input_uri)
+            self.source = cv2.VideoCapture(self.input_uri)
 
         self.frame_queue = deque([], maxlen=self.buffer_size)
         self.cond = threading.Condition()
         self.exit_event = threading.Event()
-        self.capture_thread = threading.Thread(target=self._capture_frames)
+        self.cap_thread = threading.Thread(target=self._capture_frames)
 
-        ret, frame = self.cap.read()
+        ret, frame = self.source.read()
         if not ret:
             raise RuntimeError('Unable to read video stream')
         self.frame_queue.append(frame)
 
-        width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        self.cap_fps = self.cap.get(cv2.CAP_PROP_FPS)
+        width = self.source.get(cv2.CAP_PROP_FRAME_WIDTH)
+        height = self.source.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.cap_fps = self.source.get(cv2.CAP_PROP_FPS)
         self.do_resize = (width, height) != self.size
         if self.cap_fps == 0:
             self.cap_fps = self.frame_rate # fallback to config if unknown
@@ -86,27 +86,27 @@ class VideoIO:
 
     @property
     def cap_dt(self):
-        # limit capture interval at processing latency for camera
-        return 1 / self.cap_fps if self.is_file else 1 / min(self.cap_fps, self.proc_fps)
+        # limit capture interval at processing latency for live sources
+        return 1 / min(self.cap_fps, self.proc_fps) if self.is_live else 1 / self.cap_fps
 
     def start_capture(self):
         """
-        Start capturing from video file or device.
+        Start capturing from file or device.
         """
-        if not self.cap.isOpened():
-            self.cap.open(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
-        if not self.capture_thread.is_alive():
-            self.capture_thread.start()
+        if not self.source.isOpened():
+            self.source.open(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
+        if not self.cap_thread.is_alive():
+            self.cap_thread.start()
 
     def stop_capture(self):
         """
-        Stop capturing from video file or device.
+        Stop capturing from file or device.
         """
         with self.cond:
             self.exit_event.set()
             self.cond.notify()
         self.frame_queue.clear()
-        self.capture_thread.join()
+        self.cap_thread.join()
 
     def read(self):
         """
@@ -138,7 +138,7 @@ class VideoIO:
         self.stop_capture()
         if hasattr(self, 'writer'):
             self.writer.release()
-        self.cap.release()
+        self.source.release()
 
     def _gst_cap_pipeline(self):
         gst_elements = str(subprocess.check_output('gst-inspect-1.0'))
@@ -200,7 +200,7 @@ class VideoIO:
         elif self.protocol == Protocol.RTSP:
             pipeline = 'rtspsrc location=%s latency=0 ! decodebin ! ' % self.input_uri
         elif self.protocol == Protocol.HTTP:
-            pipeline = 'souphttpsrc location=%s ! decodebin ! ' % self.input_uri
+            pipeline = 'souphttpsrc location=%s is-live=true ! decodebin ! ' % self.input_uri
         return pipeline + cvt_pipeline
 
     def _gst_write_pipeline(self):
@@ -223,14 +223,14 @@ class VideoIO:
 
     def _capture_frames(self):
         while not self.exit_event.is_set():
-            ret, frame = self.cap.read()
+            ret, frame = self.source.read()
             with self.cond:
                 if not ret:
                     self.exit_event.set()
                     self.cond.notify()
                     break
                 # keep unprocessed frames in the buffer for file
-                if self.is_file:
+                if not self.is_live:
                     while (len(self.frame_queue) == self.buffer_size and
                            not self.exit_event.is_set()):
                         self.cond.wait()
@@ -257,5 +257,5 @@ class VideoIO:
 
     @staticmethod
     def _img_format(uri):
-        suffix = Path(uri).suffix[1:]
-        return 'jpeg' if suffix == 'jpg' else suffix
+        img_format = Path(uri).suffix[1:]
+        return 'jpeg' if img_format == 'jpg' else img_format
