@@ -284,8 +284,10 @@ class PublicDetector(Detector):
         self.query_fid = None
 
         det_txt = self.seq_root / 'det' / 'det.txt'
-        for frame_id, _, x, y, w, h, conf in np.loadtxt(det_txt, delimiter=','):
-            tlbr = to_tlbr((x, y, w, h))
+        for mot_det in np.loadtxt(det_txt, delimiter=','):
+            frame_id = int(mot_det[0])
+            tlbr = to_tlbr(mot_det[2:6])
+            conf = mot_det[6]
             # scale and clip inside frame
             tlbr[:2] = tlbr[:2] / self.seq_size * self.size
             tlbr[2:] = tlbr[2:] / self.seq_size * self.size
@@ -293,7 +295,7 @@ class PublicDetector(Detector):
             tlbr = np.minimum(tlbr, np.append(self.size, self.size))
             tlbr = as_rect(tlbr)
             if conf >= self.conf_thresh and area(tlbr) <= self.max_area:
-                self.detections[int(frame_id)].append((tlbr, 1, conf))
+                self.detections[frame_id].append((tlbr, 1, conf)) # class ID = 1 (person)
 
     def detect_async(self, frame_id, frame):
         self.query_fid = frame_id + 1

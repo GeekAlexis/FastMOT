@@ -1,8 +1,8 @@
 {   
-    "size": [1280, 720],
+    "resize_to": [1280, 720],
 
     "video_io": {
-        "camera_resolution": [1920, 1080],
+        "resolution": [1920, 1080],
         "frame_rate": 30,
         "buffer_size": 10
     },
@@ -28,8 +28,8 @@
             "nms_thresh": 0.5
         },
         "public_detector": {
-            "sequence": "eval/data/MOT17-04",
-            "conf_thresh": 0.5,
+            "sequence": "eval/data/MOT20-03",
+            "conf_thresh": 0.0,
             "max_area": 800000
         },
         "feature_extractor": {

@@ -41,11 +41,11 @@ def main():
     mot = None
     log = None
     elapsed_time = 0
-    stream = fastmot.VideoIO(config['size'], config['video_io'], args.input_uri, args.output_uri)
+    stream = fastmot.VideoIO(config['resize_to'], config['video_io'], args.input_uri, args.output_uri)
 
     if args.mot:
         draw = args.gui or args.output_uri is not None
-        mot = fastmot.MOT(config['size'], stream.cap_dt, config['mot'],
+        mot = fastmot.MOT(config['resize_to'], stream.cap_dt, config['mot'],
                           draw=draw, verbose=args.verbose)
         if args.log is not None:
             Path(args.log).parent.mkdir(parents=True, exist_ok=True)
@@ -66,10 +66,8 @@ def main():
                 mot.step(frame)
                 if log is not None:
                     for track in mot.visible_tracks:
-                        # MOT17 dataset is usually of size 1920x1080, modify this otherwise
-                        orig_size = (1920, 1080)
-                        tl = track.tlbr[:2] / config['size'] * orig_size
-                        br = track.tlbr[2:] / config['size'] * orig_size
+                        tl = track.tlbr[:2] / config['resize_to'] * stream.resolution
+                        br = track.tlbr[2:] / config['resize_to'] * stream.resolution
                         w, h = br - tl + 1
                         log.write(f'{mot.frame_count},{track.trk_id},{tl[0]:.6f},{tl[1]:.6f},'
                                   f'{w:.6f},{h:.6f},-1,-1,-1\n')

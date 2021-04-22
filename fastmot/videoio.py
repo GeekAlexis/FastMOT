@@ -45,7 +45,7 @@ class VideoIO:
         self.output_uri = output_uri
         self.proc_fps = proc_fps
 
-        self.camera_resolution = config['camera_resolution']
+        self.resolution = config['resolution']
         self.frame_rate = config['frame_rate']
         self.buffer_size = config['buffer_size']
 
@@ -177,7 +177,7 @@ class VideoIO:
                     'format=NV12, framerate=%d/1 ! '
                     % (
                         self.input_uri[6:],
-                        *self.camera_resolution,
+                        *self.resolution,
                         self.frame_rate
                     )
                 )
@@ -191,7 +191,7 @@ class VideoIO:
                     'format=YUY2, framerate=%d/1 ! '
                     % (
                         self.input_uri,
-                        *self.camera_resolution,
+                        *self.resolution,
                         self.frame_rate
                     )
                 )
