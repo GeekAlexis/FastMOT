@@ -102,7 +102,7 @@ Only required if you want to use SSD
 - To disable the GStreamer backend, set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11)
 - Note that the first run will be slow due to Numba compilation
 - More options can be configured in `cfg/mot.json`
-  - Set `resolution` and `frame_rate` that corresponds to the source data or camera configuration. They are required for image sequence, IP cameras, or MOT Challenge evaluation. List all configurations for your USB/CSI camera:
+  - Set `resolution` and `frame_rate` that corresponds to the source data or camera configuration. They are required for image sequence, all camera sources, and MOT Challenge evaluation. List all configurations for your USB/CSI camera:
     ```
     $ v4l2-ctl -d /dev/video0 --list-formats-ext
     ```
