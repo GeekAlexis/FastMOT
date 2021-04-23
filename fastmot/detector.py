@@ -23,11 +23,11 @@ class Detector:
     def __init__(self, size):
         self.size = size
 
-    def __call__(self, frame_id, frame):
-        self.detect_async(frame_id, frame)
+    def __call__(self, frame):
+        self.detect_async(frame)
         return self.postprocess()
 
-    def detect_async(self, frame_id, frame):
+    def detect_async(self, frame):
         """
         Asynchronous detection.
         """
@@ -61,7 +61,7 @@ class SSDDetector(Detector):
         self.scale_factor = np.asarray(self.size) / self.tiling_region_size
         self.backend = InferenceBackend(self.model, self.batch_size)
 
-    def detect_async(self, frame_id, frame):
+    def detect_async(self, frame):
         self._preprocess(frame)
         self.backend.infer_async()
 
@@ -183,7 +183,7 @@ class YoloDetector(Detector):
         self.backend = InferenceBackend(self.model, 1)
         self.input_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
 
-    def detect_async(self, frame_id, frame):
+    def detect_async(self, frame):
         self._preprocess(frame)
         self.backend.infer_async()
 
@@ -270,8 +270,9 @@ class YoloDetector(Detector):
 
 
 class PublicDetector(Detector):
-    def __init__(self, size, config):
+    def __init__(self, size, frame_skip, config):
         super().__init__(size)
+        self.frame_skip = frame_skip
         self.seq_root = Path(__file__).parents[1] / config['sequence']
         self.conf_thresh = config['conf_thresh']
         self.max_area = config['max_area']
@@ -281,11 +282,11 @@ class PublicDetector(Detector):
         self.seq_size = (int(seqinfo['Sequence']['imWidth']), int(seqinfo['Sequence']['imHeight']))
 
         self.detections = defaultdict(list)
-        self.query_fid = None
+        self.frame_id = 0
 
         det_txt = self.seq_root / 'det' / 'det.txt'
         for mot_det in np.loadtxt(det_txt, delimiter=','):
-            frame_id = int(mot_det[0])
+            frame_id = int(mot_det[0]) - 1
             tlbr = to_tlbr(mot_det[2:6])
             conf = 1.0 # mot_det[6]
             label = 1 # mot_det[7] (person)
@@ -298,8 +299,10 @@ class PublicDetector(Detector):
             if conf >= self.conf_thresh and area(tlbr) <= self.max_area:
                 self.detections[frame_id].append((tlbr, label, conf))
 
-    def detect_async(self, frame_id, frame):
-        self.query_fid = frame_id + 1
+    def detect_async(self, frame):
+        pass
 
     def postprocess(self):
-        return np.asarray(self.detections[self.query_fid], dtype=DET_DTYPE).view(np.recarray)
+        detections = np.asarray(self.detections[self.frame_id], dtype=DET_DTYPE).view(np.recarray)
+        self.frame_id += self.frame_skip
+        return detections

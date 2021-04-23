@@ -50,7 +50,8 @@ class MOT:
         elif self.detector_type == DetectorType.YOLO:
             self.detector = YoloDetector(self.size, config['yolo_detector'])
         elif self.detector_type == DetectorType.PUBLIC:
-            self.detector = PublicDetector(self.size, config['public_detector'])
+            self.detector = PublicDetector(self.size, self.detector_frame_skip,
+                                           config['public_detector'])
 
         LOGGER.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor(config['feature_extractor'])
@@ -88,12 +89,12 @@ class MOT:
         """
         detections = []
         if self.frame_count == 0:
-            detections = self.detector(self.frame_count, frame)
+            detections = self.detector(frame)
             self.tracker.initiate(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
                 tic = time.perf_counter()
-                self.detector.detect_async(self.frame_count, frame)
+                self.detector.detect_async(frame)
                 self.preproc_time += time.perf_counter() - tic
                 tic = time.perf_counter()
                 self.tracker.compute_flow(frame)
