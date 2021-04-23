@@ -207,7 +207,7 @@ class VideoIO:
         gst_elements = str(subprocess.check_output('gst-inspect-1.0'))
         # use hardware encoder if found
         if 'omxh264enc' in gst_elements:
-            h264_encoder = 'omxh264enc'
+            h264_encoder = 'omxh264enc preset-level=2'
         elif 'x264enc' in gst_elements:
             h264_encoder = 'x264enc'
         else:
