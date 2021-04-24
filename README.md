@@ -108,8 +108,10 @@ Only required if you want to use SSD
 - Use `--gui` to visualize and `--output_uri` to save output
 - To disable the GStreamer backend, set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11)
 - Note that the first run will be slow due to Numba compilation
-- More options can be configured in `cfg/mot.json`
-  - Set `resolution` and `frame_rate` that corresponds to the source data or camera configuration. They are required for image sequence, all camera sources, and MOT Challenge evaluation. List all configurations for your USB/CSI camera:
+<details>
+<summary> More options can be configured in cfg/mot.json </summary>
+
+  - Set `resolution` and `frame_rate` that corresponds to the source data or camera configuration (optional). They are required for image sequence, camera sources, and MOT Challenge evaluation. List all configurations for your USB/CSI camera:
     ```
     $ v4l2-ctl -d /dev/video0 --list-formats-ext
     ```
@@ -118,6 +120,8 @@ Only required if you want to use SSD
   - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
   - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]`, `[2, 1]`, or `[1, 1]` if a smaller batch size is preferred
   - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy. You may also want to change `max_age` such that `max_age × detector_frame_skip ≈ 30`
+
+</details>
 
  ## Track custom classes
 FastMOT supports multi-class tracking and can be easily extended to custom classes (e.g. vehicle). You need to train both YOLO and a ReID model on your object classes. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format and place it under `fastmot/models`. To convert YOLO to ONNX, use [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/blob/master/yolo/yolo_to_onnx.py) to be compatible with the TensorRT YOLO plugins.
