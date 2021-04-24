@@ -18,7 +18,7 @@ FastMOT is a custom multiple object tracker that implements:
 
 Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT unusable for real-time applications. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
 
-To achieve faster processing, FastMOT only runs the detector and feature extractor every *N* frames. Optical flow is used to fill in the gaps. YOLOv4 was trained on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow. OSNet outperforms the original feature extractor in Deep SORT. FastMOT also re-identifies targets that moved out of frame and will keep the same IDs. 
+To achieve faster processing, FastMOT only runs the detector and feature extractor every N frames. Optical flow is used to fill in the gaps. YOLOv4 was trained on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow. OSNet outperforms the original feature extractor in Deep SORT. FastMOT also re-identifies targets that moved out of frame and will keep the same IDs. 
 
 Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba.
 
@@ -26,8 +26,8 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 ### Results on MOT20 train set
 | Detector Skip | MOTA | MOTP | IDF1 | IDS | MT | ML |
 |:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-| 1 | 63.3% | 72.8% | 54.2% | 5821 | 867 | 261 |
-| 5 | 61.4% | 72.2% | 55.7% | 4517 | 778 | 302 |
+| N = 1 | 63.3% | 72.8% | 54.2% | 5821 | 867 | 261 |
+| N = 5 | 61.4% | 72.2% | 55.7% | 4517 | 778 | 302 |
 
 ### FPS on MOT17 sequences
 | Sequence | Density | FPS |
@@ -151,7 +151,7 @@ FastMOT supports multi-class tracking and can be easily extended to custom class
     Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask` in Darknet cfg.
     Unlike YOLOv4, the anchors are usually in reverse for YOLOv3 and tiny
 2. Change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py) to your object classes
-3. Modify `cfg/mot.json`: under `yolo_detector`, set `model` to the added Python class and set `class_ids` you want to detect. You may want to play with `conf_thresh` based on the accuracy of your model
+3. Modify cfg/mot.json: set `model` in `yolo_detector` to the added Python class and set `class_ids` you want to detect. You may want to play with `conf_thresh` based on the accuracy of your model
 ### Add custom ReID
 1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/reid.py#L51
     ```
@@ -161,7 +161,7 @@ FastMOT supports multi-class tracking and can be easily extended to custom class
     OUTPUT_LAYOUT: feature dimension output by the model (e.g. 512)
     METRIC: distance metric used to match features ('euclidean' or 'cosine')
     ```
-2. Modify `cfg/mot.json`: under `feature_extractor`, set `model` to the added Python class. You may want to play with `max_feat_cost` and `max_reid_cost` - float values from `0` to `2`, based on the accuracy of your model
+2. Modify cfg/mot.json: set `model` in `feature_extractor` to the added Python class. You may want to play with `max_feat_cost` and `max_reid_cost` - float values from `0` to `2`, based on the accuracy of your model
 
  ## Citation
  If you find this repo useful in your project or research, please star and consider citing it:
