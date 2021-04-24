@@ -23,15 +23,22 @@ To achieve faster processing, the tracker only runs the detector and feature ext
 Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized and multithreaded using Numba.
 
 ## Performance
-| Sequence | Density | MOTA (SSD) | MOTA (YOLOv4) | MOTA (public) | FPS |
-|:-------|:-------:|:-------:|:-------:|:-------:|:-----:|
-| MOT17-13 | 5 - 30  | 19.8% | 45.6% | 41.3%  | 38 |
-| MOT17-04 | 30 - 50  | 43.8% | 61.0% | 75.1% | 22 |
-| MOT17-03 | 50 - 80  | - | - | - | 15 |
+### Results on MOT20 train set
+| Detector skip | MOTA | MOTP | IDF1 | IDS | MT | ML |
+|:--------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
+| 1 | 63.3% | 72.8% | 54.2% | 5821 | 867 | 261 |
+| 5 | 61.4% | 72.2% | 55.7% | 4517 | 778 | 302 |
 
-Performance is evaluated with the MOT17 dataset on Jetson Xavier NX using [py-motmetrics](https://github.com/cheind/py-motmetrics). When using public detections from MOT17, the MOTA scores are close to **state-of-the-art** trackers. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS should be even higher.
+### FPS on MOT17 train/test set
+| Sequence | Density | FPS |
+|:-------|:-------:|:-------:|
+| MOT17-13 | 5 - 30  | 38 |
+| MOT17-04 | 30 - 50  | 22 |
+| MOT17-03 | 50 - 80  | 15 |
 
-This means even though the tracker runs much faster, it is still highly accurate. More lightweight detector/feature extractor can potentially be used to obtain more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines.
+Performance is evaluated with YOLOv4 using [py-motmetrics](https://github.com/cheind/py-motmetrics). FPS results are obtained on Jetson Xavier NX. The MOTA scores on MOT20 are close to **state-of-the-art** trackers. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS is expected to be a lot higher.
+
+This means even though the tracker runs much faster, it is still highly accurate. More lightweight detector/feature extractor can be used to get more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines.
 
 ## Requirements
 - CUDA >= 10
