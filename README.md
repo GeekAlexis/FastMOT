@@ -16,16 +16,16 @@ FastMOT is a custom multiple object tracker that implements:
   - KLT optical flow tracking
   - Camera motion compensation
 
-Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT unusable for real-time applications. This repo significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
+Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT unusable for real-time applications. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
 
-To achieve faster processing, the tracker only runs the detector and feature extractor every *N* frames. Optical flow is then used to fill in the gaps. I swapped the feature extractor in Deep SORT for a better ReID model, OSNet. I also added a feature to re-identify targets that moved out of frame so that the tracker can keep the same IDs. I trained YOLOv4 on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow.
+To achieve faster processing, FastMOT only runs the detector and feature extractor every *N* frames. Optical flow is used to fill in the gaps. YOLOv4 was trained on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow. OSNet outperforms the original feature extractor in Deep SORT. FastMOT also re-identifies targets that moved out of frame and will keep the same IDs. 
 
-Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized and multithreaded using Numba.
+Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba.
 
 ## Performance
 ### Results on MOT20 train set
-| Detector skip | MOTA | MOTP | IDF1 | IDS | MT | ML |
-|:--------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
+| Detector Skip | MOTA | MOTP | IDF1 | IDS | MT | ML |
+|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
 | 1 | 63.3% | 72.8% | 54.2% | 5821 | 867 | 261 |
 | 5 | 61.4% | 72.2% | 55.7% | 4517 | 778 | 302 |
 
@@ -36,9 +36,9 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 | MOT17-04 | 30 - 50  | 22 |
 | MOT17-03 | 50 - 80  | 15 |
 
-Performance is evaluated with YOLOv4 using [py-motmetrics](https://github.com/cheind/py-motmetrics). FPS results are obtained on Jetson Xavier NX. The MOTA scores on MOT20 are close to **state-of-the-art** trackers. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS is expected to be a lot higher.
+Performance is evaluated with YOLOv4 using [py-motmetrics](https://github.com/cheind/py-motmetrics). FPS results are obtained on Jetson Xavier NX. FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Challenge. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS is expected to be much higher.
 
-This means even though the tracker runs much faster, it is still highly accurate. More lightweight detector/feature extractor can be used to get more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines.
+This means even though FastMOT runs much faster, it is still highly accurate. More lightweight detector/feature extractor can be used to get more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines.
 
 ## Requirements
 - CUDA >= 10
@@ -120,7 +120,7 @@ Only required if you want to use SSD
   - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy. You may also want to change `max_age` such that `max_age × detector_frame_skip ≈ 30`
 
  ## Track custom classes
-This repo supports multi-class tracking and thus can be easily extended to custom classes (e.g. vehicle). You need to train both YOLO and a ReID model on your object classes. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format and place it under `fastmot/models`. To convert YOLO to ONNX, use [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/blob/master/yolo/yolo_to_onnx.py) to be compatible with the TensorRT YOLO plugins.
+FastMOT supports multi-class tracking and can be easily extended to custom classes (e.g. vehicle). You need to train both YOLO and a ReID model on your object classes. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format and place it under `fastmot/models`. To convert YOLO to ONNX, use [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/blob/master/yolo/yolo_to_onnx.py) to be compatible with the TensorRT YOLO plugins.
 ### Add custom YOLOv3/v4
 1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/4e946b85381ad807d5456f2ad57d1274d0e72f3d/fastmot/models/yolo.py#L94
     ```
