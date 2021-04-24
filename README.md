@@ -29,7 +29,7 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 | 1 | 63.3% | 72.8% | 54.2% | 5821 | 867 | 261 |
 | 5 | 61.4% | 72.2% | 55.7% | 4517 | 778 | 302 |
 
-### FPS on MOT17 train/test set
+### FPS on MOT17 sequences
 | Sequence | Density | FPS |
 |:-------|:-------:|:-------:|
 | MOT17-13 | 5 - 30  | 38 |
