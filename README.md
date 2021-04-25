@@ -36,9 +36,9 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 | MOT17-04 | 30 - 50  | 22 |
 | MOT17-03 | 50 - 80  | 15 |
 
-Performance is evaluated with YOLOv4 using [py-motmetrics](https://github.com/cheind/py-motmetrics). FPS results are obtained on Jetson Xavier NX. FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Challenge. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS is expected to be much higher.
+Performance is evaluated with YOLOv4 using [py-motmetrics](https://github.com/cheind/py-motmetrics). Note that neither YOLOv4 nor OSNet was trained or finetuned on the MOT20 dataset, so train set results should generalize well. FPS results are obtained on Jetson Xavier NX. 
 
-This means even though FastMOT runs much faster, it is still highly accurate. More lightweight detector/feature extractor can be used to get more speedup. Note that plain Deep SORT + YOLO struggles to run in real-time on most edge devices and desktop machines.
+FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Challenge. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS is expected to be much higher. More lightweight models can be used to achieve better tradeoff.
 
 ## Requirements
 - CUDA >= 10
