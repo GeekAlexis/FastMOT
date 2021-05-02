@@ -75,7 +75,7 @@ class MultiTracker:
             state = self.kf.initiate(det.tlbr)
             new_trk = Track(0, self.next_id, det.tlbr, state, det.label)
             self.tracks[self.next_id] = new_trk
-            LOGGER.debug(f"{'Detected:':<15}{new_trk}")
+            LOGGER.debug(f"{'Detected:':<14}{new_trk}")
             self.next_id += 1
 
     def track(self, frame):
@@ -122,7 +122,7 @@ class MultiTracker:
             track.update(next_tlbr, (mean, cov))
             if iom(next_tlbr, self.frame_rect) < 0.5:
                 if track.confirmed:
-                    LOGGER.info(f"{'Out:':<15}{track}")
+                    LOGGER.info(f"{'Out:':<14}{track}")
                     self._mark_lost(trk_id)
                 else:
                     del self.tracks[trk_id]
@@ -179,9 +179,9 @@ class MultiTracker:
             next_tlbr = as_rect(mean[:4])
             track.update(next_tlbr, (mean, cov), embeddings[det_id])
             if track.hits == 1:
-                LOGGER.info(f"{'Found:':<15}{track}")
+                LOGGER.info(f"{'Found:':<14}{track}")
             if iom(next_tlbr, self.frame_rect) < 0.5:
-                LOGGER.info(f"{'Out:':<15}{track}")
+                LOGGER.info(f"{'Out:':<14}{track}")
                 self._mark_lost(trk_id)
             else:
                 updated.append(trk_id)
@@ -190,7 +190,7 @@ class MultiTracker:
         for trk_id, det_id in reid_matches:
             track = self.lost[trk_id]
             det = detections[det_id]
-            LOGGER.info(f"{'Re-identified:':<15}{track}")
+            LOGGER.info(f"{'Reidentified:':<14}{track}")
             state = self.kf.initiate(det.tlbr)
             track.reactivate(frame_id, det.tlbr, state, embeddings[det_id])
             self.tracks[trk_id] = track
@@ -201,12 +201,12 @@ class MultiTracker:
         for trk_id in u_trk_ids:
             track = self.tracks[trk_id]
             if not track.confirmed:
-                LOGGER.debug(f"{'Unconfirmed:':<15}{track}")
+                LOGGER.debug(f"{'Unconfirmed:':<14}{track}")
                 del self.tracks[trk_id]
                 continue
             track.mark_missed()
             if track.age > self.max_age:
-                LOGGER.info(f"{'Lost:':<15}{track}")
+                LOGGER.info(f"{'Lost:':<14}{track}")
                 self._mark_lost(trk_id)
             else:
                 aged.append(trk_id)
@@ -217,7 +217,7 @@ class MultiTracker:
             state = self.kf.initiate(det.tlbr)
             new_trk = Track(frame_id, self.next_id, det.tlbr, state, det.label)
             self.tracks[self.next_id] = new_trk
-            LOGGER.debug(f"{'Detected:':<15}{new_trk}")
+            LOGGER.debug(f"{'Detected:':<14}{new_trk}")
             updated.append(self.next_id)
             self.next_id += 1
 
@@ -282,7 +282,7 @@ class MultiTracker:
             else:
                 dup_ids.add(updated_id)
         for trk_id in dup_ids:
-            LOGGER.debug(f"{'Duplicate:':<15}{self.tracks[trk_id]}")
+            LOGGER.debug(f"{'Duplicate:':<14}{self.tracks[trk_id]}")
             del self.tracks[trk_id]
 
     @staticmethod
