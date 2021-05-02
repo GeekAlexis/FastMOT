@@ -171,7 +171,7 @@ class SSDDetector(Detector):
         return dets[keep]
 
 
-class YoloDetector(Detector):
+class YOLODetector(Detector):
     def __init__(self, size, config):
         super().__init__(size)
         self.model = getattr(models, config['model'])

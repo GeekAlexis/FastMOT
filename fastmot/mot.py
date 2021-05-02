@@ -2,7 +2,7 @@ from enum import Enum
 import logging
 import cv2
 
-from .detector import SSDDetector, YoloDetector, PublicDetector
+from .detector import SSDDetector, YOLODetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import Profiler
@@ -48,7 +48,7 @@ class MOT:
         if self.detector_type == DetectorType.SSD:
             self.detector = SSDDetector(self.size, config['ssd_detector'])
         elif self.detector_type == DetectorType.YOLO:
-            self.detector = YoloDetector(self.size, config['yolo_detector'])
+            self.detector = YOLODetector(self.size, config['yolo_detector'])
         elif self.detector_type == DetectorType.PUBLIC:
             self.detector = PublicDetector(self.size, self.detector_frame_skip,
                                            config['public_detector'])
