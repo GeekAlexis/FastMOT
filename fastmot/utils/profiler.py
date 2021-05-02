@@ -24,5 +24,5 @@ class Profiler:
     def get_avg_millis(cls, name):
         call_count = cls.__call_count[name]
         if call_count == 0:
-            return 0
+            return 0.
         return cls.__time_elapsed[name] * 1000 / call_count
