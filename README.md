@@ -58,6 +58,7 @@ Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-nativ
   $ docker build -t fastmot:latest .
   $ docker run --rm --gpus all -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY fastmot:latest
   ```
+
 ### Install for Jetson Nano/TX2/Xavier NX/Xavier
 Make sure to have [JetPack 4.4+](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
   ```
