@@ -52,16 +52,17 @@ FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Chal
 - Numba == 0.48
 - cython-bbox
 
-### Install for Jetson (TX2/Xavier NX/Xavier)
-Make sure to have [JetPack 4.4+](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
-  ```
-  $ scripts/install_jetson.sh
-  ```
 ### Install for Ubuntu 18.04
 Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires an NVIDIA Driver version >= 450. Build and run the docker image:
   ```
   $ docker build -t fastmot:latest .
   $ docker run --rm --gpus all -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY fastmot:latest
+  ```
+
+### Install for Jetson Nano/TX2/Xavier NX/Xavier
+Make sure to have [JetPack 4.4+](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
+  ```
+  $ scripts/install_jetson.sh
   ```
 ### Download models
 This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
