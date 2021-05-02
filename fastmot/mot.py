@@ -113,12 +113,13 @@ class MOT:
 
     @staticmethod
     def print_timing_info():
-        LOGGER.debug('===============Timing Stats===============')
-        LOGGER.debug('track time:            %.3f ms', Profiler.get_avg_millis('track'))
-        LOGGER.debug('feature extract time:  %.3f ms', Profiler.get_avg_millis('extract'))
-        LOGGER.debug('preprocess time:       %.3f ms', Profiler.get_avg_millis('preproc'))
-        LOGGER.debug('detect time:           %.3f ms', Profiler.get_avg_millis('detect'))
-        LOGGER.debug('association time:      %.3f ms', Profiler.get_avg_millis('assoc'))
+        LOGGER.debug('=================Timing Stats=================')
+        LOGGER.debug(f"{'track time:':<37}{Profiler.get_avg_millis('track'):>6.3f} ms")
+        LOGGER.debug(f"{'preprocess time:':<37}{Profiler.get_avg_millis('preproc'):>6.3f} ms")
+        LOGGER.debug(f"{'detect/flow time:':<37}{Profiler.get_avg_millis('detect'):>6.3f} ms")
+        LOGGER.debug(f"{'feature extract/kalman filter time:':<37}"
+                     f"{Profiler.get_avg_millis('extract'):>6.3f} ms")
+        LOGGER.debug(f"{'association time:':<37}{Profiler.get_avg_millis('assoc'):>6.3f} ms")
 
     def _draw(self, frame, detections):
         draw_tracks(frame, self.visible_tracks, show_flow=self.verbose)

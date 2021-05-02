@@ -22,8 +22,8 @@ class Track:
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
     def __str__(self):
-        return "%s %d at %s" % (LABEL_MAP[self.label], self.trk_id,
-                                get_center(self.tlbr).astype(int))
+        coord = get_center(self.tlbr).astype(int)
+        return f'{LABEL_MAP[self.label]} {self.trk_id:>3} at ({coord[0]:>4}, {coord[1]:>3})'
 
     def __repr__(self):
         return self.__str__()

@@ -68,6 +68,10 @@ class InferenceBackend:
         self.context = self.engine.create_execution_context()
         self.stream = cuda.Stream()
 
+        # timing events
+        self.start = cuda.Event()
+        self.end = cuda.Event()
+
     @property
     def input_handle(self):
         return self.input.host
@@ -81,6 +85,7 @@ class InferenceBackend:
         return self.synchronize()
 
     def infer_async(self):
+        self.start.record(self.stream)
         cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
         if self.engine.has_implicit_batch_dimension:
             self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings,
@@ -89,7 +94,12 @@ class InferenceBackend:
             self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
         for out in self.outputs:
             cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
+        self.end.record(self.stream)
 
     def synchronize(self):
         self.stream.synchronize()
         return [out.host for out in self.outputs]
+
+    def get_infer_time(self):
+        self.end.synchronize()
+        return self.start.time_till(self.end)
