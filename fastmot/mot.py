@@ -1,11 +1,11 @@
 from enum import Enum
 import logging
-import time
 import cv2
 
 from .detector import SSDDetector, YoloDetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
+from .utils import Profiler
 from .utils.visualization import draw_tracks, draw_detections
 from .utils.visualization import draw_flow_bboxes, draw_background_flow
 
@@ -58,14 +58,8 @@ class MOT:
         self.tracker = MultiTracker(self.size, cap_dt, self.extractor.metric,
                                     config['multi_tracker'])
 
-        # reset counters
+        # reset counter
         self.frame_count = 0
-        self.detector_frame_count = 0
-        self.preproc_time = 0
-        self.detector_time = 0
-        self.extractor_time = 0
-        self.association_time = 0
-        self.tracker_time = 0
 
     @property
     def visible_tracks(self):
@@ -93,30 +87,38 @@ class MOT:
             self.tracker.initiate(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
-                tic = time.perf_counter()
-                self.detector.detect_async(frame)
-                self.preproc_time += time.perf_counter() - tic
-                tic = time.perf_counter()
-                self.tracker.compute_flow(frame)
-                detections = self.detector.postprocess()
-                self.detector_time += time.perf_counter() - tic
-                tic = time.perf_counter()
-                self.extractor.extract_async(frame, detections)
-                self.tracker.apply_kalman()
-                embeddings = self.extractor.postprocess()
-                self.extractor_time += time.perf_counter() - tic
-                tic = time.perf_counter()
-                self.tracker.update(self.frame_count, detections, embeddings)
-                self.association_time += time.perf_counter() - tic
-                self.detector_frame_count += 1
+                with Profiler('preproc'):
+                    self.detector.detect_async(frame)
+
+                with Profiler('detect'):
+                    with Profiler('track'):
+                        self.tracker.compute_flow(frame)
+                    detections = self.detector.postprocess()
+
+                with Profiler('extract'):
+                    self.extractor.extract_async(frame, detections)
+                    with Profiler('track', aggregate=True):
+                        self.tracker.apply_kalman()
+                    embeddings = self.extractor.postprocess()
+
+                with Profiler('assoc'):
+                    self.tracker.update(self.frame_count, detections, embeddings)
             else:
-                tic = time.perf_counter()
-                self.tracker.track(frame)
-                self.tracker_time += time.perf_counter() - tic
+                with Profiler('track'):
+                    self.tracker.track(frame)
 
         if self.draw:
             self._draw(frame, detections)
         self.frame_count += 1
+
+    @staticmethod
+    def print_timing_info():
+        LOGGER.debug('===============Timing Stats===============')
+        LOGGER.debug('track time:            %.3f ms', Profiler.get_avg_millis('track'))
+        LOGGER.debug('feature extract time:  %.3f ms', Profiler.get_avg_millis('extract'))
+        LOGGER.debug('preprocess time:       %.3f ms', Profiler.get_avg_millis('preproc'))
+        LOGGER.debug('detect time:           %.3f ms', Profiler.get_avg_millis('detect'))
+        LOGGER.debug('association time:      %.3f ms', Profiler.get_avg_millis('assoc'))
 
     def _draw(self, frame, detections):
         draw_tracks(frame, self.visible_tracks, show_flow=self.verbose)
