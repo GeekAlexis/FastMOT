@@ -53,7 +53,7 @@ FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Chal
 - cython-bbox
 
 ### Install for Jetson (TX2/Xavier NX/Xavier)
-Make sure to have [JetPack 4.4](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
+Make sure to have [JetPack 4.4+](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
   ```
   $ scripts/install_jetson.sh
   ```
