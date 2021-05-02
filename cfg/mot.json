@@ -70,7 +70,7 @@
                 "ransac_conf": 0.99,
                 "max_error": 100,
                 "inlier_thresh": 4,
-                "bg_feat_thresh": 15,
+                "bg_feat_thresh": 10,
                 "target_feat_params": {
                     "maxCorners": 1000,
                     "qualityLevel": 0.06,
