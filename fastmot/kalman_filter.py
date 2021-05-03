@@ -247,7 +247,7 @@ class KalmanFilter:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _predict(mean, covariance, motion_mat, acc_cov, std_factor_acc, std_offset_acc):
-        size = max(mean[2:4] - mean[:2] + 1) # max(w, h)
+        size = max(get_size(mean[:4])) # max(w, h)
         std = std_factor_acc * size + std_offset_acc
         motion_cov = acc_cov * std**2
 
@@ -260,7 +260,7 @@ class KalmanFilter:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _project(mean, covariance, meas_mat, std_factor, min_std, multiplier):
-        w, h = mean[2:4] - mean[:2] + 1
+        w, h = get_size(mean[:4])
         std = np.array([
             max(std_factor[0] * w, min_std[0]),
             max(std_factor[1] * h, min_std[1]),
