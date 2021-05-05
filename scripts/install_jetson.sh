@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# Jetpack 4.4 (OpenCV, CUDA, TensorRT) is required before running this script
 DIR=$HOME
+
+# Jetpack 4.4+ (OpenCV, CUDA, TensorRT) is required
+JP_VERSION=45
+TF_VERSION=1.15.4
+NV_VERSION=20.12
 
 set -e
 
@@ -14,8 +18,9 @@ source ~/.bashrc
 sudo apt-get update
 sudo apt-get install python3-pip libhdf5-serial-dev hdf5-tools libcanberra-gtk-module
 sudo -H pip3 install cython
-sudo -H pip3 install numpy pycuda cython-bbox
-sudo -H pip3 install --no-cache-dir --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v44 tensorflow==1.15.2+nv20.4
+sudo -H pip3 install numpy cython-bbox
+sudo -H pip3 install --global-option=build_ext --global-option="-I/usr/local/cuda/include" --global-option="-L/usr/local/cuda/lib64" pycuda
+sudo -H pip3 install --no-cache-dir --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v$JP_VERSION tensorflow==$TF_VERSION+nv$NV_VERSION
 
 # install scipy
 sudo apt-get install libatlas-base-dev gfortran
