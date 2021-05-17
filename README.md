@@ -169,8 +169,7 @@ FastMOT supports multi-class tracking and can be easily extended to custom class
  ```bibtex
 @software{yukai_yang_2020_4294717,
   author       = {Yukai Yang},
-  title        = {{FastMOT: High-Performance Multiple Object Tracking
-                   Based on YOLO, Deep SORT, and Optical Flow}},
+  title        = {{FastMOT: High-Performance Multiple Object Tracking Based on Deep SORT and KLT}},
   month        = nov,
   year         = 2020,
   publisher    = {Zenodo},
