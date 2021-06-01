@@ -6,7 +6,7 @@
 ## News
   - (2021.2.13) Support Scaled-YOLOv4 models
   - (2021.1.3) Add DIoU-NMS for YOLO (+1% MOTA)
-  - (2020.11.28) Docker container provided on Ubuntu 18.04
+  - (2020.11.28) Docker container provided for Ubuntu
 
 ## Description
 FastMOT is a custom multiple object tracker that implements:
@@ -58,7 +58,7 @@ Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-nativ
   $ docker build -t fastmot:latest .
   $ docker run --rm --gpus all -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY fastmot:latest
   ```
-
+For Ubuntu 20.04, set `TRT_IMAGE_VERSION=21.05` [here](https://github.com/GeekAlexis/FastMOT/blob/2baa6e7cf00e7ab2f7796b2518b5e3791b28df78/Dockerfile#L1) and driver version >= 465.19.01 is required
 ### Install for Jetson Nano/TX2/Xavier NX/Xavier
 Make sure to have [JetPack 4.4+](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
   ```
