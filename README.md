@@ -38,7 +38,7 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 
 Performance is evaluated with YOLOv4 using [py-motmetrics](https://github.com/cheind/py-motmetrics). Note that neither YOLOv4 nor OSNet was trained or finetuned on the MOT20 dataset, so train set results should generalize well. FPS results are obtained on Jetson Xavier NX. 
 
-FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Challenge. Tracking speed can reach up to **38 FPS** depending on the number of objects. On a desktop CPU/GPU, FPS is expected to be much higher. More lightweight models can be used to achieve better tradeoff.
+FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Challenge. Tracking speed can reach up to **38 FPS** depending on the number of objects. More lightweight models are recommended to achieve better tradeoff in a more constrained device like Jetson Nano. On a desktop CPU/GPU, FPS is expected to be in the range of 50 - 100. 
 
 ## Requirements
 - CUDA >= 10
