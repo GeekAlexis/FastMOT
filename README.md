@@ -52,58 +52,62 @@ FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Chal
 - Numba == 0.48
 - cython-bbox
 
-### Install for Ubuntu 18.04
-Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires an NVIDIA Driver version >= 450. Build and run the docker image:
-  ```
+### Install for x86 Ubuntu
+Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires an NVIDIA Driver version >= 450 for Ubuntu 18.04 and >= 465.19.01 for Ubuntu 20.04. Build and run the docker image:
+  ```bash
+  # For Ubuntu 20.04, add --build-arg TRT_IMAGE_VERSION=21.05
   $ docker build -t fastmot:latest .
-  $ docker run --rm --gpus all -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY fastmot:latest
+  
+  # Run xhost + first if you have issues with display
+  $ docker run --rm --gpus all -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -e TZ=$(cat /etc/timezone) fastmot:latest
+  
+  # Save changes in the docker (e.g. downloaded models, executables, tensorRT engines)
+  $ docker commit $(docker ps -q -l) fastmot:latest
   ```
-For Ubuntu 20.04, set `TRT_IMAGE_VERSION=21.05` [here](https://github.com/GeekAlexis/FastMOT/blob/2baa6e7cf00e7ab2f7796b2518b5e3791b28df78/Dockerfile#L1) and driver version >= 465.19.01 is required
 ### Install for Jetson Nano/TX2/Xavier NX/Xavier
 Make sure to have [JetPack 4.4+](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
-  ```
+  ```bash
   $ scripts/install_jetson.sh
   ```
 ### Download models
 This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
-  ```
+  ```bash
   $ scripts/download_models.sh
   ```
 ### Build YOLOv4 TensorRT plugin
-Modify `compute` [here](https://github.com/GeekAlexis/FastMOT/blob/2296fe414ca6a9515accb02ff88e8aa563ed2a05/fastmot/plugins/Makefile#L21) to match your [GPU compute capability](https://developer.nvidia.com/cuda-gpus#compute) for x86 PC
-  ```
+  ```bash
   $ cd fastmot/plugins
   $ make
   ```
 ### Download VOC dataset for INT8 calibration
-Only required if you want to use SSD
-  ```
+Only required for SSD (not supported on Ubuntu 20.04)
+  ```bash
   $ scripts/download_data.sh
   ```
 
 ## Usage
 - USB webcam:
-  ```
+  ```bash
   $ python3 app.py --input_uri /dev/video0 --mot
   ```
 - MIPI CSI camera:
-  ```
+  ```bash
   $ python3 app.py --input_uri csi://0 --mot
   ```
 - RTSP stream:
-  ```
+  ```bash
   $ python3 app.py --input_uri rtsp://<user>:<password>@<ip>:<port>/<path> --mot
   ```
 - HTTP stream:
-  ```
+  ```bash
   $ python3 app.py --input_uri http://<user>:<password>@<ip>:<port>/<path> --mot
   ```
 - Image sequence:
-  ```
+  ```bash
   $ python3 app.py --input_uri img_%06d.jpg --mot
   ```
 - Video file:
-  ```
+  ```bash
   $ python3 app.py --input_uri video.mp4 --mot
   ```
 - Use `--gui` to visualize and `--output_uri` to save output
@@ -113,7 +117,7 @@ Only required if you want to use SSD
 <summary> More options can be configured in cfg/mot.json </summary>
 
   - Set `resolution` and `frame_rate` that corresponds to the source data or camera configuration (optional). They are required for image sequence, camera sources, and MOT Challenge evaluation. List all configurations for your USB/CSI camera:
-    ```
+    ```bash
     $ v4l2-ctl -d /dev/video0 --list-formats-ext
     ```
   - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
