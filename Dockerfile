@@ -4,12 +4,18 @@ FROM nvcr.io/nvidia/tensorrt:${TRT_IMAGE_VERSION}-py3
 ARG OPENCV_VERSION=4.1.1
 ARG APP_DIR=/usr/src/app
 ARG SCRIPT_DIR=/opt/tensorrt/python
-ENV HOME ${APP_DIR}
+ARG DEBIAN_FRONTEND=noninteractive
 
-# install OpenCV and FastMOT dependencies
+ENV HOME=${APP_DIR}
+ENV TZ=America/Los_Angeles
+
+ENV OPENBLAS_MAIN_FREE=1
+ENV OPENBLAS_NUM_THREADS=1
+
+# Install OpenCV and FastMOT dependencies
 RUN apt-get -y update && \
     apt-get install -y --no-install-recommends \
-    wget unzip \
+    wget unzip tzdata \
     build-essential cmake pkg-config \
     libgtk-3-dev libcanberra-gtk3-module \
     libjpeg-dev libpng-dev libtiff-dev \
@@ -27,7 +33,7 @@ RUN apt-get -y update && \
     libtbb2 libtbb-dev libdc1394-22-dev && \
     pip install --no-cache-dir numpy==1.18.0
 
-# build OpenCV
+# Build OpenCV
 WORKDIR ${HOME}
 RUN wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip && \
     unzip ${OPENCV_VERSION}.zip && rm ${OPENCV_VERSION}.zip && \
@@ -36,8 +42,9 @@ RUN wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip && \
     unzip ${OPENCV_VERSION}.zip && rm ${OPENCV_VERSION}.zip && \
     mv opencv_contrib-${OPENCV_VERSION} OpenCV/opencv_contrib
 
+# If you have issues with GStreamer, set -DWITH_GSTREAMER=OFF and -DWITH_FFMPEG=ON
 WORKDIR ${HOME}/OpenCV/build
-RUN cmake \ 
+RUN cmake \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DCMAKE_INSTALL_PREFIX=/usr/local \
     -DOPENCV_EXTRA_MODULES_PATH=${HOME}/OpenCV/opencv_contrib/modules \
@@ -62,9 +69,18 @@ RUN cmake \
     rm -rf /var/lib/apt/lists/* && \
     apt-get autoremove
 
-# install Python dependencies
+# Install Python dependencies
 WORKDIR ${APP_DIR}/FastMOT
 COPY . .
-RUN dpkg -i ${SCRIPT_DIR}/*-tf_*.deb && \
-    pip install --no-cache-dir cython && \
-    pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --no-cache-dir cython
+
+# tensorflow is not supported in 21.05
+RUN if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
+        pip install --no-cache-dir -r <(grep -ivE "tensorflow" requirements.txt); \
+    else \
+        dpkg -i ${SCRIPT_DIR}/*-tf_*.deb && pip install --no-cache-dir -r requirements.txt; \
+    fi
+
+# Use the following command to save changes in the image
+# docker commit $(docker ps -q -l) fastmot:latest
