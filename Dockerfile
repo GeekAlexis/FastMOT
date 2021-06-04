@@ -73,13 +73,14 @@ RUN cmake \
 WORKDIR ${APP_DIR}/FastMOT
 COPY . .
 
-RUN pip install --no-cache-dir cython
-
 # tensorflow is not supported in 21.05
 RUN if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
+        pip install --no-cache-dir cython && \
         pip install --no-cache-dir -r <(grep -ivE "tensorflow" requirements.txt); \
     else \
-        dpkg -i ${SCRIPT_DIR}/*-tf_*.deb && pip install --no-cache-dir -r requirements.txt; \
+        dpkg -i ${SCRIPT_DIR}/*-tf_*.deb && \
+        pip install --no-cache-dir cython && \
+        pip install --no-cache-dir -r requirements.txt; \
     fi
 
 # Stop the container (changes are kept)
