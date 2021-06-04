@@ -71,7 +71,7 @@ RUN cmake \
 
 # Install Python dependencies
 WORKDIR ${APP_DIR}/FastMOT
-COPY . .
+COPY requirements.txt .
 
 # tensorflow is not supported in 21.05
 RUN if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
@@ -83,14 +83,16 @@ RUN if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
         pip install --no-cache-dir -r requirements.txt; \
     fi
 
+# ------------------------------------  Extras Below  ------------------------------------
+
 # Stop the container (changes are kept)
-# docker stop $(docker ps -q -l)
+# docker stop $(docker ps -ql)
 
 # Start the container
-# docker start -ai $(docker ps -q -l)
+# docker start -ai $(docker ps -ql)
 
 # Delete the container
-# docker rm $(docker ps -q -l)
+# docker rm $(docker ps -ql)
 
-# Save downloaded models and tensorRT engines before deleting the container
-# docker commit $(docker ps -q -l) fastmot:latest
+# Save changes before deleting the container
+# docker commit $(docker ps -ql) fastmot:latest
