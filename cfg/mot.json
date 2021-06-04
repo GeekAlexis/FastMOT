@@ -56,7 +56,7 @@
                 "min_std_det": [4.0, 4.0],
                 "min_std_flow": [5.0, 5.0],
                 "init_pos_weight": 5,
-                "init_vel_weight": 10,
+                "init_vel_weight": 15,
                 "vel_coupling": 0.6,
                 "vel_half_life": 2
             },

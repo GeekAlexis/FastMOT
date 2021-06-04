@@ -82,5 +82,11 @@ RUN if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
         dpkg -i ${SCRIPT_DIR}/*-tf_*.deb && pip install --no-cache-dir -r requirements.txt; \
     fi
 
-# Use the following command to save changes in the image
+# Stop the container (changes are kept)
+# docker stop $(docker ps -q -l)
+
+# Delete the container
+# docker rm $(docker ps -q -l)
+
+# Save downloaded models and tensorRT engines before deleting the container
 # docker commit $(docker ps -q -l) fastmot:latest
