@@ -85,6 +85,9 @@ RUN if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
 # Stop the container (changes are kept)
 # docker stop $(docker ps -q -l)
 
+# Start the container
+# docker start -ai $(docker ps -q -l)
+
 # Delete the container
 # docker rm $(docker ps -q -l)
 
