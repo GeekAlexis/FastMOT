@@ -16,9 +16,9 @@ FastMOT is a custom multiple object tracker that implements:
   - KLT optical flow tracking
   - Camera motion compensation
 
-Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT unusable for real-time applications. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
+Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT unusable for real-time applications. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson. It also allows tuning the speed-accuracy tradeoff without a lightweight model.
 
-To achieve faster processing, FastMOT only runs the detector and feature extractor every N frames. KLT is used to fill in the gaps. YOLOv4 was trained on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow.FastMOT also re-identifies objects that moved out of frame and will keep the same IDs.
+To achieve faster processing, FastMOT only runs the detector and feature extractor every N frames. KLT is used to fill in the gaps. YOLOv4 was trained on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow. FastMOT also re-identifies objects that moved out of frame and will keep the same IDs.
 
 Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba.
 
@@ -56,56 +56,56 @@ FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Chal
 Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires an NVIDIA Driver version >= 450 for Ubuntu 18.04 and >= 465.19.01 for Ubuntu 20.04. Build and run the docker image:
   ```bash
   # For Ubuntu 20.04, add --build-arg TRT_IMAGE_VERSION=21.05
-  $ docker build -t fastmot:latest .
+  docker build -t fastmot:latest .
   
   # Run xhost + first if you have issues with display
-  $ docker run --gpus all --rm -it -v $(pwd):/usr/src/app/FastMOT -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -e TZ=$(cat /etc/timezone) fastmot:latest
+  docker run --gpus all --rm -it -v $(pwd):/usr/src/app/FastMOT -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -e TZ=$(cat /etc/timezone) fastmot:latest
   ```
 ### Install for Jetson Nano/TX2/Xavier NX/Xavier
 Make sure to have [JetPack 4.4+](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
   ```bash
-  $ scripts/install_jetson.sh
+  ./scripts/install_jetson.sh
   ```
 ### Download models
 This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
   ```bash
-  $ scripts/download_models.sh
+  ./scripts/download_models.sh
   ```
 ### Build YOLOv4 TensorRT plugin
   ```bash
-  $ cd fastmot/plugins
-  $ make
+  cd fastmot/plugins
+  make
   ```
 ### Download VOC dataset for INT8 calibration
 Only required for SSD (not supported on Ubuntu 20.04)
   ```bash
-  $ scripts/download_data.sh
+  ./scripts/download_data.sh
   ```
 
 ## Usage
 - USB webcam:
   ```bash
-  $ python3 app.py --input_uri /dev/video0 --mot
+  python3 app.py --input_uri /dev/video0 --mot
   ```
 - MIPI CSI camera:
   ```bash
-  $ python3 app.py --input_uri csi://0 --mot
+  python3 app.py --input_uri csi://0 --mot
   ```
 - RTSP stream:
   ```bash
-  $ python3 app.py --input_uri rtsp://<user>:<password>@<ip>:<port>/<path> --mot
+  python3 app.py --input_uri rtsp://<user>:<password>@<ip>:<port>/<path> --mot
   ```
 - HTTP stream:
   ```bash
-  $ python3 app.py --input_uri http://<user>:<password>@<ip>:<port>/<path> --mot
+  python3 app.py --input_uri http://<user>:<password>@<ip>:<port>/<path> --mot
   ```
 - Image sequence:
   ```bash
-  $ python3 app.py --input_uri img_%06d.jpg --mot
+  python3 app.py --input_uri img_%06d.jpg --mot
   ```
 - Video file:
   ```bash
-  $ python3 app.py --input_uri video.mp4 --mot
+  python3 app.py --input_uri video.mp4 --mot
   ```
 - Use `--gui` to visualize and `--output_uri` to save output
 - To disable the GStreamer backend, set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11)
@@ -115,7 +115,7 @@ Only required for SSD (not supported on Ubuntu 20.04)
 
   - Set `resolution` and `frame_rate` that corresponds to the source data or camera configuration (optional). They are required for image sequence, camera sources, and MOT Challenge evaluation. List all configurations for your USB/CSI camera:
     ```bash
-    $ v4l2-ctl -d /dev/video0 --list-formats-ext
+    v4l2-ctl -d /dev/video0 --list-formats-ext
     ```
   - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
   - To change classes, set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
