@@ -18,16 +18,16 @@ FastMOT is a custom multiple object tracker that implements:
 
 Deep learning models are usually the bottleneck in Deep SORT, making Deep SORT unusable for real-time applications. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson. It also provides enough flexibility to tune the speed-accuracy tradeoff without a lightweight model.
 
-To achieve faster processing, FastMOT only runs the detector and feature extractor every N frames. Optical flow is used to fill in the gaps. YOLOv4 was trained on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow. OSNet outperforms the original feature extractor in Deep SORT. FastMOT also re-identifies targets that moved out of frame and will keep the same IDs. 
+To achieve faster processing, FastMOT only runs the detector and feature extractor every N frames. KLT is used to fill in the gaps. YOLOv4 was trained on CrowdHuman (82% mAP@0.5) while SSD's are pretrained COCO models from TensorFlow.FastMOT also re-identifies objects that moved out of frame and will keep the same IDs.
 
 Both detector and feature extractor use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including Kalman filter, optical flow, and data association, are optimized using Numba.
 
 ## Performance
 ### Results on MOT20 train set
-| Detector Skip | MOTA | MOTP | IDF1 | IDS | MT | ML |
+| Detector Skip | MOTA | IDF1 | HOTA | MOTP | MT | ML |
 |:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-| N = 1 | 63.3% | 72.8% | 54.2% | 5821 | 867 | 261 |
-| N = 5 | 61.4% | 72.2% | 55.7% | 4517 | 778 | 302 |
+| N = 1 | 66.8% | 56.4% | 45.0% | 79.3% | 912 | 274 |
+| N = 5 | 65.1% | 57.1% | 44.3% | 77.9% | 860 | 317 |
 
 ### FPS on MOT17 sequences
 | Sequence | Density | FPS |
@@ -36,9 +36,9 @@ Both detector and feature extractor use the **TensorRT** backend and perform asy
 | MOT17-04 | 30 - 50  | 22 |
 | MOT17-03 | 50 - 80  | 15 |
 
-Performance is evaluated with YOLOv4 using [py-motmetrics](https://github.com/cheind/py-motmetrics). Note that neither YOLOv4 nor OSNet was trained or finetuned on the MOT20 dataset, so train set results should generalize well. FPS results are obtained on Jetson Xavier NX. 
+Performance is evaluated with YOLOv4 using [TrackEval](https://github.com/JonathonLuiten/TrackEval). Note that neither YOLOv4 nor OSNet was trained or finetuned on the MOT20 dataset, so train set results should generalize well. FPS results are obtained on Jetson Xavier NX.
 
-FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Challenge. Tracking speed can reach up to **38 FPS** depending on the number of objects. More lightweight models are recommended to achieve better tradeoff in a more constrained device like Jetson Nano. On a desktop CPU/GPU, FPS is expected to be in the range of **50 - 150**. 
+FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Challenge. Tracking speed can reach up to **38 FPS** depending on the number of objects. Lighter models (e.g. YOLOv4-tiny) are recommended for more constrained devices like Jetson Nano. FPS is expected to be in the range of **50 - 150** on desktop CPU/GPU.
 
 ## Requirements
 - CUDA >= 10
