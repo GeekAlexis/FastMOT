@@ -53,19 +53,3 @@ class OSNet025(ReID):
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
     METRIC = 'euclidean'
-
-
-class OSNetAIN(ReID):
-    ENGINE_PATH = Path(__file__).parent / 'osnet_ain_ms.trt'
-    MODEL_PATH = Path(__file__).parent / 'osnet_ain_ms.onnx'
-    INPUT_SHAPE = (3, 256, 128)
-    OUTPUT_LAYOUT = 512
-    METRIC = 'cosine'
-
-
-class OSNet10(ReID):
-    ENGINE_PATH = Path(__file__).parent / 'osnet_x1_0_ms.trt'
-    MODEL_PATH = Path(__file__).parent / 'osnet_x1_0_ms.onnx'
-    INPUT_SHAPE = (3, 256, 128)
-    OUTPUT_LAYOUT = 512
-    METRIC = 'cosine'

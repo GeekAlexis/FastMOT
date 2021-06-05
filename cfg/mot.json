@@ -3,9 +3,6 @@
 
     "video_io": {
         "resolution": [1920, 1080],
-        "####resolution": [640, 480],
-        "#resolution": [1654, 1080],
-        "##resolution": [1173, 880],
         "frame_rate": 30,
         "buffer_size": 10
     },
@@ -46,8 +43,6 @@
             "motion_weight": 0.02,
             "max_feat_cost": 0.9,
             "max_reid_cost": 0.6,
-            "#max_feat_cost": 0.6,
-            "#max_reid_cost": 0.2,
             "iou_thresh": 0.4,
             "duplicate_iou": 0.8,
             "conf_thresh": 0.5,
