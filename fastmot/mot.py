@@ -67,7 +67,7 @@ class MOT:
         return [track for track in self.tracker.tracks.values()
                 if track.confirmed and track.active]
 
-    def initiate(self):
+    def reset(self):
         """
         Resets multiple object tracker.
         """

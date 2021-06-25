@@ -39,7 +39,8 @@ class MultiTracker:
         self.size = size
         self.metric = metric
         self.max_age = config['max_age']
-        self.age_factor = config['age_factor']
+        self.age_penalty = config['age_penalty']
+        self.age_weight = config['age_weight']
         self.motion_weight = config['motion_weight']
         self.max_feat_cost = config['max_feat_cost']
         self.max_reid_cost = config['max_reid_cost']
@@ -68,8 +69,9 @@ class MultiTracker:
         detections : recarray[DET_DTYPE]
             Record array of N detections.
         """
-        if self.tracks:
-            self.tracks.clear()
+        self.next_id = 1
+        self.tracks.clear()
+        self.lost.clear()
         self.flow.initiate(frame)
         for det in detections:
             state = self.kf.initiate(det.tlbr)
@@ -116,7 +118,7 @@ class MultiTracker:
                 flow_tlbr = self.flow_bboxes[trk_id]
                 # give large flow uncertainty for occluded tracks
                 # usually these with high age and low inlier ratio
-                std_multiplier = max(self.age_factor * track.age, 1) / track.inlier_ratio
+                std_multiplier = max(self.age_penalty * track.age, 1) / track.inlier_ratio
                 mean, cov = self.kf.update(mean, cov, flow_tlbr, MeasType.FLOW, std_multiplier)
             next_tlbr = as_rect(mean[:4])
             track.update(next_tlbr, (mean, cov))
@@ -239,8 +241,10 @@ class MultiTracker:
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
             motion_dist = self.kf.motion_distance(*track.state, detections.tlbr)
-            cost[i] = self._fuse_motion(cost[i], motion_dist, track.label, detections.label,
-                                        self.max_feat_cost, self.motion_weight)
+            normalized_age = track.age / self.max_age
+            cost[i] = self._fuse_motion(cost[i], motion_dist, detections.label, track.label,
+                                        normalized_age, self.max_feat_cost, self.motion_weight,
+                                        self.age_weight)
         return cost
 
     def _iou_cost(self, trk_ids, detections):
@@ -311,9 +315,9 @@ class MultiTracker:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _fuse_motion(cost, motion_dist, label, det_labels, max_cost, weight):
+    def _fuse_motion(cost, motion_dist, det_labels, label, age, max_cost, w1, w2):
         gate = (cost > max_cost) | (motion_dist > CHI_SQ_INV_95) | (label != det_labels)
-        cost = (1 - weight) * cost + weight * motion_dist
+        cost = cost + w1 * motion_dist + w2 * age
         cost[gate] = INF_COST
         return cost
 

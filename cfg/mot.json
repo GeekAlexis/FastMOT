@@ -39,7 +39,8 @@
 
         "multi_tracker": {
             "max_age": 6,
-            "age_factor": 2,
+            "age_penalty": 2,
+            "age_weight": 0.1,
             "motion_weight": 0.02,
             "max_feat_cost": 0.9,
             "max_reid_cost": 0.6,

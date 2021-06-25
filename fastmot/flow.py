@@ -67,6 +67,8 @@ class Flow:
         self.prev_frame_small = cv2.resize(self.prev_frame_gray, None,
                                            fx=self.opt_flow_scale_factor[0],
                                            fy=self.opt_flow_scale_factor[1])
+        self.bg_keypoints = np.empty((0, 2), np.float32)
+        self.prev_bg_keypoints = np.empty((0, 2), np.float32)
 
     def predict(self, frame, tracks):
         """
