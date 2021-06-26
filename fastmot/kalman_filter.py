@@ -22,14 +22,11 @@ class KalmanFilter:
     corners are coupled together to minimize drifting.
     Parameters
     ----------
-    dt : float
-        Time interval in seconds between each frame.
     config : Dict
-        Kalman Filter hyperparameters.
+        Kalman Filter parameters.
     """
 
-    def __init__(self, dt, config):
-        self.dt = dt
+    def __init__(self, config):
         self.std_factor_acc = config['std_factor_acc']
         self.std_offset_acc = config['std_offset_acc']
         self.std_factor_det = config['std_factor_det']
@@ -41,17 +38,29 @@ class KalmanFilter:
         self.vel_coupling = config['vel_coupling']
         self.vel_half_life = config['vel_half_life']
 
+        self.acc_cov = None
+        self.meas_mat = None
+        self.motion_mat = None
+
+    def set_dt(self, dt):
+        """
+        Creates process noise, measurement and transition matrices from dt.
+        Parameters
+        ----------
+        dt : float
+            Time interval in seconds between each frame.
+        """
         # acceleration-based process noise
-        self.acc_cov = np.diag([0.25 * self.dt**4] * 4 + [self.dt**2] * 4)
-        self.acc_cov[4:, :4] = np.eye(4) * (0.5 * self.dt**3)
-        self.acc_cov[:4, 4:] = np.eye(4) * (0.5 * self.dt**3)
+        self.acc_cov = np.diag([0.25 * dt**4] * 4 + [dt**2] * 4)
+        self.acc_cov[4:, :4] = np.eye(4) * (0.5 * dt**3)
+        self.acc_cov[:4, 4:] = np.eye(4) * (0.5 * dt**3)
 
         self.meas_mat = np.eye(4, 8)
         self.motion_mat = np.eye(8)
         for i in range(4):
-            self.motion_mat[i, i + 4] = self.vel_coupling * self.dt
-            self.motion_mat[i, (i + 2) % 4 + 4] = (1. - self.vel_coupling) * self.dt
-            self.motion_mat[i + 4, i + 4] = 0.5**(self.dt / self.vel_half_life)
+            self.motion_mat[i, i + 4] = self.vel_coupling * dt
+            self.motion_mat[i, (i + 2) % 4 + 4] = (1. - self.vel_coupling) * dt
+            self.motion_mat[i + 4, i + 4] = 0.5**(dt / self.vel_half_life)
 
     def initiate(self, det_meas):
         """

@@ -32,10 +32,10 @@ class MultiTracker:
         Feature distance metric to associate tracklets. Usually
         `euclidean` or `cosine`.
     config : Dict
-        Tracker hyperparameters.
+        Tracker parameters.
     """
 
-    def __init__(self, size, dt, metric, config):
+    def __init__(self, size, metric, config):
         self.size = size
         self.metric = metric
         self.max_age = config['max_age']
@@ -52,12 +52,22 @@ class MultiTracker:
         self.next_id = 1
         self.tracks = {}
         self.lost = OrderedDict()
-        self.kf = KalmanFilter(dt, config['kalman_filter'])
+        self.kf = KalmanFilter(config['kalman_filter'])
         self.flow = Flow(self.size, config['flow'])
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
         self.flow_bboxes = {}
         self.homography = None
+
+    def set_capture_dt(self, dt):
+        """
+        Set KalmanFilter dt parameter.
+        Parameters
+        ----------
+        dt : float
+            Time interval in seconds between each frame.
+        """
+        self.kf.set_dt(dt)
 
     def initiate(self, frame, detections):
         """

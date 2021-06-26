@@ -44,10 +44,13 @@ class InferenceBackend:
             raise RuntimeError('Unable to load the engine file')
         if self.engine.has_implicit_batch_dimension:
             assert self.batch_size <= self.engine.max_batch_size
+        self.context = self.engine.create_execution_context()
+        self.stream = cuda.Stream()
 
         # allocate buffers
         self.bindings = []
         self.outputs = []
+        self.input = None
         for binding in self.engine:
             shape = self.engine.get_binding_shape(binding)
             size = trt.volume(shape)
@@ -62,11 +65,11 @@ class InferenceBackend:
             if self.engine.binding_is_input(binding):
                 if not self.engine.has_implicit_batch_dimension:
                     assert self.batch_size == shape[0]
+                # expect one input
                 self.input = HostDeviceMem(host_mem, device_mem)
             else:
                 self.outputs.append(HostDeviceMem(host_mem, device_mem))
-        self.context = self.engine.create_execution_context()
-        self.stream = cuda.Stream()
+        assert self.input is not None
 
         # timing events
         self.start = cuda.Event()
