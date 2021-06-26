@@ -48,7 +48,7 @@ def main():
     if args.mot:
         draw = args.gui or args.output_uri is not None
         mot = fastmot.MOT(config['resize_to'], config['mot'], draw=draw, verbose=args.verbose)
-        mot.initiate(stream.cap_dt)
+        mot.reset(stream.cap_dt)
         if args.log is not None:
             Path(args.log).parent.mkdir(parents=True, exist_ok=True)
             log = open(args.log, 'w')

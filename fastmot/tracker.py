@@ -59,7 +59,7 @@ class MultiTracker:
         self.flow_bboxes = {}
         self.homography = None
 
-    def set_capture_dt(self, dt):
+    def reset_dt(self, dt):
         """
         Set KalmanFilter dt parameter.
         Parameters
@@ -67,7 +67,7 @@ class MultiTracker:
         dt : float
             Time interval in seconds between each frame.
         """
-        self.kf.set_dt(dt)
+        self.kf.reset_dt(dt)
 
     def initiate(self, frame, detections):
         """

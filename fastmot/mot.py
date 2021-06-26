@@ -64,16 +64,16 @@ class MOT:
         return [track for track in self.tracker.tracks.values()
                 if track.confirmed and track.active]
 
-    def initiate(self, cap_dt):
+    def reset(self, cap_dt):
         """
-        Resets multiple object tracker.
+        Resets multiple object tracker. Must be called before `step`.
         Parameters
         ----------
         cap_dt : float
             Time interval in seconds between each frame.
         """
         self.frame_count = 0
-        self.tracker.set_capture_dt(cap_dt)
+        self.tracker.reset_dt(cap_dt)
 
     def step(self, frame):
         """
