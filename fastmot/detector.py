@@ -1,6 +1,7 @@
 from collections import defaultdict
 from pathlib import Path
 import configparser
+import abc
 import numpy as np
 import numba as nb
 import cv2
@@ -19,7 +20,8 @@ DET_DTYPE = np.dtype(
 )
 
 
-class Detector:
+class Detector(abc.ABC):
+    @abc.abstractmethod
     def __init__(self, size):
         self.size = size
 
@@ -27,12 +29,14 @@ class Detector:
         self.detect_async(frame)
         return self.postprocess()
 
+    @abc.abstractmethod
     def detect_async(self, frame):
         """
         Asynchronous detection.
         """
         raise NotImplementedError
 
+    @abc.abstractmethod
     def postprocess(self):
         """
         Synchronizes, applies postprocessing, and returns a record array
