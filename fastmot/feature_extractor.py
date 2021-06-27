@@ -21,6 +21,9 @@ class FeatureExtractor:
         self.embeddings = []
         self.num_features = 0
 
+    def __del__(self):
+        self.pool.close()
+
     def __call__(self, frame, detections):
         self.extract_async(frame, detections)
         return self.postprocess()
