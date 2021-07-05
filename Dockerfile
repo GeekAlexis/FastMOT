@@ -32,7 +32,7 @@ RUN apt-get -y update && \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly \
     libtbb2 libtbb-dev libdc1394-22-dev && \
-    pip install --no-cache-dir numpy==1.18.0
+    pip install --no-cache-dir numpy
 
 # Build OpenCV
 WORKDIR ${HOME}
