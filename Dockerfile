@@ -1,6 +1,7 @@
 ARG TRT_IMAGE_VERSION=20.09
 FROM nvcr.io/nvidia/tensorrt:${TRT_IMAGE_VERSION}-py3
 
+ARG TRT_IMAGE_VERSION
 ARG OPENCV_VERSION=4.1.1
 ARG APP_DIR=/usr/src/app
 ARG SCRIPT_DIR=/opt/tensorrt/python
