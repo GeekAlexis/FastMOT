@@ -101,7 +101,7 @@ Only required for SSD (not supported on Ubuntu 20.04)
   ```
 - Image sequence:
   ```bash
-  python3 app.py --input_uri img_%06d.jpg --mot
+  python3 app.py --input_uri %06d.jpg --mot
   ```
 - Video file:
   ```bash

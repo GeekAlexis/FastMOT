@@ -1,1 +1,1 @@
-"yolo_layer.h" and "yolo_layer.cu" are taken from [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos).  The original code is under [MIT License](https://github.com/jkjung-avt/tensorrt_demos/blob/master/LICENSE).
+YOLO layer plugins are adapted from [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos). The original code is under [MIT License](https://github.com/jkjung-avt/tensorrt_demos/blob/master/LICENSE).

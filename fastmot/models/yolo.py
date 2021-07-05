@@ -22,9 +22,6 @@ class YOLO:
 
     @classmethod
     def add_plugin(cls, network):
-        """
-        Adapted from https://github.com/jkjung-avt/tensorrt_demos
-        """
         def get_plugin_creator(plugin_name):
             plugin_creators = trt.get_plugin_registry().plugin_creator_list
             for plugin_creator in plugin_creators:
@@ -107,6 +104,114 @@ class YOLOv4(YOLO):
     INPUT_SHAPE = (3, 512, 512)
     LAYER_FACTORS = [8, 16, 32]
     SCALES = [1.2, 1.1, 1.05]
-    ANCHORS = [[11, 22, 24, 60, 37, 116],
-               [54, 186, 69, 268, 89, 369],
-               [126, 491, 194, 314, 278, 520]]
+    ANCHORS = [[11,22, 24,60, 37,116],
+               [54,186, 69,268, 89,369],
+               [126,491, 194,314, 278,520]]
+
+
+"""
+The following models are supported but not provided.
+Modify paths, # classes, input shape, and anchors according to your Darknet cfg for custom model.
+"""
+
+class YOLOv4CSP(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov4-csp.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov4-csp.onnx'
+    NUM_CLASSES = 1
+    LETTERBOX = True
+    NEW_COORDS = True
+    INPUT_SHAPE = (3, 512, 512)
+    LAYER_FACTORS = [8, 16, 32]
+    SCALES = [2.0, 2.0, 2.0]
+    ANCHORS = [[12,16, 19,36, 40,28],
+               [36,75, 76,55, 72,146],
+               [142,110, 192,243, 459,401]]
+
+
+class YOLOv4xMish(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov4x-mish.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov4x-mish.onnx'
+    NUM_CLASSES = 1
+    LETTERBOX = True
+    NEW_COORDS = True
+    INPUT_SHAPE = (3, 640, 640)
+    LAYER_FACTORS = [8, 16, 32]
+    SCALES = [2.0, 2.0, 2.0]
+    ANCHORS = [[12,16, 19,36, 40,28],
+               [36,75, 76,55, 72,146],
+               [142,110, 192,243, 459,401]]
+
+
+class YOLOv4P5(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov4-p5.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov4-p5.onnx'
+    NUM_CLASSES = 1
+    LETTERBOX = True
+    NEW_COORDS = True
+    INPUT_SHAPE = (3, 896, 896)
+    LAYER_FACTORS = [8, 16, 32]
+    SCALES = [2.0, 2.0, 2.0]
+    ANCHORS = [[13,17, 31,25, 24,51, 61,45],
+               [48,102, 119,96, 97,189, 217,184],
+               [171,384, 324,451, 616,618, 800,800]]
+
+
+class YOLOv4P6(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov4-p6.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov4-p6.onnx'
+    NUM_CLASSES = 1
+    LETTERBOX = True
+    NEW_COORDS = True
+    INPUT_SHAPE = (3, 1280, 1280)
+    LAYER_FACTORS = [8, 16, 32, 64]
+    SCALES = [2.0, 2.0, 2.0, 2.0]
+    ANCHORS = [[13,17,  31,25,  24,51, 61,45],
+               [61,45,  48,102,  119,96,  97,189],
+               [97,189,  217,184,  171,384,  324,451],
+               [324,451, 545,357, 616,618, 1024,1024]]
+
+
+class YOLOv4Tiny(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov4-tiny.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov4-tiny.onnx'
+    NUM_CLASSES = 1
+    INPUT_SHAPE = (3, 416, 416)
+    LAYER_FACTORS = [32, 16]
+    SCALES = [1.05, 1.05]
+    ANCHORS = [[81,82, 135,169, 344,319],
+               [23,27, 37,58, 81,82]]
+
+
+class YOLOv3(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov3.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov3.onnx'
+    NUM_CLASSES = 1
+    INPUT_SHAPE = (3, 416, 416)
+    LAYER_FACTORS = [32, 16, 8]
+    SCALES = [1., 1.]
+    ANCHORS = [[116,90, 156,198, 373,326],
+               [30,61, 62,45, 59,119],
+               [10,13, 16,30, 33,23]]
+
+
+class YOLOv3SPP(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov3-spp.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov3-spp.onnx'
+    NUM_CLASSES = 1
+    INPUT_SHAPE = (3, 608, 608)
+    LAYER_FACTORS = [32, 16, 8]
+    SCALES = [1., 1.]
+    ANCHORS = [[116,90, 156,198, 373,326],
+               [30,61, 62,45, 59,119],
+               [10,13, 16,30, 33,23]]
+
+
+class YOLOv3Tiny(YOLO):
+    ENGINE_PATH = Path(__file__).parent / 'yolov3-tiny.trt'
+    MODEL_PATH = Path(__file__).parent /  'yolov3-tiny.onnx'
+    NUM_CLASSES = 1
+    INPUT_SHAPE = (3, 416, 416)
+    LAYER_FACTORS = [32, 16]
+    SCALES = [1., 1.]
+    ANCHORS = [[81,82, 135,169, 344,319],
+               [10,14, 23,27, 37,58]]

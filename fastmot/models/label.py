@@ -1,6 +1,7 @@
 """
 90-class COCO labels
-`unlabled` (id = 0) is replaced with `head` to work with CrowdHuman
+`unlabled` (id = 0) is replaced with `head` for CrowdHuman
+These are different from the default 80-class COCO labels used by YOLO
 """
 
 LABEL_MAP = (
