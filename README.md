@@ -4,8 +4,9 @@
 <img src="assets/dense_demo.gif" width="400"/> <img src="assets/aerial_demo.gif" width="400"/>
 
 ## News
-  - (2021.2.13) Support Scaled-YOLOv4 models
-  - (2021.1.3) Add DIoU-NMS for YOLO (+1% MOTA)
+  - (2021.7.4) Support yolov4-p5 and yolov4-p6
+  - (2021.2.13) Support Scaled-YOLOv4 (i.e. yolov4-csp and yolov4x-mish)
+  - (2021.1.3) Add DIoU-NMS for postprocessing
   - (2020.11.28) Docker container provided for Ubuntu
 
 ## Description
@@ -126,42 +127,41 @@ Only required for SSD (not supported on Ubuntu 20.04)
 </details>
 
  ## Track custom classes
-FastMOT supports multi-class tracking and can be easily extended to custom classes (e.g. vehicle). You need to train both YOLO and a ReID model on your object classes. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format and place it in fastmot/models. To convert YOLO to ONNX, use [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/blob/master/yolo/yolo_to_onnx.py) to be compatible with the TensorRT YOLO plugins.
-### Add custom YOLOv3/v4
-1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/4e946b85381ad807d5456f2ad57d1274d0e72f3d/fastmot/models/yolo.py#L94
+FastMOT supports multi-class tracking and can be easily extended to custom classes (e.g. vehicle). You need to train both YOLO and a ReID model on your object classes. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format and place it in fastmot/models. The TensorRT plugin adapted from [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/) is only compatible with Darknet.
+### Convert YOLO to ONNX
+1. Install ONNX version 1.4.1 (not the latest version)
+    ```bash
+    pip3 install onnx==1.4.1
     ```
-    ENGINE_PATH: path to TensorRT engine (converted at runtime)
-    MODEL_PATH: path to ONNX model
-    NUM_CLASSES: total number of classes
-    LETTERBOX: keep aspect ratio when resizing
-               For YOLOv4-csp/YOLOv4x-mish, set to True
-    NEW_COORDS: new_coords parameter for each yolo layer
-                For YOLOv4-csp/YOLOv4x-mish, set to True
-    INPUT_SHAPE: input size in the format "(channel, height, width)"
+2. Convert using your custom cfg and weights
+    ```bash
+    ./scripts/yolo2onnx.py --config yolov4.cfg --weights yolov4.weights
+    ```
+### Add custom YOLOv3/v4
+1. Subclass `YOLO` like here: https://github.com/GeekAlexis/FastMOT/blob/32c217a7d289f15a3bb0c1820982df947c82a650/fastmot/models/yolo.py#L100-L109
+    ```
+    ENGINE_PATH:   path to TensorRT engine (converted at runtime)
+    MODEL_PATH:    path to ONNX model
+    NUM_CLASSES:   total number of classes
+    LETTERBOX:     keep aspect ratio when resizing
+    NEW_COORDS:    new_coords parameter for each yolo layer
+    INPUT_SHAPE:   input size in the format "(channel, height, width)"
     LAYER_FACTORS: scale factors with respect to the input size for each yolo layer
-                   For YOLOv4/YOLOv4-csp/YOLOv4x-mish, set to [8, 16, 32]
-                   For YOLOv3, set to [32, 16, 8]
-                   For YOLOv4-tiny/YOLOv3-tiny, set to [32, 16]
-    SCALES: scale_x_y parameter for each yolo layer
-            For YOLOv4-csp/YOLOv4x-mish, set to [2.0, 2.0, 2.0]
-            For YOLOv4, set to [1.2, 1.1, 1.05]
-            For YOLOv4-tiny, set to [1.05, 1.05]
-            For YOLOv3, set to [1., 1., 1.]
-            For YOLOv3-tiny, set to [1., 1.]
-    ANCHORS: anchors grouped by each yolo layer
+    SCALES:        scale_x_y parameter for each yolo layer
+    ANCHORS:       anchors grouped by each yolo layer
     ```
     Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask` in Darknet cfg.
-    Unlike YOLOv4, the anchors are usually in reverse for YOLOv3 and tiny
+    Unlike YOLOv4, the anchors are usually in reverse for YOLOv3 and YOLOv3/v4-tiny
 2. Change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py) to your object classes
 3. Modify cfg/mot.json: set `model` in `yolo_detector` to the added Python class and set `class_ids` you want to detect. You may want to play with `conf_thresh` based on the accuracy of your model
 ### Add custom ReID
-1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/aa707888e39d59540bb70799c7b97c58851662ee/fastmot/models/reid.py#L51
+1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/32c217a7d289f15a3bb0c1820982df947c82a650/fastmot/models/reid.py#L50-L55
     ```
-    ENGINE_PATH: path to TensorRT engine (converted at runtime)
-    MODEL_PATH: path to ONNX model
-    INPUT_SHAPE: input size in the format "(channel, height, width)"
+    ENGINE_PATH:   path to TensorRT engine (converted at runtime)
+    MODEL_PATH:    path to ONNX model
+    INPUT_SHAPE:   input size in the format "(channel, height, width)"
     OUTPUT_LAYOUT: feature dimension output by the model (e.g. 512)
-    METRIC: distance metric used to match features ('euclidean' or 'cosine')
+    METRIC:        distance metric used to match features ('euclidean' or 'cosine')
     ```
 2. Modify cfg/mot.json: set `model` in `feature_extractor` to the added Python class. You may want to play with `max_feat_cost` and `max_reid_cost` - float values from `0` to `2`, based on the accuracy of your model
 
