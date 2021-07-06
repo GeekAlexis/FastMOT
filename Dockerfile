@@ -12,6 +12,7 @@ ENV TZ=America/Los_Angeles
 
 ENV OPENBLAS_MAIN_FREE=1
 ENV OPENBLAS_NUM_THREADS=1
+ENV NO_AT_BRIDGE=1
 
 # Install OpenCV and FastMOT dependencies
 RUN apt-get -y update && \
