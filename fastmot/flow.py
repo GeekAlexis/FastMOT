@@ -129,6 +129,7 @@ class Flow:
         keypoints = self.bg_feat_detector.detect(prev_frame_small_bg, mask=bg_mask_small)
         if len(keypoints) == 0:
             self.bg_keypoints = np.empty((0, 2), np.float32)
+            self.prev_frame_gray, self.prev_frame_small = frame_gray, frame_small
             LOGGER.warning('Camera motion estimation failed')
             return {}, None
         keypoints = np.float32([kp.pt for kp in keypoints])
@@ -146,8 +147,7 @@ class Flow:
         all_cur_pts = self._unscale_pts(all_cur_pts, self.opt_flow_scale_factor, status)
 
         # reuse preprocessed frame for next prediction
-        self.prev_frame_gray = frame_gray
-        self.prev_frame_small = frame_small
+        self.prev_frame_gray, self.prev_frame_small = frame_gray, frame_small
 
         # estimate camera motion
         homography = None
