@@ -21,6 +21,11 @@ class Profiler:
         Profiler.__time_elapsed[self.name] += self.duration
 
     @classmethod
+    def reset(cls):
+        cls.__call_count.clear()
+        cls.__time_elapsed.clear()
+
+    @classmethod
     def get_avg_millis(cls, name):
         call_count = cls.__call_count[name]
         if call_count == 0:

@@ -853,6 +853,7 @@ def main():
         raise SystemExit('ERROR: file (%s) not found!' % args.config)
     if not Path(args.weights).is_file():
         raise SystemExit('ERROR: file (%s) not found!' % args.weights)
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     model_name = Path(args.weights).stem
     output_file_path = Path(args.output_dir) / f'{model_name}.onnx'
