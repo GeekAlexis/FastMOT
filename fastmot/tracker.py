@@ -69,7 +69,7 @@ class MultiTracker:
         """
         self.kf.reset_dt(dt)
 
-    def initiate(self, frame, detections):
+    def init(self, frame, detections):
         """
         Initializes the tracker from detections in the first frame.
         Parameters
@@ -82,9 +82,9 @@ class MultiTracker:
         self.next_id = 1
         self.tracks.clear()
         self.lost.clear()
-        self.flow.initiate(frame)
+        self.flow.init(frame)
         for det in detections:
-            state = self.kf.initiate(det.tlbr)
+            state = self.kf.create(det.tlbr)
             new_trk = Track(0, self.next_id, det.tlbr, state, det.label)
             self.tracks[self.next_id] = new_trk
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")
@@ -203,7 +203,7 @@ class MultiTracker:
             track = self.lost[trk_id]
             det = detections[det_id]
             LOGGER.info(f"{'Reidentified:':<14}{track}")
-            state = self.kf.initiate(det.tlbr)
+            state = self.kf.create(det.tlbr)
             track.reactivate(frame_id, det.tlbr, state, embeddings[det_id])
             self.tracks[trk_id] = track
             del self.lost[trk_id]
@@ -226,7 +226,7 @@ class MultiTracker:
         # register new detections
         for det_id in u_det_ids:
             det = detections[det_id]
-            state = self.kf.initiate(det.tlbr)
+            state = self.kf.create(det.tlbr)
             new_trk = Track(frame_id, self.next_id, det.tlbr, state, det.label)
             self.tracks[self.next_id] = new_trk
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")

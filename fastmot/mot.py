@@ -94,7 +94,7 @@ class MOT:
         detections = []
         if self.frame_count == 0:
             detections = self.detector(frame)
-            self.tracker.initiate(frame, detections)
+            self.tracker.init(frame, detections)
         else:
             if self.frame_count % self.detector_frame_skip == 0:
                 with Profiler('preproc'):

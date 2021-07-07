@@ -54,7 +54,7 @@ class Flow:
         self.fg_mask = np.empty_like(self.ones)
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
-    def initiate(self, frame):
+    def init(self, frame):
         """
         Preprocesses the first frame to prepare for subsequent optical
         flow computations.

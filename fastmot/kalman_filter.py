@@ -39,7 +39,7 @@ class KalmanFilter:
         self.vel_half_life = config['vel_half_life']
 
         dt = 1 / 30.
-        self.acc_cov, self.meas_mat, self.motion_mat = self._create_mat(dt)
+        self.acc_cov, self.meas_mat, self.trans_mat = self._init_mat(dt)
 
     def reset_dt(self, dt):
         """
@@ -49,11 +49,11 @@ class KalmanFilter:
         dt : float
             Time interval in seconds between each frame.
         """
-        self.acc_cov, self.meas_mat, self.motion_mat = self._create_mat(dt)
+        self.acc_cov, self.meas_mat, self.trans_mat = self._init_mat(dt)
 
-    def initiate(self, det_meas):
+    def create(self, det_meas):
         """
-        Creates track from unassociated measurement.
+        Creates Kalman filter state from unassociated measurement.
         Parameters
         ----------
         det_meas : ndarray
@@ -99,7 +99,7 @@ class KalmanFilter:
             Returns the mean vector and covariance matrix of the predicted
             state.
         """
-        return self._predict(mean, covariance, self.motion_mat, self.acc_cov,
+        return self._predict(mean, covariance, self.trans_mat, self.acc_cov,
                              self.std_factor_acc, self.std_offset_acc)
 
     def project(self, mean, covariance, meas_type, multiplier=1.):
@@ -242,29 +242,29 @@ class KalmanFilter:
         covariance = F @ covariance @ F.T
         return mean, covariance
 
-    def _create_mat(self, dt):
+    def _init_mat(self, dt):
         # acceleration-based process noise
         acc_cov = np.diag([0.25 * dt**4] * 4 + [dt**2] * 4)
         acc_cov[4:, :4] = np.eye(4) * (0.5 * dt**3)
         acc_cov[:4, 4:] = np.eye(4) * (0.5 * dt**3)
 
         meas_mat = np.eye(4, 8)
-        motion_mat = np.eye(8)
+        trans_mat = np.eye(8)
         for i in range(4):
-            motion_mat[i, i + 4] = self.vel_coupling * dt
-            motion_mat[i, (i + 2) % 4 + 4] = (1. - self.vel_coupling) * dt
-            motion_mat[i + 4, i + 4] = 0.5**(dt / self.vel_half_life)
-        return acc_cov, meas_mat, motion_mat
+            trans_mat[i, i + 4] = self.vel_coupling * dt
+            trans_mat[i, (i + 2) % 4 + 4] = (1. - self.vel_coupling) * dt
+            trans_mat[i + 4, i + 4] = 0.5**(dt / self.vel_half_life)
+        return acc_cov, meas_mat, trans_mat
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _predict(mean, covariance, motion_mat, acc_cov, std_factor_acc, std_offset_acc):
+    def _predict(mean, covariance, trans_mat, acc_cov, std_factor_acc, std_offset_acc):
         size = max(get_size(mean[:4])) # max(w, h)
         std = std_factor_acc * size + std_offset_acc
         motion_cov = acc_cov * std**2
 
-        mean = motion_mat @ mean
-        covariance = motion_mat @ covariance @ motion_mat.T + motion_cov
+        mean = trans_mat @ mean
+        covariance = trans_mat @ covariance @ trans_mat.T + motion_cov
         # ensure positive definiteness
         covariance = 0.5 * (covariance + covariance.T)
         return mean, covariance
