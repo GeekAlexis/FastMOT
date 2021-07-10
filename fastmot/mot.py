@@ -1,6 +1,8 @@
 from enum import Enum
 import logging
-import pycuda.driver as cuda
+# import pycuda.autoinit
+# import pycuda.driver as cuda
+import numba.cuda
 import cv2
 
 from .detector import SSDDetector, YOLODetector, PublicDetector
@@ -46,7 +48,8 @@ class MOT:
         self.detector_frame_skip = config['detector_frame_skip']
 
         # create CUDA context for tensorRT
-        self.cfx = cuda.Device(0).make_context()
+        numba.cuda.select_device(0)
+        # self.cfx = cuda.Device(0).make_context()
 
         LOGGER.info('Loading detector model...')
         if self.detector_type == DetectorType.SSD:
@@ -63,7 +66,10 @@ class MOT:
         self.frame_count = 0
 
     def __del__(self):
-        self.cfx.pop()
+        del self.detector
+        del self.extractor
+        numba.cuda.close()
+        # self.cfx.pop()
 
     @property
     def visible_tracks(self):
@@ -90,7 +96,7 @@ class MOT:
         frame : ndarray
             The next frame.
         """
-        self.cfx.push()
+        # self.cfx.push()
         detections = []
         if self.frame_count == 0:
             detections = self.detector(frame)
@@ -120,7 +126,7 @@ class MOT:
         if self.draw:
             self._draw(frame, detections)
         self.frame_count += 1
-        self.cfx.pop()
+        # self.cfx.pop()
 
     @staticmethod
     def print_timing_info():

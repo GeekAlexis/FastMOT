@@ -1,10 +1,11 @@
 from multiprocessing.pool import ThreadPool
 import numpy as np
 import numba as nb
+import cupy as cp
 import cv2
 
 from . import models
-from .utils import InferenceBackend
+from .utils import TRTInference
 from .utils.rect import multi_crop
 
 
@@ -15,7 +16,7 @@ class FeatureExtractor:
 
         self.inp_stride = np.prod(self.model.INPUT_SHAPE)
         self.feature_dim = self.model.OUTPUT_LAYOUT
-        self.backend = InferenceBackend(self.model, self.batch_size)
+        self.backend = TRTInference(self.model, self.batch_size)
         self.pool = ThreadPool()
 
         self.embeddings = []

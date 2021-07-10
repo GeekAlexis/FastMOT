@@ -4,10 +4,11 @@ import configparser
 import abc
 import numpy as np
 import numba as nb
+import cupy as cp
 import cv2
 
 from . import models
-from .utils import InferenceBackend
+from .utils import TRTInference
 from .utils.rect import as_rect, to_tlbr, get_size, area
 from .utils.rect import union, crop, multi_crop, iom, diou_nms
 
@@ -63,7 +64,7 @@ class SSDDetector(Detector):
         self.inp_stride = np.prod(self.model.INPUT_SHAPE)
         self.tiles, self.tiling_region_size = self._generate_tiles()
         self.scale_factor = np.asarray(self.size) / self.tiling_region_size
-        self.backend = InferenceBackend(self.model, self.batch_size)
+        self.backend = TRTInference(self.model, self.batch_size)
 
     def detect_async(self, frame):
         self._preprocess(frame)
@@ -79,7 +80,7 @@ class SSDDetector(Detector):
 
     def _preprocess(self, frame):
         frame = cv2.resize(frame, self.tiling_region_size)
-        self._normalize(frame, self.tiles, self.backend.input_handle, self.inp_stride)
+        self._normalize(frame, self.tiles, self.backend.input.host, self.inp_stride)
 
     def _generate_tiles(self):
         tile_size = np.asarray(self.model.INPUT_SHAPE[:0:-1])
@@ -184,7 +185,7 @@ class YOLODetector(Detector):
         self.max_area = config['max_area']
         self.nms_thresh = config['nms_thresh']
 
-        self.backend = InferenceBackend(self.model, 1)
+        self.backend = TRTInference(self.model, 1)
         self.input_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
 
     def detect_async(self, frame):
@@ -213,7 +214,7 @@ class YOLODetector(Detector):
             insert_roi = to_tlbr(np.r_[img_offset, scaled_size])
             upscaled_sz = np.rint(dst_size / scale_factor).astype(int)
             bbox_offset = (upscaled_sz - src_size) / 2
-            self.backend.input_handle = 0.5
+            self.backend.input.host = 0.5
         else:
             upscaled_sz = src_size
             insert_roi = to_tlbr(np.r_[0, 0, dst_size])
