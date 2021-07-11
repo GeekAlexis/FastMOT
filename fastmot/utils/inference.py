@@ -11,6 +11,12 @@ class HostDeviceMem:
         self.host = cupyx.empty_pinned(size, dtype)
         self.device = cp.empty(size, dtype)
 
+    def __str__(self):
+        return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
+
+    def __repr__(self):
+        return self.__str__()
+
     @property
     def nbytes(self):
         return self.device.nbytes
@@ -22,12 +28,6 @@ class HostDeviceMem:
     @property
     def devptr(self):
         return self.device.data.ptr
-
-    def __str__(self):
-        return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
-
-    def __repr__(self):
-        return self.__str__()
 
     def copy_htod_async(self, stream):
         self.device.data.copy_from_host_async(self.hostptr, self.nbytes, stream)
@@ -119,4 +119,4 @@ class TRTInference:
 
     def get_infer_time(self):
         self.end.synchronize()
-        return self.start.time_till(self.end)
+        return cp.cuda.get_elapsed_time(self.start, self.end)
