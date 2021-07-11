@@ -2,6 +2,5 @@ numpy >= 1.17
 scipy >= 1.5
 numba >= 0.48
 tensorflow < 2.0
-pycuda
 cupy >= 9.0
 cython-bbox

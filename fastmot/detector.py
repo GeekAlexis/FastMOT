@@ -220,7 +220,7 @@ class YOLODetector(Detector):
             insert_roi = to_tlbr(np.r_[0, 0, dst_size])
             bbox_offset = np.zeros(2)
 
-        input_handle = self.backend.input_handle.reshape(self.model.INPUT_SHAPE)
+        input_handle = self.backend.input.host.reshape(self.model.INPUT_SHAPE)
         input_handle = crop(input_handle, insert_roi, chw=True)
         return input_handle, upscaled_sz, bbox_offset
 

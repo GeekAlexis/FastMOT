@@ -1,6 +1,4 @@
 import ctypes
-# import pycuda.autoinit
-# import pycuda.driver as cuda
 import cupy as cp
 import cupyx
 import tensorrt as trt
@@ -60,8 +58,7 @@ class TRTInference:
         else:
             runtime = trt.Runtime(TRTInference.TRT_LOGGER)
             with open(self.model.ENGINE_PATH, 'rb') as engine_file:
-                buf = engine_file.read()
-                self.engine = runtime.deserialize_cuda_engine(buf)
+                self.engine = runtime.deserialize_cuda_engine(engine_file.read())
         if self.engine is None:
             raise RuntimeError('Unable to load the engine file')
         if self.engine.has_implicit_batch_dimension:
@@ -81,7 +78,6 @@ class TRTInference:
             dtype = trt.nptype(self.engine.get_binding_dtype(binding))
             # allocate host and device buffers
             buffer = HostDeviceMem(size, dtype)
-            # print(buffer)
             # append the device buffer to device bindings
             self.bindings.append(buffer.devptr)
             if self.engine.binding_is_input(binding):
@@ -98,28 +94,12 @@ class TRTInference:
         self.end = cp.cuda.Event()
 
     def __del__(self):
-        del self.input
-        del self.outputs
-        del self.stream
-        del self.start
-        del self.end
+        self.context.__del__()
+        self.engine.__del__()
 
     def infer(self):
         self.infer_async()
         return self.synchronize()
-
-    # def infer_async(self):
-    #     self.start.record(self.stream)
-    #     cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
-    #     # cuda.memcpy_dtod_async(self.input.device, self.input.host, self.stream)
-    #     if self.engine.has_implicit_batch_dimension:
-    #         self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings,
-    #                                    stream_handle=self.stream.handle)
-    #     else:
-    #         self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
-    #     for out in self.outputs:
-    #         cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
-    #     self.end.record(self.stream)
 
     def infer_async(self):
         self.start.record(self.stream)
