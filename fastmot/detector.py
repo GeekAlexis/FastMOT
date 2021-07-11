@@ -5,6 +5,7 @@ import abc
 import numpy as np
 import numba as nb
 import cupy as cp
+import cupyx.scipy.ndimage
 import cv2
 
 from . import models
@@ -186,11 +187,21 @@ class YOLODetector(Detector):
         self.nms_thresh = config['nms_thresh']
 
         self.backend = TRTInference(self.model, 1)
-        self.input_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
+        roi, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
+        self.inp_handle = self.backend.input.device.reshape(self.model.INPUT_SHAPE)[roi]
+
+        # self.resize_mat = cp.eye(4)
+        _, h, w = self.inp_handle.shape
+        # self.scaled_size = (h, w, 3)
+        # self.resize_mat[0][0] = w / size[0]
+        # self.resize_mat[1][1] = h / size[1]
+
+        self.zoom_factors = (h / size[1], w / size[0], 1.)
+        self.small_dev = cp.empty((h, w, 3))
 
     def detect_async(self, frame):
         self._preprocess(frame)
-        self.backend.infer_async()
+        self.backend.infer_async2()
 
     def postprocess(self):
         det_out = self.backend.synchronize()
@@ -201,8 +212,15 @@ class YOLODetector(Detector):
         return detections
 
     def _preprocess(self, frame):
-        frame = cv2.resize(frame, self.input_handle.shape[:0:-1])
-        self._normalize(frame, self.input_handle)
+        # frame = cv2.resize(frame, inp_handle.shape[:0:-1])
+        # self._normalize(frame, inp_handle)
+        frame_dev = cp.asarray(frame)
+        # cupyx.scipy.ndimage.affine_transform(frame_dev, self.resize_mat, output_shape=self.small_dev.shape, output=self.small_dev, order=1, mode='opencv')
+        cupyx.scipy.ndimage.zoom(frame_dev, self.zoom_factors, output=self.small_dev, order=1, mode='opencv', grid_mode=True)
+        rgb_dev = self.small_dev[..., ::-1]
+        chw_dev = rgb_dev.transpose(2, 0, 1)
+        self.inp_handle[:] = chw_dev / 255.
+
 
     def _create_letterbox(self):
         src_size = np.asarray(self.size)
@@ -211,18 +229,23 @@ class YOLODetector(Detector):
             scale_factor = min(dst_size / src_size)
             scaled_size = np.rint(src_size * scale_factor).astype(int)
             img_offset = (dst_size - scaled_size) / 2
-            insert_roi = to_tlbr(np.r_[img_offset, scaled_size])
+            # insert_roi = to_tlbr(np.r_[img_offset, scaled_size])
+            xmin, ymin = img_offset
+            xmax, ymax = scaled_size
+            roi = np.s_[:, ymin:ymax + 1, xmin:xmax + 1] # chw order
             upscaled_sz = np.rint(dst_size / scale_factor).astype(int)
             bbox_offset = (upscaled_sz - src_size) / 2
-            self.backend.input.host = 0.5
+            # self.backend.input.host[:] = 0.5
+            self.backend.input.device[:] = 0.5
         else:
+            roi = np.s_[:]
             upscaled_sz = src_size
-            insert_roi = to_tlbr(np.r_[0, 0, dst_size])
+            # insert_roi = to_tlbr(np.r_[0, 0, dst_size])
             bbox_offset = np.zeros(2)
 
-        input_handle = self.backend.input.host.reshape(self.model.INPUT_SHAPE)
-        input_handle = crop(input_handle, insert_roi, chw=True)
-        return input_handle, upscaled_sz, bbox_offset
+        # input_handle = self.backend.input.host.reshape(self.model.INPUT_SHAPE)
+        # input_handle = crop(input_handle, insert_roi, chw=True)
+        return roi, upscaled_sz, bbox_offset
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

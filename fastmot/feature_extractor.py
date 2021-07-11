@@ -2,6 +2,7 @@ from multiprocessing.pool import ThreadPool
 import numpy as np
 import numba as nb
 import cupy as cp
+import cupyx.scipy.ndimage
 import cv2
 
 from . import models

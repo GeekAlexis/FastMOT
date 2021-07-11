@@ -113,6 +113,17 @@ class TRTInference:
             out.copy_dtoh_async(self.stream)
         self.end.record(self.stream)
 
+    def infer_async2(self):
+        self.start.record(self.stream)
+        if self.engine.has_implicit_batch_dimension:
+            self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings,
+                                       stream_handle=self.stream.ptr)
+        else:
+            self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.ptr)
+        for out in self.outputs:
+            out.copy_dtoh_async(self.stream)
+        self.end.record(self.stream)
+
     def synchronize(self):
         self.stream.synchronize()
         return [out.host for out in self.outputs]
