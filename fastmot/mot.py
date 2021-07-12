@@ -1,5 +1,6 @@
 from enum import Enum
 import logging
+import cupy as cp
 import cv2
 
 from .detector import SSDDetector, YOLODetector, PublicDetector
@@ -83,6 +84,7 @@ class MOT:
         frame : ndarray
             The next frame.
         """
+        # frame_dev = frame
         detections = []
         if self.frame_count == 0:
             detections = self.detector(frame)

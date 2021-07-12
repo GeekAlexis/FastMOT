@@ -62,10 +62,10 @@ class SSDDetector(Detector):
         self.merge_thresh = config['merge_thresh']
 
         self.batch_size = int(np.prod(self.tiling_grid))
-        self.inp_stride = np.prod(self.model.INPUT_SHAPE)
         self.tiles, self.tiling_region_size = self._generate_tiles()
         self.scale_factor = np.asarray(self.size) / self.tiling_region_size
         self.backend = TRTInference(self.model, self.batch_size)
+        self.inp_handle = self.backend.input.host.reshape(self.batch_size, *self.model.INPUT_SHAPE)
 
     def detect_async(self, frame):
         self._preprocess(frame)
@@ -81,7 +81,7 @@ class SSDDetector(Detector):
 
     def _preprocess(self, frame):
         frame = cv2.resize(frame, self.tiling_region_size)
-        self._normalize(frame, self.tiles, self.backend.input.host, self.inp_stride)
+        self._normalize(frame, self.tiles, self.inp_handle)
 
     def _generate_tiles(self):
         tile_size = np.asarray(self.model.INPUT_SHAPE[:0:-1])
@@ -103,18 +103,16 @@ class SSDDetector(Detector):
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
-    def _normalize(frame, tiles, out, stride):
+    def _normalize(frame, tiles, out):
         imgs = multi_crop(frame, tiles)
         for i in nb.prange(len(imgs)):
-            offset = i * stride
             bgr = imgs[i]
             # BGR to RGB
             rgb = bgr[..., ::-1]
             # HWC -> CHW
             chw = rgb.transpose(2, 0, 1)
             # Normalize to [-1.0, 1.0] interval
-            normalized = chw * (2 / 255) - 1
-            out[offset:offset + stride] = normalized.ravel()
+            out[i] = chw * (2 / 255.) - 1.
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
@@ -191,13 +189,13 @@ class YOLODetector(Detector):
         self.inp_handle = self.backend.input.device.reshape(self.model.INPUT_SHAPE)[roi]
 
         # self.resize_mat = cp.eye(4)
-        _, h, w = self.inp_handle.shape
+        c, h, w = self.inp_handle.shape
         # self.scaled_size = (h, w, 3)
         # self.resize_mat[0][0] = w / size[0]
         # self.resize_mat[1][1] = h / size[1]
 
         self.zoom_factors = (h / size[1], w / size[0], 1.)
-        self.small_dev = cp.empty((h, w, 3))
+        self.dev_buf = cp.empty((h, w, c), dtype=np.uint8)
 
     def detect_async(self, frame):
         self._preprocess(frame)
@@ -212,15 +210,14 @@ class YOLODetector(Detector):
         return detections
 
     def _preprocess(self, frame):
-        # frame = cv2.resize(frame, inp_handle.shape[:0:-1])
-        # self._normalize(frame, inp_handle)
+        # frame = cv2.resize(frame, self.inp_handle.shape[:0:-1])
+        # self._normalize(frame, self.inp_handle)
         frame_dev = cp.asarray(frame)
         # cupyx.scipy.ndimage.affine_transform(frame_dev, self.resize_mat, output_shape=self.small_dev.shape, output=self.small_dev, order=1, mode='opencv')
-        cupyx.scipy.ndimage.zoom(frame_dev, self.zoom_factors, output=self.small_dev, order=1, mode='opencv', grid_mode=True)
-        rgb_dev = self.small_dev[..., ::-1]
+        cupyx.scipy.ndimage.zoom(frame_dev, self.zoom_factors, output=self.dev_buf, order=1, mode='opencv', grid_mode=True)
+        rgb_dev = self.dev_buf[..., ::-1]
         chw_dev = rgb_dev.transpose(2, 0, 1)
-        self.inp_handle[:] = chw_dev / 255.
-
+        cp.multiply(chw_dev, 1 / 255., out=self.inp_handle)
 
     def _create_letterbox(self):
         src_size = np.asarray(self.size)
@@ -255,8 +252,7 @@ class YOLODetector(Detector):
         # HWC -> CHW
         chw = rgb.transpose(2, 0, 1)
         # Normalize to [0, 1] interval
-        normalized = chw / 255.
-        out[:] = normalized
+        out[:] = chw / 255.
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
