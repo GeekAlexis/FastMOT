@@ -198,6 +198,7 @@ class YOLODetector(Detector):
         self.dev_buf = cp.empty((h, w, c), dtype=np.uint8)
 
     def detect_async(self, frame):
+        # with self.backend.stream:
         self._preprocess(frame)
         self.backend.infer_async2()
 
