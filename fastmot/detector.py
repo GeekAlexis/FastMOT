@@ -188,7 +188,8 @@ class YOLODetector(Detector):
         self.inp_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
 
     def detect_async(self, frame):
-        self._preprocess(frame)
+        with self.backend.stream:
+            self._preprocess(frame)
         self.backend.infer_async(from_device=True)
 
     def postprocess(self):

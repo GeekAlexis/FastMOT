@@ -2,6 +2,7 @@ import logging
 import itertools
 import numpy as np
 import numba as nb
+import cupyx
 import cv2
 
 from .utils.rect import to_tlbr, get_size, get_center
@@ -50,20 +51,19 @@ class Flow:
             round(self.opt_flow_scale_factor[0] * self.size[0]),
             round(self.opt_flow_scale_factor[1] * self.size[1])
         )
-        self.frame_gray = np.empty(self.size[::-1], np.uint8)
-        self.frame_small = np.empty(opt_flow_sz[::-1], np.uint8)
-        self.prev_frame_gray = np.empty_like(self.frame_gray)
-        self.prev_frame_small = np.empty_like(self.frame_small)
+        self.frame_gray = cupyx.empty_pinned(self.size[::-1], np.uint8)
+        self.frame_small = cupyx.empty_pinned(opt_flow_sz[::-1], np.uint8)
+        self.prev_frame_gray = cupyx.empty_like_pinned(self.frame_gray)
+        self.prev_frame_small = cupyx.empty_like_pinned(self.frame_small)
 
         bg_feat_sz = (
             round(self.bg_feat_scale_factor[0] * self.size[0]),
             round(self.bg_feat_scale_factor[1] * self.size[1])
         )
-        self.prev_frame_bg = np.empty(bg_feat_sz[::-1], np.uint8)
-        self.bg_mask_small = np.empty_like(self.prev_frame_bg)
+        self.prev_frame_bg = cupyx.empty_pinned(bg_feat_sz[::-1], np.uint8)
+        self.bg_mask_small = cupyx.empty_like_pinned(self.prev_frame_bg)
 
-        self.ones = np.full(self.size[::-1], 255, np.uint8)
-        self.fg_mask = np.empty_like(self.ones)
+        self.fg_mask = cupyx.empty_like_pinned(self.frame_gray)
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
     def init(self, frame):
@@ -106,7 +106,7 @@ class Flow:
 
         # detect target feature points
         all_prev_pts = []
-        np.copyto(self.fg_mask, self.ones)
+        self.fg_mask[:] = 255
         for track in tracks:
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
             target_mask = crop(self.fg_mask, inside_tlbr)
@@ -181,7 +181,7 @@ class Flow:
 
         # estimate target bounding boxes
         next_bboxes = {}
-        np.copyto(self.fg_mask, self.ones)
+        self.fg_mask[:] = 255
         for begin, end, track in zip(target_begins, target_ends, tracks):
             prev_pts, matched_pts = self._get_good_match(all_prev_pts, all_cur_pts,
                                                          status, begin, end)
