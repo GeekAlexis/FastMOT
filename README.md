@@ -59,7 +59,7 @@ Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-nativ
   # For Ubuntu 20.04, add --build-arg TRT_IMAGE_VERSION=21.05
   docker build -t fastmot:latest .
   
-  # Run xhost + first if you have issues with display
+  # Run xhost local:root first if you have issues with display
   docker run --gpus all --rm -it -v $(pwd):/usr/src/app/FastMOT -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -e TZ=$(cat /etc/timezone) fastmot:latest
   ```
 ### Install for Jetson Nano/TX2/Xavier NX/Xavier
