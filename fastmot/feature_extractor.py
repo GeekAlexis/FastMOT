@@ -19,7 +19,7 @@ class FeatureExtractor:
         self.pool = ThreadPool()
 
         self.embeddings = []
-        self.num_features = 0
+        self.last_num_features = 0
 
     def __del__(self):
         self.pool.close()
@@ -47,7 +47,7 @@ class FeatureExtractor:
                 embedding_out = self.backend.synchronize()[0]
                 self.embeddings.append(embedding_out)
             self.backend.infer_async()
-        self.num_features = len(cur_imgs)
+        self.last_num_features = len(cur_imgs)
 
     def postprocess(self):
         """
@@ -55,10 +55,10 @@ class FeatureExtractor:
         extracted embeddings with dimension M.
         This API should be called after `extract_async`.
         """
-        if self.num_features == 0:
+        if self.last_num_features == 0:
             return np.empty((0, self.feature_dim))
 
-        embedding_out = self.backend.synchronize()[0][:self.num_features * self.feature_dim]
+        embedding_out = self.backend.synchronize()[0][:self.last_num_features * self.feature_dim]
         self.embeddings.append(embedding_out)
         embeddings = np.concatenate(self.embeddings).reshape(-1, self.feature_dim)
         embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
