@@ -185,22 +185,19 @@ class YOLODetector(Detector):
         self.nms_thresh = config['nms_thresh']
 
         self.backend = TRTInference(self.model, 1)
-        roi, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
-        self.inp_handle = self.backend.input.device.reshape(self.model.INPUT_SHAPE)[roi]
+        self.inp_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
 
-        # self.resize_mat = cp.eye(4)
-        c, h, w = self.inp_handle.shape
-        # self.scaled_size = (h, w, 3)
-        # self.resize_mat[0][0] = w / size[0]
-        # self.resize_mat[1][1] = h / size[1]
+        # c, h, w = self.inp_handle.shape
+        # self.dev_buf = cp.empty((*self.size[::-1], c), dtype=np.uint8)
+        # self.dev_buf_small = cp.empty((h, w, c), dtype=np.uint8)
 
-        self.zoom_factors = (h / size[1], w / size[0], 1.)
-        self.dev_buf = cp.empty((h, w, c), dtype=np.uint8)
+        # self.dev_buf = None
+        # self.dev_buf_small = None
 
     def detect_async(self, frame):
         # with self.backend.stream:
         self._preprocess(frame)
-        self.backend.infer_async2()
+        self.backend.infer_async(from_device=True)
 
     def postprocess(self):
         det_out = self.backend.synchronize()
@@ -212,12 +209,24 @@ class YOLODetector(Detector):
 
     def _preprocess(self, frame):
         # frame = cv2.resize(frame, self.inp_handle.shape[:0:-1])
-        # self._normalize(frame, self.inp_handle)
+        # cv2.resize(frame, self.inp_handle.shape[:0:-1], dst=self.frame_buf)
+        # self._normalize(self.frame_buf, self.inp_handle)
+
+        # frame_dev = cv2.cuda_GpuMat(frame)
+        # small_dev = cv2.cuda.resize(frame_dev, self.inp_handle.shape[:0:-1])
+        # self.dev_buf.data.copy_from(small_dev.cudaPtr(), small_dev.elemSize())
+        # self.dev_buf = cp.asarray(frame)
+        # self.dev_buf.data.copy_from(frame.ctypes.data, frame.nbytes)
+        # zoom = np.asarray(self.dev_buf_small.shape) / self.dev_buf.shape
+        # cupyx.scipy.ndimage.zoom(self.dev_buf, zoom, output=self.dev_buf_small, order=1, mode='opencv', grid_mode=True)
         frame_dev = cp.asarray(frame)
-        # cupyx.scipy.ndimage.affine_transform(frame_dev, self.resize_mat, output_shape=self.small_dev.shape, output=self.small_dev, order=1, mode='opencv')
-        cupyx.scipy.ndimage.zoom(frame_dev, self.zoom_factors, output=self.dev_buf, order=1, mode='opencv', grid_mode=True)
-        rgb_dev = self.dev_buf[..., ::-1]
+        zoom = np.roll(self.inp_handle.shape, -1) / frame_dev.shape
+        small_dev = cupyx.scipy.ndimage.zoom(frame_dev, zoom, order=1, mode='opencv', grid_mode=True)
+        # BGR to RGB
+        rgb_dev = small_dev[..., ::-1]
+        # HWC -> CHW
         chw_dev = rgb_dev.transpose(2, 0, 1)
+        # Normalize to [0, 1] interval
         cp.multiply(chw_dev, 1 / 255., out=self.inp_handle)
 
     def _create_letterbox(self):
@@ -227,23 +236,17 @@ class YOLODetector(Detector):
             scale_factor = min(dst_size / src_size)
             scaled_size = np.rint(src_size * scale_factor).astype(int)
             img_offset = (dst_size - scaled_size) / 2
-            # insert_roi = to_tlbr(np.r_[img_offset, scaled_size])
-            xmin, ymin = img_offset
-            xmax, ymax = scaled_size
-            roi = np.s_[:, ymin:ymax + 1, xmin:xmax + 1] # chw order
+            roi = np.s_[:, img_offset[1]:scaled_size[1] + 1, img_offset[0]:scaled_size[0] + 1]
             upscaled_sz = np.rint(dst_size / scale_factor).astype(int)
             bbox_offset = (upscaled_sz - src_size) / 2
-            # self.backend.input.host[:] = 0.5
-            self.backend.input.device[:] = 0.5
         else:
             roi = np.s_[:]
             upscaled_sz = src_size
-            # insert_roi = to_tlbr(np.r_[0, 0, dst_size])
             bbox_offset = np.zeros(2)
-
-        # input_handle = self.backend.input.host.reshape(self.model.INPUT_SHAPE)
-        # input_handle = crop(input_handle, insert_roi, chw=True)
-        return roi, upscaled_sz, bbox_offset
+        inp_reshaped = self.backend.input.device.reshape(self.model.INPUT_SHAPE)
+        inp_reshaped[:] = 0.5 # initial value for letterbox
+        inp_handle = inp_reshaped[roi]
+        return inp_handle, upscaled_sz, bbox_offset
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

@@ -1,8 +1,6 @@
 from multiprocessing.pool import ThreadPool
 import numpy as np
 import numba as nb
-import cupy as cp
-import cupyx.scipy.ndimage
 import cv2
 
 from . import models
@@ -23,11 +21,6 @@ class FeatureExtractor:
         self.embeddings = []
         self.num_features = 0
 
-        # c, h, w = self.model.INPUT_SHAPE
-        # self.small_devs = cp.empty((self.batch_size, h, w, 3), dtype=np.uint8)
-        # self.map_streams = [cp.cuda.stream.Stream() for _ in range(self.batch_size)]
-        # self.end_events = [cp.cuda.Event() for _ in range(self.batch_size)]
-
     def __del__(self):
         self.pool.close()
         self.pool.join()
@@ -44,18 +37,15 @@ class FeatureExtractor:
         """
         Extract feature embeddings from detections asynchronously.
         """
-        # frame_dev = cp.asarray(frame)
         imgs = multi_crop(frame, detections.tlbr)
         self.embeddings, cur_imgs = [], []
         # pipeline inference and preprocessing the next batch in parallel
         for offset in range(0, len(imgs), self.batch_size):
             cur_imgs = imgs[offset:offset + self.batch_size]
             self.pool.starmap(self._preprocess, enumerate(cur_imgs))
-            # self._map(cur_imgs)
             if offset > 0:
                 embedding_out = self.backend.synchronize()[0]
                 self.embeddings.append(embedding_out)
-            # self.backend.infer_async2()
             self.backend.infer_async()
         self.num_features = len(cur_imgs)
 
@@ -63,7 +53,7 @@ class FeatureExtractor:
         """
         Synchronizes, applies postprocessing, and returns a NxM matrix of N
         extracted embeddings with dimension M.
-        This function should be called after `extract_async`.
+        This API should be called after `extract_async`.
         """
         if self.num_features == 0:
             return np.empty((0, self.feature_dim))
@@ -74,31 +64,16 @@ class FeatureExtractor:
         embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
         return embeddings
 
+    def null_features(self, detections):
+        """
+        Returns returns a NxM matrix of N zero embeddings with dimension M.
+        This API effectively disables feature extraction.
+        """
+        return np.zeros((len(detections), self.feature_dim))
+
     def _preprocess(self, idx, img):
         img = cv2.resize(img, self.model.INPUT_SHAPE[:0:-1])
         self._normalize(img, self.inp_handle[idx])
-
-        # img_dev = cp.asarray(img)
-        # _, h, w = self.model.INPUT_SHAPE
-        # zoom_factors = (h / img_dev.shape[0], w / img_dev.shape[1], 1.)
-        # cupyx.scipy.ndimage.zoom(img_dev, zoom_factors, output=self.small_devs[idx], order=1, mode='opencv', grid_mode=True)
-        # img_dev = self.small_devs[idx][..., ::-1]
-        # img_dev = img_dev.transpose(2, 0, 1)
-        # offset = idx * self.inp_stride
-        # out = self.backend.input.device[offset:offset + self.inp_stride].reshape(self.model.INPUT_SHAPE)
-        # # img_dev *= 1 / 255
-        # out[0, ...] = (img_dev[0, ...] / 255. - 0.485) / 0.229
-        # out[1, ...] = (img_dev[1, ...] / 255. - 0.456) / 0.224
-        # out[2, ...] = (img_dev[2, ...] / 255. - 0.406) / 0.225
-
-    def _map(self, cur_imgs):
-        for idx, img in enumerate(cur_imgs):
-            with self.map_streams[idx]:
-                self._preprocess(idx, img)
-            # self.end_events[idx].record(stream)
-
-        for stream in self.map_streams:
-            stream.synchronize()
 
     @staticmethod
     @nb.njit(fastmath=True, nogil=True, cache=True)

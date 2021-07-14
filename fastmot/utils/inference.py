@@ -94,27 +94,19 @@ class TRTInference:
         self.end = cp.cuda.Event()
 
     def __del__(self):
-        self.context.__del__()
-        self.engine.__del__()
+        if hasattr(self, 'context'):
+            self.context.__del__()
+        if hasattr(self, 'engine'):
+            self.engine.__del__()
 
     def infer(self):
         self.infer_async()
         return self.synchronize()
 
-    def infer_async(self):
+    def infer_async(self, from_device=False):
         self.start.record(self.stream)
-        self.input.copy_htod_async(self.stream)
-        if self.engine.has_implicit_batch_dimension:
-            self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings,
-                                       stream_handle=self.stream.ptr)
-        else:
-            self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.ptr)
-        for out in self.outputs:
-            out.copy_dtoh_async(self.stream)
-        self.end.record(self.stream)
-
-    def infer_async2(self):
-        self.start.record(self.stream)
+        if not from_device:
+            self.input.copy_htod_async(self.stream)
         if self.engine.has_implicit_batch_dimension:
             self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings,
                                        stream_handle=self.stream.ptr)

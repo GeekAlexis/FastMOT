@@ -2,7 +2,7 @@ ARG TRT_IMAGE_VERSION=20.09
 FROM nvcr.io/nvidia/tensorrt:${TRT_IMAGE_VERSION}-py3
 
 ARG TRT_IMAGE_VERSION
-ARG OPENCV_VERSION=4.5.3
+ARG OPENCV_VERSION=4.1.1
 ARG APP_DIR=/usr/src/app
 ARG SCRIPT_DIR=/opt/tensorrt/python
 ARG DEBIAN_FRONTEND=noninteractive
@@ -33,7 +33,8 @@ RUN apt-get -y update && \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly \
     libtbb2 libtbb-dev libdc1394-22-dev && \
-    pip install --no-cache-dir numpy
+    pip install -U --no-cache-dir setuptools pip && \
+    pip install --no-cache-dir numpy==1.18.0
 
 # Build OpenCV
 WORKDIR ${HOME}
@@ -60,7 +61,7 @@ RUN cmake \
     -DENABLE_FAST_MATH=ON \
     -DWITH_TBB=ON \
     -DWITH_LIBV4L=ON \
-    -DWITH_CUDA=ON \
+    -DWITH_CUDA=OFF \
     -DWITH_GSTREAMER=ON \
     -DWITH_GSTREAMER_0_10=OFF \
     -DWITH_FFMPEG=OFF .. && \
