@@ -19,7 +19,7 @@ class HostDeviceMem:
 
     @property
     def nbytes(self):
-        return self.device.nbytes
+        return self.host.nbytes
 
     @property
     def hostptr(self):
