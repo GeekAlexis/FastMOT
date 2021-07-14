@@ -187,15 +187,7 @@ class YOLODetector(Detector):
         self.backend = TRTInference(self.model, 1)
         self.inp_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
 
-        # c, h, w = self.inp_handle.shape
-        # self.dev_buf = cp.empty((*self.size[::-1], c), dtype=np.uint8)
-        # self.dev_buf_small = cp.empty((h, w, c), dtype=np.uint8)
-
-        # self.dev_buf = None
-        # self.dev_buf_small = None
-
     def detect_async(self, frame):
-        # with self.backend.stream:
         self._preprocess(frame)
         self.backend.infer_async(from_device=True)
 
@@ -208,25 +200,15 @@ class YOLODetector(Detector):
         return detections
 
     def _preprocess(self, frame):
-        # frame = cv2.resize(frame, self.inp_handle.shape[:0:-1])
-        # cv2.resize(frame, self.inp_handle.shape[:0:-1], dst=self.frame_buf)
-        # self._normalize(self.frame_buf, self.inp_handle)
-
-        # frame_dev = cv2.cuda_GpuMat(frame)
-        # small_dev = cv2.cuda.resize(frame_dev, self.inp_handle.shape[:0:-1])
-        # self.dev_buf.data.copy_from(small_dev.cudaPtr(), small_dev.elemSize())
-        # self.dev_buf = cp.asarray(frame)
-        # self.dev_buf.data.copy_from(frame.ctypes.data, frame.nbytes)
-        # zoom = np.asarray(self.dev_buf_small.shape) / self.dev_buf.shape
-        # cupyx.scipy.ndimage.zoom(self.dev_buf, zoom, output=self.dev_buf_small, order=1, mode='opencv', grid_mode=True)
         frame_dev = cp.asarray(frame)
+        # resize
         zoom = np.roll(self.inp_handle.shape, -1) / frame_dev.shape
         small_dev = cupyx.scipy.ndimage.zoom(frame_dev, zoom, order=1, mode='opencv', grid_mode=True)
         # BGR to RGB
         rgb_dev = small_dev[..., ::-1]
         # HWC -> CHW
         chw_dev = rgb_dev.transpose(2, 0, 1)
-        # Normalize to [0, 1] interval
+        # normalize to [0, 1] interval
         cp.multiply(chw_dev, 1 / 255., out=self.inp_handle)
 
     def _create_letterbox(self):
@@ -247,16 +229,6 @@ class YOLODetector(Detector):
         inp_reshaped[:] = 0.5 # initial value for letterbox
         inp_handle = inp_reshaped[roi]
         return inp_handle, upscaled_sz, bbox_offset
-
-    @staticmethod
-    @nb.njit(fastmath=True, cache=True)
-    def _normalize(frame, out):
-        # BGR to RGB
-        rgb = frame[..., ::-1]
-        # HWC -> CHW
-        chw = rgb.transpose(2, 0, 1)
-        # Normalize to [0, 1] interval
-        out[:] = chw / 255.
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

@@ -64,7 +64,7 @@ class FeatureExtractor:
         embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
         return embeddings
 
-    def null_features(self, detections):
+    def null_embeddings(self, detections):
         """
         Returns returns a NxM matrix of N zero embeddings with dimension M.
         This API effectively disables feature extraction.
