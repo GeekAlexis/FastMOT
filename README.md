@@ -46,11 +46,11 @@ FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Chal
 - cuDNN >= 7
 - TensorRT >= 7
 - OpenCV >= 3.3
-- PyCuda
-- Numpy >= 1.15
+- Numpy >= 1.17
 - Scipy >= 1.5
-- TensorFlow < 2.0 (for SSD support)
 - Numba == 0.48
+- CuPy == 9.2
+- TensorFlow < 2.0 (for SSD support)
 - cython-bbox
 
 ### Install for x86 Ubuntu

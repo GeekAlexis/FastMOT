@@ -1,46 +1,47 @@
 #!/bin/bash
 
-DIR=$HOME
-
-# Jetpack 4.4+ (OpenCV, CUDA, TensorRT) is required
-JP_VERSION=45
-TF_VERSION=1.15.4
-NV_VERSION=20.12
-
 set -e
 
-# set up environment variables
-echo 'export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}' >> ~/.bashrc 
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}' >> ~/.bashrc 
-source ~/.bashrc
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <Jetpack Version>"
+    exit 1
+fi
+JP_VERSION="${1//.}"
 
-# install pip, numpy, pycuda, tensorflow, cython-bbox
+# Jetpack>=4.4 (OpenCV, CUDA, TensorRT) is required
+if [[ $JP_VERSION == 45 ]]; then
+    TF_VERSION=1.15.4
+    NV_VERSION=20.12
+elif [[ $JP_VERSION == 44 ]]; then
+    TF_VERSION=1.15.2
+    NV_VERSION=20.4
+else
+    echo "Error: unsupported Jetpack Version, 4.4+ is required"
+    exit 1
+fi
+
+# Set up CUDA environment
+if [ ! -x "$(command -v nvcc)" ]; then
+    echo "export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}" >> ~/.bashrc
+    echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> ~/.bashrc
+    source ~/.bashrc
+fi
+
+# Numpy, PyCUDA, TensorFlow, cython-bbox
 sudo apt-get update
-sudo apt-get install python3-pip libhdf5-serial-dev hdf5-tools libcanberra-gtk-module
+sudo apt-get install -y python3-pip libhdf5-serial-dev hdf5-tools libcanberra-gtk-module
 sudo -H pip3 install cython
 sudo -H pip3 install numpy cython-bbox
-sudo -H pip3 install --global-option=build_ext --global-option="-I/usr/local/cuda/include" --global-option="-L/usr/local/cuda/lib64" pycuda
 sudo -H pip3 install --no-cache-dir --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v$JP_VERSION tensorflow==$TF_VERSION+nv$NV_VERSION
 
-# install scipy
-sudo apt-get install libatlas-base-dev gfortran
-sudo -H pip3 install scipy==1.5.0
+# Scipy
+sudo apt-get install -y libatlas-base-dev gfortran
+sudo -H pip3 install scipy==1.5
 
-# install llvm (This may take a while)
-cd $DIR
-wget http://releases.llvm.org/7.0.1/llvm-7.0.1.src.tar.xz
-tar -xvf llvm-7.0.1.src.tar.xz
-cd llvm-7.0.1.src
-mkdir llvm_build_dir
-cd llvm_build_dir/
-cmake ../ -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD="ARM;X86;AArch64"
-make -j4
-sudo make install
-cd bin/
-echo "export LLVM_CONFIG=\""`pwd`"/llvm-config\"" >> ~/.bashrc
-echo "alias llvm='"`pwd`"/llvm-lit'" >> ~/.bashrc
-source ~/.bashrc
-sudo -H pip3 install llvmlite==0.31.0
+# Numba
+sudo apt-get install -y llvm-8 llvm-8-dev
+sudo -H LLVM_CONFIG=/usr/bin/llvm-config-8 pip3 install numba==0.48
 
-# install numba
-sudo -H pip3 install numba==0.48
+# CuPy
+echo "Installing CuPy, this may take a while..."
+sudo -H CUPY_NVCC_GENERATE_CODE="current" CUPY_NUM_BUILD_JOBS=$(nproc) pip3 install cupy==9.2
