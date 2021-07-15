@@ -79,11 +79,11 @@ COPY requirements.txt .
 # tensorflow is not supported in 21.05
 RUN if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
         pip install --no-cache-dir cython && \
-        pip install --no-cache-dir -r <(grep -ivE "tensorflow" requirements.txt); \
+        CUPY_NVCC_GENERATE_CODE=current CUPY_NUM_BUILD_JOBS=$(nproc) pip install --no-cache-dir -r <(grep -ivE "tensorflow" requirements.txt); \
     else \
         dpkg -i ${SCRIPT_DIR}/*-tf_*.deb && \
         pip install --no-cache-dir cython && \
-        pip install --no-cache-dir -r requirements.txt; \
+        CUPY_NVCC_GENERATE_CODE=current CUPY_NUM_BUILD_JOBS=$(nproc) pip install --no-cache-dir -r requirements.txt; \
     fi
 
 # ------------------------------------  Extras Below  ------------------------------------
