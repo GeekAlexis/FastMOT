@@ -33,7 +33,8 @@ RUN apt-get -y update && \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly \
     libtbb2 libtbb-dev libdc1394-22-dev && \
-    pip install --no-cache-dir numpy
+    pip install -U --no-cache-dir setuptools pip && \
+    pip install --no-cache-dir numpy==1.18.0
 
 # Build OpenCV
 WORKDIR ${HOME}
@@ -75,14 +76,19 @@ RUN cmake \
 WORKDIR ${APP_DIR}/FastMOT
 COPY requirements.txt .
 
-# tensorflow is not supported in 21.05
-RUN if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
-        pip install --no-cache-dir cython && \
-        pip install --no-cache-dir -r <(grep -ivE "tensorflow" requirements.txt); \
+# Specify your GPU compute with --build-arg for CuPy (e.g. "arch=compute_75,code=sm_75")
+ARG CUPY_NVCC_GENERATE_CODE
+
+# TensorFlow is not supported in 21.05
+RUN if [[ -z ${CUPY_NVCC_GENERATE_CODE} ]]; then \
+        echo "CUPY_NVCC_GENERATE_CODE not set, building CuPy for all architectures (slower)"; \
+    fi && \
+    pip install --no-cache-dir cython && \
+    if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
+        CUPY_NUM_BUILD_JOBS=$(nproc) pip install --no-cache-dir -r <(grep -ivE "tensorflow" requirements.txt); \
     else \
         dpkg -i ${SCRIPT_DIR}/*-tf_*.deb && \
-        pip install --no-cache-dir cython && \
-        pip install --no-cache-dir -r requirements.txt; \
+        CUPY_NUM_BUILD_JOBS=$(nproc) pip install --no-cache-dir -r requirements.txt; \
     fi
 
 # ------------------------------------  Extras Below  ------------------------------------

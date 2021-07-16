@@ -4,10 +4,12 @@ import configparser
 import abc
 import numpy as np
 import numba as nb
+import cupy as cp
+import cupyx.scipy.ndimage
 import cv2
 
 from . import models
-from .utils import InferenceBackend
+from .utils import TRTInference
 from .utils.rect import as_rect, to_tlbr, get_size, area
 from .utils.rect import union, crop, multi_crop, iom, diou_nms
 
@@ -60,10 +62,10 @@ class SSDDetector(Detector):
         self.merge_thresh = config['merge_thresh']
 
         self.batch_size = int(np.prod(self.tiling_grid))
-        self.inp_stride = np.prod(self.model.INPUT_SHAPE)
         self.tiles, self.tiling_region_size = self._generate_tiles()
         self.scale_factor = np.asarray(self.size) / self.tiling_region_size
-        self.backend = InferenceBackend(self.model, self.batch_size)
+        self.backend = TRTInference(self.model, self.batch_size)
+        self.inp_handle = self.backend.input.host.reshape(self.batch_size, *self.model.INPUT_SHAPE)
 
     def detect_async(self, frame):
         self._preprocess(frame)
@@ -79,7 +81,7 @@ class SSDDetector(Detector):
 
     def _preprocess(self, frame):
         frame = cv2.resize(frame, self.tiling_region_size)
-        self._normalize(frame, self.tiles, self.backend.input_handle, self.inp_stride)
+        self._normalize(frame, self.tiles, self.inp_handle)
 
     def _generate_tiles(self):
         tile_size = np.asarray(self.model.INPUT_SHAPE[:0:-1])
@@ -101,18 +103,16 @@ class SSDDetector(Detector):
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
-    def _normalize(frame, tiles, out, stride):
+    def _normalize(frame, tiles, out):
         imgs = multi_crop(frame, tiles)
         for i in nb.prange(len(imgs)):
-            offset = i * stride
             bgr = imgs[i]
             # BGR to RGB
             rgb = bgr[..., ::-1]
             # HWC -> CHW
             chw = rgb.transpose(2, 0, 1)
             # Normalize to [-1.0, 1.0] interval
-            normalized = chw * (2 / 255) - 1
-            out[offset:offset + stride] = normalized.ravel()
+            out[i] = chw * (2 / 255.) - 1.
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
@@ -184,12 +184,12 @@ class YOLODetector(Detector):
         self.max_area = config['max_area']
         self.nms_thresh = config['nms_thresh']
 
-        self.backend = InferenceBackend(self.model, 1)
-        self.input_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
+        self.backend = TRTInference(self.model, 1)
+        self.inp_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
 
     def detect_async(self, frame):
         self._preprocess(frame)
-        self.backend.infer_async()
+        self.backend.infer_async(from_device=True)
 
     def postprocess(self):
         det_out = self.backend.synchronize()
@@ -200,8 +200,16 @@ class YOLODetector(Detector):
         return detections
 
     def _preprocess(self, frame):
-        frame = cv2.resize(frame, self.input_handle.shape[:0:-1])
-        self._normalize(frame, self.input_handle)
+        frame_dev = cp.asarray(frame)
+        # resize
+        zoom = np.roll(self.inp_handle.shape, -1) / frame_dev.shape
+        small_dev = cupyx.scipy.ndimage.zoom(frame_dev, zoom, order=1, mode='opencv', grid_mode=True)
+        # BGR to RGB
+        rgb_dev = small_dev[..., ::-1]
+        # HWC -> CHW
+        chw_dev = rgb_dev.transpose(2, 0, 1)
+        # normalize to [0, 1] interval
+        cp.multiply(chw_dev, 1 / 255., out=self.inp_handle)
 
     def _create_letterbox(self):
         src_size = np.asarray(self.size)
@@ -210,29 +218,17 @@ class YOLODetector(Detector):
             scale_factor = min(dst_size / src_size)
             scaled_size = np.rint(src_size * scale_factor).astype(int)
             img_offset = (dst_size - scaled_size) / 2
-            insert_roi = to_tlbr(np.r_[img_offset, scaled_size])
+            roi = np.s_[:, img_offset[1]:scaled_size[1] + 1, img_offset[0]:scaled_size[0] + 1]
             upscaled_sz = np.rint(dst_size / scale_factor).astype(int)
             bbox_offset = (upscaled_sz - src_size) / 2
-            self.backend.input_handle = 0.5
         else:
+            roi = np.s_[:]
             upscaled_sz = src_size
-            insert_roi = to_tlbr(np.r_[0, 0, dst_size])
             bbox_offset = np.zeros(2)
-
-        input_handle = self.backend.input_handle.reshape(self.model.INPUT_SHAPE)
-        input_handle = crop(input_handle, insert_roi, chw=True)
-        return input_handle, upscaled_sz, bbox_offset
-
-    @staticmethod
-    @nb.njit(fastmath=True, cache=True)
-    def _normalize(frame, out):
-        # BGR to RGB
-        rgb = frame[..., ::-1]
-        # HWC -> CHW
-        chw = rgb.transpose(2, 0, 1)
-        # Normalize to [0, 1] interval
-        normalized = chw / 255.
-        out[:] = normalized
+        inp_reshaped = self.backend.input.device.reshape(self.model.INPUT_SHAPE)
+        inp_reshaped[:] = 0.5 # initial value for letterbox
+        inp_handle = inp_reshaped[roi]
+        return inp_handle, upscaled_sz, bbox_offset
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

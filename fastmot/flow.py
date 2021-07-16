@@ -2,6 +2,7 @@ import logging
 import itertools
 import numpy as np
 import numba as nb
+import cupyx
 import cv2
 
 from .utils.rect import to_tlbr, get_size, get_center
@@ -42,16 +43,27 @@ class Flow:
         self.bg_feat_detector = cv2.FastFeatureDetector_create(threshold=self.bg_feat_thresh)
 
         # background feature points for visualization
-        self.bg_keypoints = np.empty((0, 2), np.float32)
-        self.prev_bg_keypoints = np.empty((0, 2), np.float32)
+        self.bg_keypoints = None
+        self.prev_bg_keypoints = None
 
-        # previous frames
-        self.prev_frame_gray = None
-        self.prev_frame_small = None
+        # preallocate frame buffers
+        opt_flow_sz = (
+            round(self.opt_flow_scale_factor[0] * self.size[0]),
+            round(self.opt_flow_scale_factor[1] * self.size[1])
+        )
+        self.frame_gray = cupyx.empty_pinned(self.size[::-1], np.uint8)
+        self.frame_small = cupyx.empty_pinned(opt_flow_sz[::-1], np.uint8)
+        self.prev_frame_gray = cupyx.empty_like_pinned(self.frame_gray)
+        self.prev_frame_small = cupyx.empty_like_pinned(self.frame_small)
 
-        # preallocate
-        self.ones = np.full(self.size[::-1], 255, np.uint8)
-        self.fg_mask = np.empty_like(self.ones)
+        bg_feat_sz = (
+            round(self.bg_feat_scale_factor[0] * self.size[0]),
+            round(self.bg_feat_scale_factor[1] * self.size[1])
+        )
+        self.prev_frame_bg = cupyx.empty_pinned(bg_feat_sz[::-1], np.uint8)
+        self.bg_mask_small = cupyx.empty_like_pinned(self.prev_frame_bg)
+
+        self.fg_mask = cupyx.empty_like_pinned(self.frame_gray)
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
     def init(self, frame):
@@ -63,10 +75,9 @@ class Flow:
         frame : ndarray
             Initial frame.
         """
-        self.prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self.prev_frame_small = cv2.resize(self.prev_frame_gray, None,
-                                           fx=self.opt_flow_scale_factor[0],
-                                           fy=self.opt_flow_scale_factor[1])
+        cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY, dst=self.prev_frame_gray)
+        cv2.resize(self.prev_frame_gray, self.prev_frame_small.shape[::-1],
+                   dst=self.prev_frame_small)
         self.bg_keypoints = np.empty((0, 2), np.float32)
         self.prev_bg_keypoints = np.empty((0, 2), np.float32)
 
@@ -87,15 +98,15 @@ class Flow:
             boxes of [x1, x2, y1, y2] as values, and a 3x3 homography matrix.
         """
         # preprocess frame
-        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_small = cv2.resize(frame_gray, None, fx=self.opt_flow_scale_factor[0],
-                                 fy=self.opt_flow_scale_factor[1])
+        cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY, dst=self.frame_gray)
+        cv2.resize(self.frame_gray, self.frame_small.shape[::-1], dst=self.frame_small)
+
         # order tracks from closest to farthest
         tracks.sort(reverse=True)
 
         # detect target feature points
         all_prev_pts = []
-        np.copyto(self.fg_mask, self.ones)
+        self.fg_mask[:] = 255
         for track in tracks:
             inside_tlbr = intersection(track.tlbr, self.frame_rect)
             target_mask = crop(self.fg_mask, inside_tlbr)
@@ -121,15 +132,14 @@ class Flow:
         target_begins = itertools.chain([0], target_ends[:-1])
 
         # detect background feature points
-        prev_frame_small_bg = cv2.resize(self.prev_frame_gray, None,
-                                         fx=self.bg_feat_scale_factor[0],
-                                         fy=self.bg_feat_scale_factor[1])
-        bg_mask_small = cv2.resize(self.fg_mask, None, fx=self.bg_feat_scale_factor[0],
-                                   fy=self.bg_feat_scale_factor[1], interpolation=cv2.INTER_NEAREST)
-        keypoints = self.bg_feat_detector.detect(prev_frame_small_bg, mask=bg_mask_small)
+        cv2.resize(self.prev_frame_gray, self.prev_frame_bg.shape[::-1], dst=self.prev_frame_bg)
+        cv2.resize(self.fg_mask, self.bg_mask_small.shape[::-1], dst=self.bg_mask_small,
+                   interpolation=cv2.INTER_NEAREST)
+        keypoints = self.bg_feat_detector.detect(self.prev_frame_bg, mask=self.bg_mask_small)
         if len(keypoints) == 0:
             self.bg_keypoints = np.empty((0, 2), np.float32)
-            self.prev_frame_gray, self.prev_frame_small = frame_gray, frame_small
+            self.prev_frame_gray, self.frame_gray = self.frame_gray, self.prev_frame_gray
+            self.prev_frame_small, self.frame_small = self.frame_small, self.prev_frame_small
             LOGGER.warning('Camera motion estimation failed')
             return {}, None
         keypoints = np.float32([kp.pt for kp in keypoints])
@@ -140,14 +150,15 @@ class Flow:
         # match features using optical flow
         all_prev_pts = np.concatenate(all_prev_pts)
         scaled_prev_pts = self._scale_pts(all_prev_pts, self.opt_flow_scale_factor)
-        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(self.prev_frame_small, frame_small,
+        all_cur_pts, status, err = cv2.calcOpticalFlowPyrLK(self.prev_frame_small, self.frame_small,
                                                             scaled_prev_pts, None,
                                                             **self.opt_flow_params)
         status = self._get_status(status, err, self.max_error)
         all_cur_pts = self._unscale_pts(all_cur_pts, self.opt_flow_scale_factor, status)
 
-        # reuse preprocessed frame for next prediction
-        self.prev_frame_gray, self.prev_frame_small = frame_gray, frame_small
+        # save preprocessed frame buffers for next prediction
+        self.prev_frame_gray, self.frame_gray = self.frame_gray, self.prev_frame_gray
+        self.prev_frame_small, self.frame_small = self.frame_small, self.prev_frame_small
 
         # estimate camera motion
         homography = None
@@ -170,7 +181,7 @@ class Flow:
 
         # estimate target bounding boxes
         next_bboxes = {}
-        np.copyto(self.fg_mask, self.ones)
+        self.fg_mask[:] = 255
         for begin, end, track in zip(target_begins, target_ends, tracks):
             prev_pts, matched_pts = self._get_good_match(all_prev_pts, all_cur_pts,
                                                          status, begin, end)

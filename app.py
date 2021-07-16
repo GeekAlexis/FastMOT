@@ -87,8 +87,8 @@ def main():
         stream.release()
         cv2.destroyAllWindows()
 
+    # timing statistics
     if args.mot:
-        # timing statistics
         avg_fps = round(mot.frame_count / prof.duration)
         logger.info('Average FPS: %d', avg_fps)
         mot.print_timing_info()

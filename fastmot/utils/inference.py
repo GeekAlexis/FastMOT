@@ -1,13 +1,15 @@
 import ctypes
-import pycuda.autoinit
-import pycuda.driver as cuda
+import cupy as cp
+import cupyx
 import tensorrt as trt
 
 
 class HostDeviceMem:
-    def __init__(self, host_mem, device_mem):
-        self.host = host_mem
-        self.device = device_mem
+    def __init__(self, size, dtype):
+        self.size = size
+        self.dtype = dtype
+        self.host = cupyx.empty_pinned(size, dtype)
+        self.device = cp.empty(size, dtype)
 
     def __str__(self):
         return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
@@ -15,8 +17,26 @@ class HostDeviceMem:
     def __repr__(self):
         return self.__str__()
 
+    @property
+    def nbytes(self):
+        return self.host.nbytes
 
-class InferenceBackend:
+    @property
+    def hostptr(self):
+        return self.host.ctypes.data
+
+    @property
+    def devptr(self):
+        return self.device.data.ptr
+
+    def copy_htod_async(self, stream):
+        self.device.data.copy_from_host_async(self.hostptr, self.nbytes, stream)
+
+    def copy_dtoh_async(self, stream):
+        self.device.data.copy_to_host_async(self.hostptr, self.nbytes, stream)
+
+
+class TRTInference:
     # initialize TensorRT
     TRT_LOGGER = trt.Logger(trt.Logger.ERROR)
     trt.init_libnvinfer_plugins(TRT_LOGGER, '')
@@ -34,18 +54,17 @@ class InferenceBackend:
 
         # load trt engine or build one if not found
         if not self.model.ENGINE_PATH.exists():
-            self.engine = self.model.build_engine(InferenceBackend.TRT_LOGGER, self.batch_size)
+            self.engine = self.model.build_engine(TRTInference.TRT_LOGGER, self.batch_size)
         else:
-            runtime = trt.Runtime(InferenceBackend.TRT_LOGGER)
+            runtime = trt.Runtime(TRTInference.TRT_LOGGER)
             with open(self.model.ENGINE_PATH, 'rb') as engine_file:
-                buf = engine_file.read()
-                self.engine = runtime.deserialize_cuda_engine(buf)
+                self.engine = runtime.deserialize_cuda_engine(engine_file.read())
         if self.engine is None:
             raise RuntimeError('Unable to load the engine file')
         if self.engine.has_implicit_batch_dimension:
             assert self.batch_size <= self.engine.max_batch_size
         self.context = self.engine.create_execution_context()
-        self.stream = cuda.Stream()
+        self.stream = cp.cuda.Stream()
 
         # allocate buffers
         self.bindings = []
@@ -58,45 +77,43 @@ class InferenceBackend:
                 size *= self.batch_size
             dtype = trt.nptype(self.engine.get_binding_dtype(binding))
             # allocate host and device buffers
-            host_mem = cuda.pagelocked_empty(size, dtype)
-            device_mem = cuda.mem_alloc(host_mem.nbytes)
+            buffer = HostDeviceMem(size, dtype)
             # append the device buffer to device bindings
-            self.bindings.append(int(device_mem))
+            self.bindings.append(buffer.devptr)
             if self.engine.binding_is_input(binding):
                 if not self.engine.has_implicit_batch_dimension:
                     assert self.batch_size == shape[0]
                 # expect one input
-                self.input = HostDeviceMem(host_mem, device_mem)
+                self.input = buffer
             else:
-                self.outputs.append(HostDeviceMem(host_mem, device_mem))
+                self.outputs.append(buffer)
         assert self.input is not None
 
         # timing events
-        self.start = cuda.Event()
-        self.end = cuda.Event()
+        self.start = cp.cuda.Event()
+        self.end = cp.cuda.Event()
 
-    @property
-    def input_handle(self):
-        return self.input.host
-
-    @input_handle.setter
-    def input_handle(self, val):
-        self.input.host[:] = val
+    def __del__(self):
+        if hasattr(self, 'context'):
+            self.context.__del__()
+        if hasattr(self, 'engine'):
+            self.engine.__del__()
 
     def infer(self):
         self.infer_async()
         return self.synchronize()
 
-    def infer_async(self):
+    def infer_async(self, from_device=False):
         self.start.record(self.stream)
-        cuda.memcpy_htod_async(self.input.device, self.input.host, self.stream)
+        if not from_device:
+            self.input.copy_htod_async(self.stream)
         if self.engine.has_implicit_batch_dimension:
             self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings,
-                                       stream_handle=self.stream.handle)
+                                       stream_handle=self.stream.ptr)
         else:
-            self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
+            self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.ptr)
         for out in self.outputs:
-            cuda.memcpy_dtoh_async(out.host, out.device, self.stream)
+            out.copy_dtoh_async(self.stream)
         self.end.record(self.stream)
 
     def synchronize(self):
@@ -105,4 +122,4 @@ class InferenceBackend:
 
     def get_infer_time(self):
         self.end.synchronize()
-        return self.start.time_till(self.end)
+        return cp.cuda.get_elapsed_time(self.start, self.end)
