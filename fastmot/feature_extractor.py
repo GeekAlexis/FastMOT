@@ -66,7 +66,7 @@ class FeatureExtractor:
 
     def null_embeddings(self, detections):
         """
-        Returns returns a NxM matrix of N identical embeddings with dimension M.
+        Returns a NxM matrix of N identical embeddings with dimension M.
         This API effectively disables feature extraction.
         """
         embeddings = np.ones((len(detections), self.feature_dim))

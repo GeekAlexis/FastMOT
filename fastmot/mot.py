@@ -73,7 +73,7 @@ class MOT:
             Time interval in seconds between each frame.
         """
         self.frame_count = 0
-        self.tracker.reset_dt(cap_dt)
+        self.tracker.reset(cap_dt)
 
     def step(self, frame):
         """

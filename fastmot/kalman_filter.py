@@ -30,9 +30,9 @@ class KalmanFilter:
         self.std_factor_acc = config['std_factor_acc']
         self.std_offset_acc = config['std_offset_acc']
         self.std_factor_det = config['std_factor_det']
-        self.std_factor_flow = config['std_factor_flow']
+        self.std_factor_klt = config['std_factor_klt']
         self.min_std_det = config['min_std_det']
-        self.min_std_flow = config['min_std_flow']
+        self.min_std_klt = config['min_std_klt']
         self.init_pos_weight = config['init_pos_weight']
         self.init_vel_weight = config['init_vel_weight']
         self.vel_coupling = config['vel_coupling']
@@ -122,8 +122,8 @@ class KalmanFilter:
             estimate.
         """
         if meas_type == MeasType.FLOW:
-            std_factor = self.std_factor_flow
-            min_std = self.min_std_flow
+            std_factor = self.std_factor_klt
+            min_std = self.min_std_klt
         elif meas_type == MeasType.DETECTOR:
             std_factor = self.std_factor_det
             min_std = self.min_std_det

@@ -1,21 +1,86 @@
+import threading
 import numpy as np
+import numba as nb
+from scipy.spatial.distance import cdist
 
 from .models import LABEL_MAP
 from .utils.rect import get_center
 
 
+class ClusterFeature:
+    def __init__(self, num_clusters, metric):
+        self.num_clusters = num_clusters
+        self.metric = metric
+        self.clusters = None
+        self.cluster_sizes = None
+        self._next = 0
+
+    def __len__(self):
+        return self._next
+
+    def update(self, embedding):
+        if self._next < self.num_clusters:
+            if self.clusters is None:
+                self.clusters = np.empty((self.num_clusters, len(embedding)))
+                self.cluster_sizes = np.zeros(self.num_clusters)
+            self.clusters[self._next, :] = embedding
+            self.cluster_sizes[self._next] += 1
+            self._next += 1
+        # elif np.sum(self.cluster_sizes) < 2 * self.num_clusters:
+        #     idx = np.random.randint(0, self.num_clusters - 1)
+        #     self.cluster_sizes[idx] += 1
+        #     self._seq_kmeans(self.clusters, self.cluster_sizes, embedding, idx)
+        else:
+            nearest_idx = np.argmin(cdist(np.atleast_2d(embedding), self.clusters, self.metric))
+            self.cluster_sizes[nearest_idx] += 1
+            self._seq_kmeans(self.clusters, self.cluster_sizes, embedding, nearest_idx)
+
+    def distance(self, embeddings):
+        return np.min(cdist(self.clusters, embeddings, self.metric), axis=0)
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _seq_kmeans(clusters, cluster_sizes, embedding, idx):
+        clusters[idx] += (embedding - clusters[idx]) / cluster_sizes[idx]
+
+
+class SmoothFeature:
+    def __init__(self, learning_rate):
+        self.lr = learning_rate
+        self.smooth_feat = None
+
+    def get(self):
+        return self.smooth_feat
+
+    def update(self, embedding):
+        if self.smooth_feat is None:
+            self.smooth_feat = embedding.copy()
+        else:
+            self._rolling(self.smooth_feat, embedding, self.lr)
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _rolling(smooth_feat, embedding, lr):
+        smooth_feat = (1. - lr) * smooth_feat + lr * embedding
+        smooth_feat /= np.linalg.norm(smooth_feat)
+
+
 class Track:
-    def __init__(self, frame_id, trk_id, tlbr, state, label):
+    _count = 0
+    _lock = threading.Lock()
+
+    def __init__(self, frame_id, tlbr, state, label, metric, num_clusters=4, learning_rate=0.9):
+        self.trk_id = self.next_id()
         self.start_frame = frame_id
-        self.trk_id = trk_id
         self.tlbr = tlbr
         self.state = state
         self.label = label
 
         self.age = 0
         self.hits = 0
-        self.alpha = 0.9
-        self.smooth_feature = None
+        self.clust_feat = ClusterFeature(num_clusters, metric)
+        self.smooth_feat = SmoothFeature(learning_rate)
+        self.last_feat = None
 
         self.inlier_ratio = 1.
         self.keypoints = np.empty((0, 2), np.float32)
@@ -48,7 +113,7 @@ class Track:
             self.hits += 1
             self.update_feature(embedding)
 
-    def reactivate(self, frame_id, tlbr, state, embedding):
+    def reinstate(self, frame_id, tlbr, state, embedding):
         self.start_frame = frame_id
         self.tlbr = tlbr
         self.state = state
@@ -61,8 +126,17 @@ class Track:
         self.age += 1
 
     def update_feature(self, embedding):
-        if self.smooth_feature is None:
-            self.smooth_feature = embedding
-        else:
-            self.smooth_feature = self.alpha * self.smooth_feature + (1. - self.alpha) * embedding
-            self.smooth_feature /= np.linalg.norm(self.smooth_feature)
+        self.last_feat = embedding
+        self.clust_feat.update(embedding)
+        self.smooth_feat.update(embedding)
+
+    @staticmethod
+    def reset():
+        # with Track._lock:
+        Track._count = 0
+
+    @staticmethod
+    def next_id():
+        # with Track._lock:
+        Track._count += 1
+        return Track._count

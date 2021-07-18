@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import itertools
 import logging
+import threading
 import numpy as np
 import numba as nb
 from scipy.optimize import linear_sum_assignment
@@ -34,6 +35,8 @@ class MultiTracker:
     config : Dict
         Tracker parameters.
     """
+    _history = OrderedDict()
+    _lock = threading.Lock()
 
     def __init__(self, size, metric, config):
         self.size = size
@@ -47,27 +50,28 @@ class MultiTracker:
         self.iou_thresh = config['iou_thresh']
         self.duplicate_iou = config['duplicate_iou']
         self.conf_thresh = config['conf_thresh']
-        self.lost_buf_size = config['lost_buf_size']
+        self.history_size = config['history_size']
 
-        self.next_id = 1
         self.tracks = {}
-        self.lost = OrderedDict()
         self.kf = KalmanFilter(config['kalman_filter'])
         self.flow = Flow(self.size, config['flow'])
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
-        self.flow_bboxes = {}
+        self.klt_bboxes = {}
         self.homography = None
 
-    def reset_dt(self, dt):
+    def reset(self, dt):
         """
-        Set KalmanFilter dt parameter.
+        Reset the tracker for new input context.
         Parameters
         ----------
         dt : float
             Time interval in seconds between each frame.
         """
         self.kf.reset_dt(dt)
+        Track.reset()
+        # with MultiTracker._lock:
+        MultiTracker._history.clear()
 
     def init(self, frame, detections):
         """
@@ -79,16 +83,13 @@ class MultiTracker:
         detections : recarray[DET_DTYPE]
             Record array of N detections.
         """
-        self.next_id = 1
         self.tracks.clear()
-        self.lost.clear()
         self.flow.init(frame)
         for det in detections:
             state = self.kf.create(det.tlbr)
-            new_trk = Track(0, self.next_id, det.tlbr, state, det.label)
-            self.tracks[self.next_id] = new_trk
+            new_trk = Track(0, det.tlbr, state, det.label, self.metric)
+            self.tracks[new_trk.trk_id] = new_trk
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")
-            self.next_id += 1
 
     def track(self, frame):
         """
@@ -110,26 +111,26 @@ class MultiTracker:
             The next frame.
         """
         active_tracks = [track for track in self.tracks.values() if track.active]
-        self.flow_bboxes, self.homography = self.flow.predict(frame, active_tracks)
+        self.klt_bboxes, self.homography = self.flow.predict(frame, active_tracks)
         if self.homography is None:
             # clear tracks when camera motion cannot be estimated
             self.tracks.clear()
 
     def apply_kalman(self):
         """
-        Performs kalman filter prediction and update from flow measurements.
+        Performs kalman filter prediction and update from KLT measurements.
         The function should be called after `compute_flow`.
         """
         for trk_id, track in list(self.tracks.items()):
             mean, cov = track.state
             mean, cov = self.kf.warp(mean, cov, self.homography)
             mean, cov = self.kf.predict(mean, cov)
-            if trk_id in self.flow_bboxes:
-                flow_tlbr = self.flow_bboxes[trk_id]
-                # give large flow uncertainty for occluded tracks
-                # usually these with high age and low inlier ratio
+            if trk_id in self.klt_bboxes:
+                klt_tlbr = self.klt_bboxes[trk_id]
+                # give large KLT uncertainty for occluded tracks
+                # usually these with large age and low inlier ratio
                 std_multiplier = max(self.age_penalty * track.age, 1) / track.inlier_ratio
-                mean, cov = self.kf.update(mean, cov, flow_tlbr, MeasType.FLOW, std_multiplier)
+                mean, cov = self.kf.update(mean, cov, klt_tlbr, MeasType.FLOW, std_multiplier)
             next_tlbr = as_rect(mean[:4])
             track.update(next_tlbr, (mean, cov))
             if iom(next_tlbr, self.frame_rect) < 0.5:
@@ -172,13 +173,6 @@ class MultiTracker:
         matches3, u_trk_ids3, u_det_ids = self._linear_assignment(cost, unconfirmed,
                                                                   u_det_ids, True)
 
-        # re-id with lost tracks
-        lost_ids = list(self.lost.keys())
-        u_det_ids = [det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh]
-        u_detections, u_embeddings = detections[u_det_ids], embeddings[u_det_ids]
-        cost = self._reid_cost(u_detections, u_embeddings)
-        reid_matches, _, u_det_ids = self._linear_assignment(cost, lost_ids, u_det_ids)
-
         matches = itertools.chain(matches1, matches2, matches3)
         u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
         updated, aged = [], []
@@ -198,16 +192,16 @@ class MultiTracker:
             else:
                 updated.append(trk_id)
 
-        # reactivate matched lost tracks
-        for trk_id, det_id in reid_matches:
-            track = self.lost[trk_id]
-            det = detections[det_id]
-            LOGGER.info(f"{'Reidentified:':<14}{track}")
-            state = self.kf.create(det.tlbr)
-            track.reactivate(frame_id, det.tlbr, state, embeddings[det_id])
-            self.tracks[trk_id] = track
-            del self.lost[trk_id]
-            updated.append(trk_id)
+        # # reactivate matched lost tracks
+        # for trk_id, det_id in reid_matches:
+        #     track = self.lost[trk_id]
+        #     det = detections[det_id]
+        #     LOGGER.info(f"{'Reidentified:':<14}{track}")
+        #     state = self.kf.create(det.tlbr)
+        #     track.reactivate(frame_id, det.tlbr, state, embeddings[det_id])
+        #     self.tracks[trk_id] = track
+        #     del self.lost[trk_id]
+        #     updated.append(trk_id)
 
         # clean up lost tracks
         for trk_id in u_trk_ids:
@@ -223,38 +217,57 @@ class MultiTracker:
             else:
                 aged.append(trk_id)
 
+        # reID with track history
+        u_det_ids = [det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh]
+        u_detections, u_embeddings = detections[u_det_ids], embeddings[u_det_ids]
+        # with MultiTracker._lock:
+        hist_ids = list(MultiTracker._history.keys())
+        cost = self._reid_cost(u_detections, u_embeddings)
+        reid_matches, _, u_det_ids = self._linear_assignment(cost, hist_ids, u_det_ids)
+
+        # reinstate matched tracks
+        for trk_id, det_id in reid_matches:
+            track = MultiTracker._history.pop(trk_id)
+            det = detections[det_id]
+            LOGGER.info(f"{'Reidentified:':<14}{track}")
+            state = self.kf.create(det.tlbr)
+            track.reinstate(frame_id, det.tlbr, state, embeddings[det_id])
+            self.tracks[trk_id] = track
+            updated.append(trk_id)
+
         # register new detections
         for det_id in u_det_ids:
             det = detections[det_id]
             state = self.kf.create(det.tlbr)
-            new_trk = Track(frame_id, self.next_id, det.tlbr, state, det.label)
-            self.tracks[self.next_id] = new_trk
+            new_trk = Track(frame_id, det.tlbr, state, det.label, self.metric)
+            self.tracks[new_trk.trk_id] = new_trk
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")
-            updated.append(self.next_id)
-            self.next_id += 1
+            updated.append(new_trk.trk_id)
 
         # remove duplicate tracks
         self._remove_duplicate(updated, aged)
 
     def _mark_lost(self, trk_id):
-        self.lost[trk_id] = self.tracks[trk_id]
-        if len(self.lost) > self.lost_buf_size:
-            self.lost.popitem(last=False)
-        del self.tracks[trk_id]
+        # with MultiTracker._lock:
+        MultiTracker._history[trk_id] = self.tracks.pop(trk_id)
+        if len(MultiTracker._history) > self.history_size:
+            MultiTracker._history.popitem(last=False)
 
     def _matching_cost(self, trk_ids, detections, embeddings):
         if len(trk_ids) == 0 or len(detections) == 0:
             return np.empty((len(trk_ids), len(detections)))
 
-        features = [self.tracks[trk_id].smooth_feature for trk_id in trk_ids]
-        cost = cdist(features, embeddings, self.metric)
+        smooth_feats = [self.tracks[trk_id].smooth_feat.get() for trk_id in trk_ids]
+        cost = cdist(smooth_feats, embeddings, self.metric)
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
+            f_smooth_dist = cost[i]
+            f_clust_dist = track.clust_feat.distance(embeddings)
             motion_dist = self.kf.motion_distance(*track.state, detections.tlbr)
             normalized_age = track.age / self.max_age
-            cost[i] = self._fuse_motion(cost[i], motion_dist, detections.label, track.label,
-                                        normalized_age, self.max_feat_cost, self.motion_weight,
-                                        self.age_weight)
+            self._fuse_dist(f_smooth_dist, f_clust_dist, motion_dist, detections.label, cost[i],
+                            track.label, normalized_age, self.max_feat_cost,
+                            self.motion_weight, self.age_weight)
         return cost
 
     def _iou_cost(self, trk_ids, detections):
@@ -266,17 +279,20 @@ class MultiTracker:
         trk_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
         det_bboxes = detections.tlbr
         ious = bbox_overlaps(trk_bboxes, det_bboxes)
-        ious = self._gate_cost(ious, trk_labels, detections.label, self.iou_thresh, True)
+        self._gate_cost(ious, trk_labels, detections.label, self.iou_thresh, True)
         return ious
 
     def _reid_cost(self, detections, embeddings):
-        if len(self.lost) == 0 or len(detections) == 0:
-            return np.empty((len(self.lost), len(detections)))
+        if len(MultiTracker._history) == 0 or len(detections) == 0:
+            return np.empty((len(MultiTracker._history), len(detections)))
 
-        trk_labels = np.array([track.label for track in self.lost.values()])
-        features = [track.smooth_feature for track in self.lost.values()]
-        cost = cdist(features, embeddings, self.metric)
-        cost = self._gate_cost(cost, trk_labels, detections.label, self.max_reid_cost)
+        trk_labels = np.array([track.label for track in MultiTracker._history.values()])
+        smooth_feats = [track.smooth_feat.get() for track in MultiTracker._history.values()]
+        cost = cdist(smooth_feats, embeddings, self.metric)
+        for i, track in enumerate(MultiTracker._history.values()):
+            f_clust_dist = track.clust_feat.distance(embeddings)
+            cost[i] = np.minimum(cost[i], f_clust_dist)
+        self._gate_cost(cost, trk_labels, detections.label, self.max_reid_cost)
         return cost
 
     def _remove_duplicate(self, updated, aged):
@@ -325,20 +341,20 @@ class MultiTracker:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _fuse_motion(cost, motion_dist, det_labels, label, age, max_cost, w1, w2):
-        gate = (cost > max_cost) | (motion_dist > CHI_SQ_INV_95) | (label != det_labels)
-        cost = cost + w1 * motion_dist + w2 * age
-        cost[gate] = INF_COST
-        return cost
+    def _fuse_dist(f_smooth_dist, f_clust_dist, m_dist, d_labels, out,
+                   label, age, max_f_dist, w1, w2):
+        f_dist = np.minimum(f_smooth_dist, f_clust_dist)
+        gate = (f_dist > max_f_dist) | (m_dist > CHI_SQ_INV_95) | (label != d_labels)
+        out[:] = f_dist + w1 * m_dist + w2 * age
+        out[gate] = INF_COST
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
-    def _gate_cost(cost, trk_labels, det_labels, thresh, maximize=False):
+    def _gate_cost(cost, t_labels, d_labels, thresh, maximize=False):
         for i in nb.prange(len(cost)):
             if maximize:
-                gate = (cost[i] < thresh) | (trk_labels[i] != det_labels)
+                gate = (cost[i] < thresh) | (t_labels[i] != d_labels)
                 cost[i][gate] = 0
             else:
-                gate = (cost[i] > thresh) | (trk_labels[i] != det_labels)
+                gate = (cost[i] > thresh) | (t_labels[i] != d_labels)
                 cost[i][gate] = INF_COST
-        return cost
