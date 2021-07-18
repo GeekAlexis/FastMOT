@@ -179,3 +179,4 @@ FastMOT supports multi-class tracking and can be easily extended to custom class
   url          = {https://doi.org/10.5281/zenodo.4294717}
 }
 ```
+kokoloko
