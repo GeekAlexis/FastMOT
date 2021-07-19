@@ -1,9 +1,10 @@
 import threading
 import numpy as np
 import numba as nb
-from scipy.spatial.distance import cdist
 
 from .models import LABEL_MAP
+from .utils.distance import cdist
+from .utils.numba import apply_along_axis
 from .utils.rect import get_center
 
 
@@ -13,30 +14,40 @@ class ClusterFeature:
         self.metric = metric
         self.clusters = None
         self.cluster_sizes = None
-        self._next = 0
+        self._next_idx = 0
 
     def __len__(self):
-        return self._next
+        return self._next_idx
 
     def update(self, embedding):
-        if self._next < self.num_clusters:
+        if self._next_idx < self.num_clusters:
             if self.clusters is None:
-                self.clusters = np.empty((self.num_clusters, len(embedding)))
-                self.cluster_sizes = np.zeros(self.num_clusters)
-            self.clusters[self._next, :] = embedding
-            self.cluster_sizes[self._next] += 1
-            self._next += 1
+                self.clusters = np.empty((self.num_clusters, len(embedding)), embedding.dtype)
+                self.cluster_sizes = np.zeros(self.num_clusters, np.int_)
+            self.clusters[self._next_idx] = embedding
+            self.cluster_sizes[self._next_idx] += 1
+            self._next_idx += 1
         # elif np.sum(self.cluster_sizes) < 2 * self.num_clusters:
         #     idx = np.random.randint(0, self.num_clusters - 1)
         #     self.cluster_sizes[idx] += 1
         #     self._seq_kmeans(self.clusters, self.cluster_sizes, embedding, idx)
         else:
-            nearest_idx = np.argmin(cdist(np.atleast_2d(embedding), self.clusters, self.metric))
+            nearest_idx = self._get_nearest_cluster(self.clusters, embedding, self.metric)
             self.cluster_sizes[nearest_idx] += 1
             self._seq_kmeans(self.clusters, self.cluster_sizes, embedding, nearest_idx)
 
     def distance(self, embeddings):
-        return np.min(cdist(self.clusters, embeddings, self.metric), axis=0)
+        return self._nearest_cluster_dist(self.clusters, embeddings, self.metric)
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _get_nearest_cluster(clusters, embedding, metric):
+        return np.argmin(cdist(np.atleast_2d(embedding), clusters, metric))
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _nearest_cluster_dist(clusters, embeddings, metric):
+        return apply_along_axis(np.min, cdist(clusters, embeddings, metric), axis=0)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)

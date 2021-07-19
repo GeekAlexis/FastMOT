@@ -7,7 +7,7 @@ from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import Profiler
 from .utils.visualization import draw_tracks, draw_detections
-from .utils.visualization import draw_flow_bboxes, draw_background_flow
+from .utils.visualization import draw_klt_bboxes, draw_background_flow
 
 
 LOGGER = logging.getLogger(__name__)
@@ -127,7 +127,7 @@ class MOT:
         draw_tracks(frame, self.visible_tracks, show_flow=self.verbose)
         if self.verbose:
             draw_detections(frame, detections)
-            draw_flow_bboxes(frame, self.tracker)
+            draw_klt_bboxes(frame, self.tracker)
             draw_background_flow(frame, self.tracker)
         cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

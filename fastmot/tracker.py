@@ -5,12 +5,12 @@ import threading
 import numpy as np
 import numba as nb
 from scipy.optimize import linear_sum_assignment
-from scipy.spatial.distance import cdist
 from cython_bbox import bbox_overlaps
 
 from .track import Track
 from .flow import Flow
 from .kalman_filter import MeasType, KalmanFilter
+from .utils.distance import cdist
 from .utils.rect import as_rect, to_tlbr, iom
 
 
@@ -257,7 +257,7 @@ class MultiTracker:
         if len(trk_ids) == 0 or len(detections) == 0:
             return np.empty((len(trk_ids), len(detections)))
 
-        smooth_feats = [self.tracks[trk_id].smooth_feat.get() for trk_id in trk_ids]
+        smooth_feats = np.array([self.tracks[trk_id].smooth_feat.get() for trk_id in trk_ids])
         cost = cdist(smooth_feats, embeddings, self.metric)
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
@@ -287,7 +287,7 @@ class MultiTracker:
             return np.empty((len(MultiTracker._history), len(detections)))
 
         trk_labels = np.array([track.label for track in MultiTracker._history.values()])
-        smooth_feats = [track.smooth_feat.get() for track in MultiTracker._history.values()]
+        smooth_feats = np.array([track.smooth_feat.get() for track in MultiTracker._history.values()])
         cost = cdist(smooth_feats, embeddings, self.metric)
         for i, track in enumerate(MultiTracker._history.values()):
             f_clust_dist = track.clust_feat.distance(embeddings)

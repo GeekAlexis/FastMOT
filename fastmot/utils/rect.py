@@ -96,32 +96,6 @@ def iom(tlbr1, tlbr2):
 
 
 @nb.njit(fastmath=True, cache=True)
-def transform(pts, m):
-    """
-    Numba implementation of OpenCV's transform.
-    """
-    pts = np.asarray(pts)
-    pts = np.atleast_2d(pts)
-    augment = np.ones((len(pts), 1))
-    pts = np.concatenate((pts, augment), axis=1)
-    return pts @ m.T
-
-
-@nb.njit(fastmath=True, cache=True)
-def perspective_transform(pts, m):
-    """
-    Numba implementation of OpenCV's perspectiveTransform.
-    """
-    pts = np.asarray(pts)
-    pts = np.atleast_2d(pts)
-    augment = np.ones((len(pts), 1))
-    pts = np.concatenate((pts, augment), axis=1).T
-    pts = m @ pts
-    pts = pts / pts[-1]
-    return pts[:2].T
-
-
-@nb.njit(fastmath=True, cache=True)
 def nms(tlwhs, scores, nms_thresh):
     """
     Applies Non-Maximum Suppression on the bounding boxes [x, y, w, h].

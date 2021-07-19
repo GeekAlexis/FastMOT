@@ -20,8 +20,8 @@ def draw_detections(frame, detections):
         draw_bbox(frame, det.tlbr, (255, 255, 255), 1)
 
 
-def draw_flow_bboxes(frame, tracker):
-    for tlbr in tracker.flow_bboxes.values():
+def draw_klt_bboxes(frame, tracker):
+    for tlbr in tracker.klt_bboxes.values():
         draw_bbox(frame, tlbr, 0, 1)
 
 

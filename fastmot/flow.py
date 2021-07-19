@@ -6,7 +6,8 @@ import cupyx
 import cv2
 
 from .utils.rect import to_tlbr, get_size, get_center
-from .utils.rect import mask_area, intersection, crop, transform
+from .utils.rect import mask_area, intersection, crop
+from .utils.numba import transform
 
 
 LOGGER = logging.getLogger(__name__)
