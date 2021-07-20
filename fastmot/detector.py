@@ -200,16 +200,17 @@ class YOLODetector(Detector):
         return detections
 
     def _preprocess(self, frame):
-        frame_dev = cp.asarray(frame)
-        # resize
-        zoom = np.roll(self.inp_handle.shape, -1) / frame_dev.shape
-        small_dev = cupyx.scipy.ndimage.zoom(frame_dev, zoom, order=1, mode='opencv', grid_mode=True)
-        # BGR to RGB
-        rgb_dev = small_dev[..., ::-1]
-        # HWC -> CHW
-        chw_dev = rgb_dev.transpose(2, 0, 1)
-        # normalize to [0, 1] interval
-        cp.multiply(chw_dev, 1 / 255., out=self.inp_handle)
+        zoom = np.roll(self.inp_handle.shape, -1) / frame.shape
+        with self.backend.stream:
+            frame_dev = cp.asarray(frame)
+            # resize
+            small_dev = cupyx.scipy.ndimage.zoom(frame_dev, zoom, order=1, mode='opencv', grid_mode=True)
+            # BGR to RGB
+            rgb_dev = small_dev[..., ::-1]
+            # HWC -> CHW
+            chw_dev = rgb_dev.transpose(2, 0, 1)
+            # normalize to [0, 1] interval
+            cp.multiply(chw_dev, 1 / 255., out=self.inp_handle)
 
     def _create_letterbox(self):
         src_size = np.asarray(self.size)

@@ -83,6 +83,19 @@ def multi_crop(img, tlbrs):
 
 
 @nb.njit(fastmath=True, cache=True)
+def ios(tlbr1, tlbr2):
+    """
+    Computes intersection over self.
+    """
+    tlbr = intersection(tlbr1, tlbr2)
+    if tlbr is None:
+        return 0.
+    area_intersection = area(tlbr)
+    area_self = area(tlbr1)
+    return area_intersection / area_self if area_self > 0 else 0
+
+
+@nb.njit(fastmath=True, cache=True)
 def iom(tlbr1, tlbr2):
     """
     Computes intersection over minimum.
@@ -92,7 +105,7 @@ def iom(tlbr1, tlbr2):
         return 0.
     area_intersection = area(tlbr)
     area_minimum = min(area(tlbr1), area(tlbr2))
-    return area_intersection / area_minimum
+    return area_intersection / area_minimum if area_minimum > 0 else 0
 
 
 @nb.njit(fastmath=True, cache=True)

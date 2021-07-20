@@ -888,10 +888,8 @@ def main():
     print('Checking ONNX model...')
     onnx.checker.check_model(yolo_model_def)
 
-    print('Saving ONNX file...')
     onnx.save(yolo_model_def, output_file_path)
-
-    print('Done.')
+    print(f'ONNX file saved to {output_file_path}')
 
 
 if __name__ == '__main__':

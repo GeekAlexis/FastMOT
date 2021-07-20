@@ -284,12 +284,13 @@ class Flow:
     @nb.njit(fastmath=True, cache=True)
     def _unscale_pts(pts, scale_factor, mask=None):
         scale_factor = np.asarray(scale_factor, np.float32)
+        unscale_factor = 1 / scale_factor
         pts = pts.reshape(-1, 2)
         if mask is None:
-            pts = pts / scale_factor
+            pts = pts * unscale_factor
         else:
             idx = np.where(mask)
-            pts[idx] = pts[idx] / scale_factor
+            pts[idx] = pts[idx] * unscale_factor
         return pts
 
     @staticmethod

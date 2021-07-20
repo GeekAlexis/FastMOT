@@ -2,7 +2,7 @@ import numpy as np
 import numba as nb
 
 
-@nb.njit(cache=True)
+@nb.njit(fastmath=True, cache=True)
 def apply_along_axis(func1d, mat, axis):
     """
     Numba utility to apply reduction to a given axis.

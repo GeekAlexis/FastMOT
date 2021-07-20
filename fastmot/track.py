@@ -45,14 +45,15 @@ class ClusterFeature:
         return np.argmin(cdist(np.atleast_2d(embedding), clusters, metric))
 
     @staticmethod
-    @nb.njit(fastmath=True, cache=True)
+    @nb.njit(cache=True)
     def _nearest_cluster_dist(clusters, embeddings, metric):
         return apply_along_axis(np.min, cdist(clusters, embeddings, metric), axis=0)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _seq_kmeans(clusters, cluster_sizes, embedding, idx):
-        clusters[idx] += (embedding - clusters[idx]) / cluster_sizes[idx]
+        div_size = 1. / cluster_sizes[idx]
+        clusters[idx] += (embedding - clusters[idx]) * div_size
 
 
 class SmoothFeature:
@@ -73,7 +74,8 @@ class SmoothFeature:
     @nb.njit(fastmath=True, cache=True)
     def _rolling(smooth_feat, embedding, lr):
         smooth_feat = (1. - lr) * smooth_feat + lr * embedding
-        smooth_feat /= np.linalg.norm(smooth_feat)
+        norm_factor = 1. / np.linalg.norm(smooth_feat)
+        smooth_feat *= norm_factor
 
 
 class Track:
@@ -116,13 +118,14 @@ class Track:
     def confirmed(self):
         return self.hits > 0
 
-    def update(self, tlbr, state, embedding=None):
+    def update(self, tlbr, state, embedding=None, is_valid=True):
         self.tlbr = tlbr
         self.state = state
         if embedding is not None:
             self.age = 0
             self.hits += 1
-            self.update_feature(embedding)
+            if is_valid or self.hits == 1:
+                self.update_feature(embedding)
 
     def reinstate(self, frame_id, tlbr, state, embedding):
         self.start_frame = frame_id
