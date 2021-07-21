@@ -211,13 +211,16 @@ class MultiTracker:
                 aged.append(trk_id)
 
         # reID with track history
-        u_det_ids = [det_id for det_id in u_det_ids if det_id not in occluded_det_ids
-                     and detections[det_id].conf >= self.conf_thresh]
-        u_detections, u_embeddings = detections[u_det_ids], embeddings[u_det_ids]
+        u_det_ids = {det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh}
+        reid_u_det_ids = list(u_det_ids - occluded_det_ids)
+
+        # u_det_ids = [det_id for det_id in u_det_ids if det_id not in occluded_det_ids
+        #              and detections[det_id].conf >= self.conf_thresh]
+        u_detections, u_embeddings = detections[reid_u_det_ids], embeddings[reid_u_det_ids]
         # with MultiTracker._lock:
         hist_ids = list(MultiTracker._history.keys())
         cost = self._reid_cost(u_detections, u_embeddings)
-        reid_matches, _, u_det_ids = self._linear_assignment(cost, hist_ids, u_det_ids)
+        reid_matches, _, reid_u_det_ids = self._linear_assignment(cost, hist_ids, reid_u_det_ids)
 
         # reinstate matched tracks
         for trk_id, det_id in reid_matches:
@@ -229,6 +232,7 @@ class MultiTracker:
             self.tracks[trk_id] = track
             updated.append(trk_id)
 
+        u_det_ids = itertools.chain(u_det_ids & occluded_det_ids, reid_u_det_ids)
         # register new detections
         for det_id in u_det_ids:
             det = detections[det_id]
@@ -253,6 +257,9 @@ class MultiTracker:
 
         smooth_feats = np.array([self.tracks[trk_id].smooth_feat.get() for trk_id in trk_ids])
         cost = cdist(smooth_feats, embeddings, self.metric)
+
+        # last_feats = np.array([self.tracks[trk_id].last_feat for trk_id in trk_ids])
+        # cost = cdist(last_feats, embeddings, self.metric)
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
             f_smooth_dist = cost[i]
@@ -283,6 +290,9 @@ class MultiTracker:
         smooth_feats = np.array([track.smooth_feat.get()
                                  for track in MultiTracker._history.values()])
         cost = cdist(smooth_feats, embeddings, self.metric)
+
+        # last_feats = np.array([track.last_feat for track in MultiTracker._history.values()])
+        # cost = cdist(last_feats, embeddings, self.metric)
         for i, track in enumerate(MultiTracker._history.values()):
             f_smooth_dist = cost[i]
             f_clust_dist = track.clust_feat.distance(embeddings)

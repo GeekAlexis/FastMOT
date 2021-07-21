@@ -59,30 +59,57 @@ class ClusterFeature:
 class SmoothFeature:
     def __init__(self, learning_rate):
         self.lr = learning_rate
-        self.smooth_feat = None
+        self.smooth = None
 
     def get(self):
-        return self.smooth_feat
+        return self.smooth
 
     def update(self, embedding):
-        if self.smooth_feat is None:
-            self.smooth_feat = embedding.copy()
+        if self.smooth is None:
+            self.smooth = embedding.copy()
         else:
-            self._rolling(self.smooth_feat, embedding, self.lr)
+            self._rolling(self.smooth, embedding, self.lr)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _rolling(smooth_feat, embedding, lr):
-        smooth_feat = (1. - lr) * smooth_feat + lr * embedding
-        norm_factor = 1. / np.linalg.norm(smooth_feat)
-        smooth_feat *= norm_factor
+    def _rolling(smooth, embedding, lr):
+        smooth[:] = (1. - lr) * smooth + lr * embedding
+        norm_factor = 1. / np.linalg.norm(smooth)
+        smooth *= norm_factor
+
+
+class AverageFeature:
+    def __init__(self):
+        self.sum = None
+        self.avg = None
+        self.count = 0
+
+    def get(self):
+        return self.avg
+
+    def update(self, embedding):
+        self.count += 1
+        if self.avg is None:
+            self.sum = embedding.copy()
+            self.avg = embedding.copy()
+        else:
+            self._average(self.sum, self.avg, embedding, self.count)
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
+    def _average(sum, avg, embedding, count):
+        sum += embedding
+        div_cnt = 1. / count
+        avg[:] = sum * div_cnt
+        norm_factor = 1. / np.linalg.norm(avg)
+        avg *= norm_factor
 
 
 class Track:
     _count = 0
     _lock = threading.Lock()
 
-    def __init__(self, frame_id, tlbr, state, label, metric, num_clusters=4, learning_rate=0.9):
+    def __init__(self, frame_id, tlbr, state, label, metric, num_clusters=4, learning_rate=0.1):
         self.trk_id = self.next_id()
         self.start_frame = frame_id
         self.tlbr = tlbr
@@ -93,6 +120,7 @@ class Track:
         self.hits = 0
         self.clust_feat = ClusterFeature(num_clusters, metric)
         self.smooth_feat = SmoothFeature(learning_rate)
+        # self.avg_feat = AverageFeature()
         self.last_feat = None
 
         self.inlier_ratio = 1.
