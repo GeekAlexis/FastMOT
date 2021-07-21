@@ -260,9 +260,6 @@ class YOLODetector(Detector):
         detections = []
         for i in range(len(nms_dets)):
             tlbr = to_tlbr(nms_dets[i, :4])
-            # clip inside frame
-            tlbr = np.maximum(tlbr, 0)
-            tlbr = np.minimum(tlbr, np.append(size, size))
             label = int(nms_dets[i, 5])
             conf = nms_dets[i, 4] * nms_dets[i, 6]
             if 0 < area(tlbr) <= max_area:
@@ -294,8 +291,6 @@ class PublicDetector(Detector):
             # scale and clip inside frame
             tlbr[:2] = tlbr[:2] / self.seq_size * self.size
             tlbr[2:] = tlbr[2:] / self.seq_size * self.size
-            tlbr = np.maximum(tlbr, 0)
-            tlbr = np.minimum(tlbr, np.append(self.size, self.size))
             tlbr = as_rect(tlbr)
             if conf >= self.conf_thresh and area(tlbr) <= self.max_area:
                 self.detections[frame_id].append((tlbr, label, conf))

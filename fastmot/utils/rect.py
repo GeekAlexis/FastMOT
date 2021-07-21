@@ -71,15 +71,18 @@ def union(tlbr1, tlbr2):
 
 @nb.njit(cache=True)
 def crop(img, tlbr):
-    xmin, ymin, xmax, ymax = tlbr.astype(np.int_)
+    _tlbr = tlbr.astype(np.int_)
+    _tlbr = np.maximum(_tlbr, 0)
+    xmin, ymin, xmax, ymax = _tlbr
     return img[ymin:ymax + 1, xmin:xmax + 1]
 
 
 @nb.njit(cache=True)
 def multi_crop(img, tlbrs):
-    tlbrs_ = tlbrs.astype(np.int_)
-    return [img[tlbrs_[i][1]:tlbrs_[i][3] + 1, tlbrs_[i][0]:tlbrs_[i][2] + 1]
-            for i in range(len(tlbrs_))]
+    _tlbrs = tlbrs.astype(np.int_)
+    _tlbrs = np.maximum(_tlbrs, 0)
+    return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1]
+            for i in range(len(_tlbrs))]
 
 
 @nb.njit(fastmath=True, cache=True)
