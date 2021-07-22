@@ -35,7 +35,7 @@ class MultiTracker:
     config : Dict
         Tracker parameters.
     """
-    _history = OrderedDict()
+    _hist_tracks = OrderedDict()
     _lock = threading.Lock()
 
     def __init__(self, size, metric, config):
@@ -72,7 +72,7 @@ class MultiTracker:
         self.kf.reset_dt(dt)
         Track.reset()
         # with MultiTracker._lock:
-        MultiTracker._history.clear()
+        MultiTracker._hist_tracks.clear()
 
     def init(self, frame, detections):
         """
@@ -160,7 +160,7 @@ class MultiTracker:
         unconfirmed = [trk_id for trk_id, track in self.tracks.items() if not track.confirmed]
 
         # association with motion and embeddings
-        cost = self._matching_cost(confirmed, detections, embeddings)
+        cost = self._matching_cost(confirmed, occluded_det_ids, detections, embeddings)
         matches1, u_trk_ids1, u_det_ids = self._linear_assignment(cost, confirmed, det_ids)
 
         # 2nd association with IoU
@@ -214,17 +214,17 @@ class MultiTracker:
         u_det_ids = {det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh}
         reid_u_det_ids = list(u_det_ids - occluded_det_ids)
 
-        # u_det_ids = [det_id for det_id in u_det_ids if det_id not in occluded_det_ids
-        #              and detections[det_id].conf >= self.conf_thresh]
+        # reid_u_det_ids = [det_id for det_id in u_det_ids if det_id not in occluded_det_ids
+        #                   and detections[det_id].conf >= self.conf_thresh]
         u_detections, u_embeddings = detections[reid_u_det_ids], embeddings[reid_u_det_ids]
         # with MultiTracker._lock:
-        hist_ids = list(MultiTracker._history.keys())
+        hist_ids = list(MultiTracker._hist_tracks.keys())
         cost = self._reid_cost(u_detections, u_embeddings)
         reid_matches, _, reid_u_det_ids = self._linear_assignment(cost, hist_ids, reid_u_det_ids)
 
         # reinstate matched tracks
         for trk_id, det_id in reid_matches:
-            track = MultiTracker._history.pop(trk_id)
+            track = MultiTracker._hist_tracks.pop(trk_id)
             det = detections[det_id]
             LOGGER.info(f"{'Reidentified:':<14}{track}")
             state = self.kf.create(det.tlbr)
@@ -247,27 +247,40 @@ class MultiTracker:
 
     def _mark_lost(self, trk_id):
         # with MultiTracker._lock:
-        MultiTracker._history[trk_id] = self.tracks.pop(trk_id)
-        if len(MultiTracker._history) > self.history_size:
-            MultiTracker._history.popitem(last=False)
+        MultiTracker._hist_tracks[trk_id] = self.tracks.pop(trk_id)
+        if len(MultiTracker._hist_tracks) > self.history_size:
+            MultiTracker._hist_tracks.popitem(last=False)
 
-    def _matching_cost(self, trk_ids, detections, embeddings):
+    def _matching_cost(self, trk_ids, occluded_det_ids, detections, embeddings):
         if len(trk_ids) == 0 or len(detections) == 0:
             return np.empty((len(trk_ids), len(detections)))
 
+        occluded_idx = np.fromiter(occluded_det_ids, int)
+        # print(occluded_idx)
         smooth_feats = np.array([self.tracks[trk_id].smooth_feat.get() for trk_id in trk_ids])
         cost = cdist(smooth_feats, embeddings, self.metric)
 
         # last_feats = np.array([self.tracks[trk_id].last_feat for trk_id in trk_ids])
-        # cost = cdist(last_feats, embeddings, self.metric)
+        # cost2 = cdist(last_feats, embeddings, self.metric)
+        # for i, trk_id in enumerate(trk_ids):
+        #     track = self.tracks[trk_id]
+        #     f_smooth_dist = cost[i]
+        #     f_last_dist = cost2[i]
+        #     m_dist = self.kf.motion_distance(*track.state, detections.tlbr)
+        #     age = track.age / self.max_age
+        #     self._fuse_feature(f_smooth_dist, f_last_dist, detections.label, cost[i],
+        #                        track.label, self.max_feat_cost)
+        #     self._fuse_motion(cost[i], m_dist, cost[i], age, self.motion_weight, self.age_weight)
+
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
             f_smooth_dist = cost[i]
             f_clust_dist = track.clust_feat.distance(embeddings)
             m_dist = self.kf.motion_distance(*track.state, detections.tlbr)
             age = track.age / self.max_age
-            self._fuse_feature(f_smooth_dist, f_clust_dist, detections.label, cost[i],
-                               track.label, self.max_feat_cost)
+            self._fuse_feature(f_smooth_dist, f_clust_dist, detections.label,
+                               cost[i], track.label, self.max_feat_cost)
+            # self._invalidate_occluded(occluded_idx, cost[i], self.max_feat_cost)
             self._fuse_motion(cost[i], m_dist, cost[i], age, self.motion_weight, self.age_weight)
         return cost
 
@@ -284,16 +297,22 @@ class MultiTracker:
         return ious
 
     def _reid_cost(self, detections, embeddings):
-        if len(MultiTracker._history) == 0 or len(detections) == 0:
-            return np.empty((len(MultiTracker._history), len(detections)))
+        if len(MultiTracker._hist_tracks) == 0 or len(detections) == 0:
+            return np.empty((len(MultiTracker._hist_tracks), len(detections)))
 
         smooth_feats = np.array([track.smooth_feat.get()
-                                 for track in MultiTracker._history.values()])
+                                 for track in MultiTracker._hist_tracks.values()])
         cost = cdist(smooth_feats, embeddings, self.metric)
 
-        # last_feats = np.array([track.last_feat for track in MultiTracker._history.values()])
-        # cost = cdist(last_feats, embeddings, self.metric)
-        for i, track in enumerate(MultiTracker._history.values()):
+        # last_feats = np.array([track.last_feat for track in MultiTracker._hist_tracks.values()])
+        # cost2 = cdist(last_feats, embeddings, self.metric)
+        # for i, track in enumerate(MultiTracker._hist_tracks.values()):
+        #     f_smooth_dist = cost[i]
+        #     f_last_dist = cost2[i]
+        #     self._fuse_feature(f_smooth_dist, f_last_dist, detections.label, cost[i],
+        #                        track.label, self.max_reid_cost)
+
+        for i, track in enumerate(MultiTracker._hist_tracks.values()):
             f_smooth_dist = cost[i]
             f_clust_dist = track.clust_feat.distance(embeddings)
             self._fuse_feature(f_smooth_dist, f_clust_dist, detections.label, cost[i],
@@ -358,15 +377,22 @@ class MultiTracker:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _fuse_feature(f_smooth_dist, f_clust_dist, d_labels, out, label, max_feat_cost):
-        out[:] = np.minimum(f_smooth_dist, f_clust_dist) * 0.5
+        # out[:] = np.minimum(f_smooth_dist, f_clust_dist) * 0.5
+        out[:] = f_clust_dist * 0.5
+        # out[:] = f_smooth_dist * 0.5
         gate = (out > max_feat_cost) | (label != d_labels)
         out[gate] = INF_COST
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
+    def _invalidate_occluded(occluded_idx, out, max_feat_cost):
+        out[occluded_idx] = max_feat_cost * 0.5 # gate labels after?
+
+    @staticmethod
+    @nb.njit(fastmath=True, cache=True)
     def _fuse_motion(cost, m_dist, out, age, w1, w2):
-        # out[:] = (1. - w1) * cost + w1 * (m_dist / CHI_SQ_INV_95) + w2 * age
         norm_factor = 1. / CHI_SQ_INV_95
+        # out[:] = (1. - w1) * cost + w1 * norm_factor * m_dist + w2 * age
         out[:] = (1. - w1 - w2) * cost + w1 * norm_factor * m_dist + w2 * age
         gate = (m_dist > CHI_SQ_INV_95)
         out[gate] = INF_COST

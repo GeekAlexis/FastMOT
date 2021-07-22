@@ -19,6 +19,9 @@ class ClusterFeature:
     def __len__(self):
         return self._next_idx
 
+    def get(self):
+        return self.clusters[:self._next_idx]
+
     def update(self, embedding):
         if self._next_idx < self.num_clusters:
             if self.clusters is None:
@@ -37,7 +40,7 @@ class ClusterFeature:
             self._seq_kmeans(self.clusters, self.cluster_sizes, embedding, nearest_idx)
 
     def distance(self, embeddings):
-        return self._nearest_cluster_dist(self.clusters, embeddings, self.metric)
+        return self._nearest_cluster_dist(self.get(), embeddings, self.metric)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
@@ -120,7 +123,7 @@ class Track:
         self.hits = 0
         self.clust_feat = ClusterFeature(num_clusters, metric)
         self.smooth_feat = SmoothFeature(learning_rate)
-        # self.avg_feat = AverageFeature()
+        # self.smooth_feat = AverageFeature()
         self.last_feat = None
 
         self.inlier_ratio = 1.

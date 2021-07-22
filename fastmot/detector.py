@@ -11,7 +11,7 @@ import cv2
 from . import models
 from .utils import TRTInference
 from .utils.rect import as_rect, to_tlbr, get_size, area
-from .utils.rect import union, crop, multi_crop, iom, diou_nms
+from .utils.rect import intersection, union, multi_crop, iom, diou_nms
 
 
 DET_DTYPE = np.dtype(
@@ -257,12 +257,14 @@ class YOLODetector(Detector):
         keep = np.asarray(keep)
         nms_dets = det_out[keep]
 
+        w, h = size - offset * 2
+        frame_rect = to_tlbr((0, 0, w, h))
         detections = []
         for i in range(len(nms_dets)):
             tlbr = to_tlbr(nms_dets[i, :4])
             label = int(nms_dets[i, 5])
             conf = nms_dets[i, 4] * nms_dets[i, 6]
-            if 0 < area(tlbr) <= max_area:
+            if intersection(tlbr, frame_rect) is not None and area(tlbr) <= max_area:
                 detections.append((tlbr, label, conf))
         return detections
 
@@ -288,7 +290,7 @@ class PublicDetector(Detector):
             tlbr = to_tlbr(mot_det[2:6])
             conf = 1.0 # mot_det[6]
             label = 1 # mot_det[7] (person)
-            # scale and clip inside frame
+            # scale inside frame
             tlbr[:2] = tlbr[:2] / self.seq_size * self.size
             tlbr[2:] = tlbr[2:] / self.seq_size * self.size
             tlbr = as_rect(tlbr)

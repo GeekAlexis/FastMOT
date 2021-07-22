@@ -109,7 +109,7 @@ class Flow:
         all_prev_pts = []
         self.fg_mask[:] = 255
         for track in tracks:
-            inside_tlbr = intersection(track.tlbr, self.frame_rect)
+            inside_tlbr = intersection(track.tlbr, self.frame_rect) # bug here?
             target_mask = crop(self.fg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
             keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.fg_mask)
@@ -257,10 +257,10 @@ class Flow:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _fg_filter(prev_pts, cur_pts, fg_mask, frame_size):
+    def _fg_filter(prev_pts, cur_pts, fg_mask, frame_sz):
         if len(cur_pts) == 0:
             return prev_pts, cur_pts
-        size = np.asarray(frame_size)
+        size = np.asarray(frame_sz)
         pts2i = np.rint(cur_pts).astype(np.int32)
         # filter out points outside the frame
         ge_lt = (pts2i >= 0) & (pts2i < size)
