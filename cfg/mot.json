@@ -31,7 +31,7 @@
             "nms_thresh": 0.5
         },
         "public_detector": {
-            "sequence": "eval/data/MOT20-03",
+            "sequence": "MOT20/train/MOT20-01",
             "conf_thresh": 0.5,
             "max_area": 800000
         },

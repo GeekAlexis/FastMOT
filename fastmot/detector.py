@@ -62,8 +62,8 @@ class SSDDetector(Detector):
         self.merge_thresh = config['merge_thresh']
 
         self.batch_size = int(np.prod(self.tiling_grid))
-        self.tiles, self.tiling_region_size = self._generate_tiles()
-        self.scale_factor = np.asarray(self.size) / self.tiling_region_size
+        self.tiles, self.tiling_region_sz = self._generate_tiles()
+        self.scale_factor = np.asarray(self.size) / self.tiling_region_sz
         self.backend = TRTInference(self.model, self.batch_size)
         self.inp_handle = self.backend.input.host.reshape(self.batch_size, *self.model.INPUT_SHAPE)
 
@@ -80,7 +80,7 @@ class SSDDetector(Detector):
         return detections
 
     def _preprocess(self, frame):
-        frame = cv2.resize(frame, self.tiling_region_size)
+        frame = cv2.resize(frame, self.tiling_region_sz)
         self._normalize(frame, self.tiles, self.inp_handle)
 
     def _generate_tiles(self):
@@ -277,6 +277,7 @@ class PublicDetector(Detector):
         self.conf_thresh = config['conf_thresh']
         self.max_area = config['max_area']
 
+        assert self.seq_root.exists()
         seqinfo = configparser.ConfigParser()
         seqinfo.read(self.seq_root / 'seqinfo.ini')
         self.seq_size = (int(seqinfo['Sequence']['imWidth']), int(seqinfo['Sequence']['imHeight']))
@@ -285,11 +286,11 @@ class PublicDetector(Detector):
         self.frame_id = 0
 
         det_txt = self.seq_root / 'det' / 'det.txt'
-        for mot_det in np.loadtxt(det_txt, delimiter=','):
-            frame_id = int(mot_det[0]) - 1
-            tlbr = to_tlbr(mot_det[2:6])
-            conf = 1.0 # mot_det[6]
-            label = 1 # mot_det[7] (person)
+        for mot_challenge_det in np.loadtxt(det_txt, delimiter=','):
+            frame_id = int(mot_challenge_det[0]) - 1
+            tlbr = to_tlbr(mot_challenge_det[2:6])
+            conf = 1.0 # mot_challenge_det[6]
+            label = 1 # mot_challenge_det[7] (person)
             # scale inside frame
             tlbr[:2] = tlbr[:2] / self.seq_size * self.size
             tlbr[2:] = tlbr[2:] / self.seq_size * self.size

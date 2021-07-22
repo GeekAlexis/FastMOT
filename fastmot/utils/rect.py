@@ -17,9 +17,15 @@ def get_size(tlbr):
 
 
 @nb.njit(cache=True)
+def aspect_ratio(tlbr):
+    w, h = get_size(tlbr)
+    return h / w
+
+
+@nb.njit(cache=True)
 def area(tlbr):
-    size = get_size(tlbr)
-    return int(size[0] * size[1])
+    w, h = get_size(tlbr)
+    return int(w * h)
 
 
 @nb.njit(cache=True)
