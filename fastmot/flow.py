@@ -109,7 +109,7 @@ class Flow:
         all_prev_pts = []
         self.fg_mask[:] = 255
         for track in tracks:
-            inside_tlbr = intersection(track.tlbr, self.frame_rect) # bug here?
+            inside_tlbr = intersection(track.tlbr, self.frame_rect)
             target_mask = crop(self.fg_mask, inside_tlbr)
             target_area = mask_area(target_mask)
             keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.fg_mask)

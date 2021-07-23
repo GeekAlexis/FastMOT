@@ -257,14 +257,12 @@ class YOLODetector(Detector):
         keep = np.asarray(keep)
         nms_dets = det_out[keep]
 
-        w, h = size - offset * 2
-        frame_rect = to_tlbr((0, 0, w, h))
         detections = []
         for i in range(len(nms_dets)):
             tlbr = to_tlbr(nms_dets[i, :4])
             label = int(nms_dets[i, 5])
             conf = nms_dets[i, 4] * nms_dets[i, 6]
-            if intersection(tlbr, frame_rect) is not None and area(tlbr) <= max_area:
+            if 0 < area(tlbr) <= max_area:
                 detections.append((tlbr, label, conf))
         return detections
 
