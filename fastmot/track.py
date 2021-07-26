@@ -1,4 +1,3 @@
-import threading
 import numpy as np
 import numba as nb
 
@@ -30,10 +29,6 @@ class ClusterFeature:
             self.clusters[self._next_idx] = embedding
             self.cluster_sizes[self._next_idx] += 1
             self._next_idx += 1
-        # elif np.sum(self.cluster_sizes) < 2 * self.num_clusters:
-        #     idx = np.random.randint(0, self.num_clusters - 1)
-        #     self.cluster_sizes[idx] += 1
-        #     self._seq_kmeans(self.clusters, self.cluster_sizes, embedding, idx)
         else:
             nearest_idx = self._get_nearest_cluster(self.clusters, embedding, self.metric)
             self.cluster_sizes[nearest_idx] += 1
@@ -110,11 +105,12 @@ class AverageFeature:
 
 class Track:
     _count = 0
-    _lock = threading.Lock()
 
-    def __init__(self, frame_id, tlbr, state, label, metric, num_clusters=4, learning_rate=0.1):
+    def __init__(self, frame_id, tlbr, state, label, metric,
+                 confirm_hits=1, num_clusters=4, learning_rate=0.1):
         self.trk_id = self.next_id()
         self.start_frame = frame_id
+        self.confirm_hits = confirm_hits
         self.tlbr = tlbr
         self.state = state
         self.label = label
@@ -123,7 +119,6 @@ class Track:
         self.hits = 0
         self.clust_feat = ClusterFeature(num_clusters, metric)
         self.smooth_feat = SmoothFeature(learning_rate)
-        # self.smooth_feat = AverageFeature()
         self.last_feat = None
 
         self.inlier_ratio = 1.
@@ -147,7 +142,10 @@ class Track:
 
     @property
     def confirmed(self):
-        return self.hits > 0
+        return self.hits >= self.confirm_hits
+
+    def just_confirmed(self):
+        return self.hits == self.confirm_hits
 
     def update(self, tlbr, state, embedding=None, is_valid=True):
         self.tlbr = tlbr
@@ -155,7 +153,7 @@ class Track:
         if embedding is not None:
             self.age = 0
             self.hits += 1
-            if is_valid or self.hits == 1:
+            if is_valid or self.just_confirmed():
                 self.update_feature(embedding)
 
     def reinstate(self, frame_id, tlbr, state, embedding):
@@ -177,11 +175,9 @@ class Track:
 
     @staticmethod
     def reset():
-        # with Track._lock:
         Track._count = 0
 
     @staticmethod
     def next_id():
-        # with Track._lock:
         Track._count += 1
         return Track._count

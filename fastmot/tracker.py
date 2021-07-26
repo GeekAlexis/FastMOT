@@ -1,7 +1,6 @@
 from collections import OrderedDict
 import itertools
 import logging
-import threading
 import numpy as np
 import numba as nb
 from scipy.optimize import linear_sum_assignment
@@ -36,7 +35,6 @@ class MultiTracker:
         Tracker parameters.
     """
     _hist_tracks = OrderedDict()
-    _lock = threading.Lock()
 
     def __init__(self, size, metric, config):
         self.size = size
@@ -51,6 +49,7 @@ class MultiTracker:
         self.duplicate_iou = config['duplicate_iou']
         self.occlusion_thresh = config['occlusion_thresh']
         self.conf_thresh = config['conf_thresh']
+        self.confirm_hits = config['confirm_hits']
         self.history_size = config['history_size']
 
         self.tracks = {}
@@ -88,7 +87,7 @@ class MultiTracker:
         self.flow.init(frame)
         for det in detections:
             state = self.kf.create(det.tlbr)
-            new_trk = Track(0, det.tlbr, state, det.label, self.metric)
+            new_trk = Track(0, det.tlbr, state, det.label, self.metric, self.confirm_hits)
             self.tracks[new_trk.trk_id] = new_trk
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")
 
@@ -188,7 +187,7 @@ class MultiTracker:
             next_tlbr = as_rect(mean[:4])
             is_valid = (det_id not in occluded_det_ids)
             track.update(next_tlbr, (mean, cov), embeddings[det_id], is_valid)
-            if track.hits == 1:
+            if track.just_confirmed():
                 LOGGER.info(f"{'Found:':<14}{track}")
             if iom(next_tlbr, self.frame_rect) < 0.5:
                 LOGGER.info(f"{'Out:':<14}{track}")
@@ -237,7 +236,7 @@ class MultiTracker:
         for det_id in u_det_ids:
             det = detections[det_id]
             state = self.kf.create(det.tlbr)
-            new_trk = Track(frame_id, det.tlbr, state, det.label, self.metric)
+            new_trk = Track(frame_id, det.tlbr, state, det.label, self.metric, self.confirm_hits)
             self.tracks[new_trk.trk_id] = new_trk
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")
             updated.append(new_trk.trk_id)
@@ -378,8 +377,8 @@ class MultiTracker:
     @nb.njit(fastmath=True, cache=True)
     def _fuse_feature(f_smooth_dist, f_clust_dist, d_labels, out, label, max_feat_cost):
         # out[:] = np.minimum(f_smooth_dist, f_clust_dist) * 0.5
-        out[:] = f_clust_dist * 0.5
-        # out[:] = f_smooth_dist * 0.5
+        # out[:] = f_clust_dist * 0.5
+        out[:] = f_smooth_dist * 0.5
         gate = (out > max_feat_cost) | (label != d_labels)
         out[gate] = INF_COST
 

@@ -5,8 +5,8 @@
         "resolution": [1920, 1080],
         "##resolution": [1173, 880],
         "#resolution": [1654, 1080],
-        "#frame_rate": 25,
         "frame_rate": 30,
+        "#frame_rate": 30,
         "buffer_size": 10
     },
 
@@ -51,6 +51,7 @@
             "duplicate_iou": 0.8,
             "occlusion_thresh": 0.7,
             "conf_thresh": 0.5,
+            "confirm_hits": 5,
             "history_size": 50,
 
             "kalman_filter": {
@@ -61,7 +62,7 @@
                 "min_std_det": [4.0, 4.0],
                 "min_std_klt": [5.0, 5.0],
                 "init_pos_weight": 5,
-                "init_vel_weight": 15,
+                "init_vel_weight": 12,
                 "vel_coupling": 0.6,
                 "vel_half_life": 2
             },
