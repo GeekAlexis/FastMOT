@@ -70,7 +70,6 @@ class MultiTracker:
         """
         self.kf.reset_dt(dt)
         Track.reset()
-        # with MultiTracker._lock:
         MultiTracker._hist_tracks.clear()
 
     def init(self, frame, detections):
@@ -159,7 +158,7 @@ class MultiTracker:
         unconfirmed = [trk_id for trk_id, track in self.tracks.items() if not track.confirmed]
 
         # association with motion and embeddings
-        cost = self._matching_cost(confirmed, occluded_det_ids, detections, embeddings)
+        cost = self._matching_cost(confirmed, detections, embeddings)
         matches1, u_trk_ids1, u_det_ids = self._linear_assignment(cost, confirmed, det_ids)
 
         # 2nd association with IoU
@@ -216,7 +215,6 @@ class MultiTracker:
         # reid_u_det_ids = [det_id for det_id in u_det_ids if det_id not in occluded_det_ids
         #                   and detections[det_id].conf >= self.conf_thresh]
         u_detections, u_embeddings = detections[reid_u_det_ids], embeddings[reid_u_det_ids]
-        # with MultiTracker._lock:
         hist_ids = list(MultiTracker._hist_tracks.keys())
         cost = self._reid_cost(u_detections, u_embeddings)
         reid_matches, _, reid_u_det_ids = self._linear_assignment(cost, hist_ids, reid_u_det_ids)
@@ -245,77 +243,52 @@ class MultiTracker:
         self._remove_duplicate(updated, aged)
 
     def _mark_lost(self, trk_id):
-        # with MultiTracker._lock:
         MultiTracker._hist_tracks[trk_id] = self.tracks.pop(trk_id)
         if len(MultiTracker._hist_tracks) > self.history_size:
             MultiTracker._hist_tracks.popitem(last=False)
 
-    def _matching_cost(self, trk_ids, occluded_det_ids, detections, embeddings):
-        if len(trk_ids) == 0 or len(detections) == 0:
-            return np.empty((len(trk_ids), len(detections)))
+    def _matching_cost(self, trk_ids, detections, embeddings):
+        n_trk, n_det = len(trk_ids), len(detections)
+        if n_trk == 0 or n_det == 0:
+            return np.empty((n_trk, n_det))
 
-        occluded_idx = np.fromiter(occluded_det_ids, int)
-        # print(occluded_idx)
-        smooth_feats = np.array([self.tracks[trk_id].smooth_feat.get() for trk_id in trk_ids])
+        smooth_feats = np.concatenate([self.tracks[trk_id].smooth_feat()
+                                       for trk_id in trk_ids]).reshape(n_trk, -1)
         cost = cdist(smooth_feats, embeddings, self.metric)
-
-        # last_feats = np.array([self.tracks[trk_id].last_feat for trk_id in trk_ids])
-        # cost2 = cdist(last_feats, embeddings, self.metric)
-        # for i, trk_id in enumerate(trk_ids):
-        #     track = self.tracks[trk_id]
-        #     f_smooth_dist = cost[i]
-        #     f_last_dist = cost2[i]
-        #     m_dist = self.kf.motion_distance(*track.state, detections.tlbr)
-        #     age = track.age / self.max_age
-        #     self._fuse_feature(f_smooth_dist, f_last_dist, detections.label, cost[i],
-        #                        track.label, self.max_feat_cost)
-        #     self._fuse_motion(cost[i], m_dist, cost[i], age, self.motion_weight, self.age_weight)
 
         for i, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
-            f_smooth_dist = cost[i]
-            f_clust_dist = track.clust_feat.distance(embeddings)
             m_dist = self.kf.motion_distance(*track.state, detections.tlbr)
             age = track.age / self.max_age
-            self._fuse_feature(f_smooth_dist, f_clust_dist, detections.label,
-                               cost[i], track.label, self.max_feat_cost)
-            # self._invalidate_occluded(occluded_idx, cost[i], self.max_feat_cost)
-            self._fuse_motion(cost[i], m_dist, cost[i], age, self.motion_weight, self.age_weight)
+            # self._fuse_feature(f_smooth_dist, f_clust_dist, detections.label,
+            #                    cost[i], track.label, self.max_feat_cost)
+            # self._fuse_motion(cost[i], m_dist, cost[i], age, self.motion_weight, self.age_weight)
+            self._fuse_motion(cost[i], m_dist, detections.label, age, track.label,
+                              self.max_feat_cost, self.motion_weight, self.age_weight)
         return cost
 
     def _iou_cost(self, trk_ids, detections):
-        if len(trk_ids) == 0 or len(detections) == 0:
-            return np.empty((len(trk_ids), len(detections)))
+        n_trk, n_det = len(trk_ids), len(detections)
+        if n_trk == 0 or n_det == 0:
+            return np.empty((n_trk, n_det))
 
         # make sure associated pair has the same class label
-        trk_labels = np.array([self.tracks[trk_id].label for trk_id in trk_ids])
-        trk_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
-        det_bboxes = detections.tlbr
-        ious = bbox_overlaps(trk_bboxes, det_bboxes)
-        self._gate_cost(ious, trk_labels, detections.label, self.iou_thresh, True)
+        t_labels = np.fromiter((self.tracks[trk_id].label for trk_id in trk_ids), int, n_trk)
+        t_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
+        d_bboxes = detections.tlbr
+        ious = bbox_overlaps(t_bboxes, d_bboxes)
+        self._gate_cost(ious, t_labels, detections.label, self.iou_thresh, True)
         return ious
 
     def _reid_cost(self, detections, embeddings):
-        if len(MultiTracker._hist_tracks) == 0 or len(detections) == 0:
-            return np.empty((len(MultiTracker._hist_tracks), len(detections)))
+        n_hist, n_det = len(MultiTracker._hist_tracks), len(detections)
+        if n_hist == 0 or n_det == 0:
+            return np.empty((n_hist, n_det))
 
-        smooth_feats = np.array([track.smooth_feat.get()
-                                 for track in MultiTracker._hist_tracks.values()])
-        cost = cdist(smooth_feats, embeddings, self.metric)
-
-        # last_feats = np.array([track.last_feat for track in MultiTracker._hist_tracks.values()])
-        # cost2 = cdist(last_feats, embeddings, self.metric)
-        # for i, track in enumerate(MultiTracker._hist_tracks.values()):
-        #     f_smooth_dist = cost[i]
-        #     f_last_dist = cost2[i]
-        #     self._fuse_feature(f_smooth_dist, f_last_dist, detections.label, cost[i],
-        #                        track.label, self.max_reid_cost)
-
-        for i, track in enumerate(MultiTracker._hist_tracks.values()):
-            f_smooth_dist = cost[i]
-            f_clust_dist = track.clust_feat.distance(embeddings)
-            self._fuse_feature(f_smooth_dist, f_clust_dist, detections.label, cost[i],
-                               track.label, self.max_reid_cost)
+        t_labels = np.fromiter((t.label for t in MultiTracker._hist_tracks.values()), int, n_hist)
+        cost = np.concatenate([t.clust_feat.distance(embeddings)
+                               for t in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
+        self._gate_cost(cost, t_labels, detections.label, self.max_feat_cost)
         return cost
 
     def _remove_duplicate(self, updated, aged):
@@ -373,28 +346,23 @@ class MultiTracker:
                     unmatched_det_ids.append(det_ids[col])
         return matches, unmatched_trk_ids, unmatched_det_ids
 
-    @staticmethod
-    @nb.njit(fastmath=True, cache=True)
-    def _fuse_feature(f_smooth_dist, f_clust_dist, d_labels, out, label, max_feat_cost):
-        # out[:] = np.minimum(f_smooth_dist, f_clust_dist) * 0.5
-        # out[:] = f_clust_dist * 0.5
-        out[:] = f_smooth_dist * 0.5
-        gate = (out > max_feat_cost) | (label != d_labels)
-        out[gate] = INF_COST
+    # @staticmethod
+    # @nb.njit(fastmath=True, cache=True)
+    # def _fuse_feature(f_clust_dist, d_labels, out, label, max_feat_cost):
+    #     # out[:] = np.minimum(f_smooth_dist, f_clust_dist) * 0.5
+    #     # out[:] = f_clust_dist * 0.5
+    #     out[:] = f_smooth_dist * 0.5
+    #     gate = (out > max_feat_cost) | (label != d_labels)
+    #     out[gate] = INF_COST
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _invalidate_occluded(occluded_idx, out, max_feat_cost):
-        out[occluded_idx] = max_feat_cost * 0.5 # gate labels after?
-
-    @staticmethod
-    @nb.njit(fastmath=True, cache=True)
-    def _fuse_motion(cost, m_dist, out, age, w1, w2):
+    def _fuse_motion(cost, m_dist, d_labels, age, label, max_cost, w1, w2):
+        cost[:] *= 0.5
+        gate = (cost > max_cost) | (m_dist > CHI_SQ_INV_95) | (label != d_labels)
         norm_factor = 1. / CHI_SQ_INV_95
-        # out[:] = (1. - w1) * cost + w1 * norm_factor * m_dist + w2 * age
-        out[:] = (1. - w1 - w2) * cost + w1 * norm_factor * m_dist + w2 * age
-        gate = (m_dist > CHI_SQ_INV_95)
-        out[gate] = INF_COST
+        cost[:] = (1. - w1 - w2) * cost + w1 * norm_factor * m_dist + w2 * age
+        cost[gate] = INF_COST
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)

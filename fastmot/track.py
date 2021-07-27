@@ -18,7 +18,7 @@ class ClusterFeature:
     def __len__(self):
         return self._next_idx
 
-    def get(self):
+    def __call__(self):
         return self.clusters[:self._next_idx]
 
     def update(self, embedding):
@@ -35,7 +35,7 @@ class ClusterFeature:
             self._seq_kmeans(self.clusters, self.cluster_sizes, embedding, nearest_idx)
 
     def distance(self, embeddings):
-        return self._nearest_cluster_dist(self.get(), embeddings, self.metric)
+        return self._nearest_cluster_dist(self.clusters[:self._next_idx], embeddings, self.metric)
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
@@ -59,7 +59,7 @@ class SmoothFeature:
         self.lr = learning_rate
         self.smooth = None
 
-    def get(self):
+    def __call__(self):
         return self.smooth
 
     def update(self, embedding):
@@ -82,7 +82,7 @@ class AverageFeature:
         self.avg = None
         self.count = 0
 
-    def get(self):
+    def __call__(self):
         return self.avg
 
     def update(self, embedding):
@@ -153,7 +153,7 @@ class Track:
         if embedding is not None:
             self.age = 0
             self.hits += 1
-            if is_valid or self.just_confirmed():
+            if self.confirmed and (is_valid or self.last_feat is None):
                 self.update_feature(embedding)
 
     def reinstate(self, frame_id, tlbr, state, embedding):
