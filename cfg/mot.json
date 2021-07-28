@@ -6,7 +6,6 @@
         "##resolution": [1173, 880],
         "#resolution": [1654, 1080],
         "frame_rate": 30,
-        "#frame_rate": 30,
         "buffer_size": 10
     },
 
@@ -45,8 +44,8 @@
             "age_penalty": 2,
             "age_weight": 0.05,
             "motion_weight": 0.15,
-            "max_feat_cost": 0.4,
-            "max_reid_cost": 0.25,
+            "max_feat_cost": 0.9,
+            "max_reid_cost": 0.45,
             "iou_thresh": 0.4,
             "duplicate_iou": 0.8,
             "occlusion_thresh": 0.7,

@@ -25,7 +25,7 @@ class ClusterFeature:
         if self._next_idx < self.num_clusters:
             if self.clusters is None:
                 self.clusters = np.empty((self.num_clusters, len(embedding)), embedding.dtype)
-                self.cluster_sizes = np.zeros(self.num_clusters, np.int_)
+                self.cluster_sizes = np.zeros(self.num_clusters, int)
             self.clusters[self._next_idx] = embedding
             self.cluster_sizes[self._next_idx] += 1
             self._next_idx += 1
@@ -107,7 +107,7 @@ class Track:
     _count = 0
 
     def __init__(self, frame_id, tlbr, state, label, metric,
-                 confirm_hits=1, num_clusters=4, learning_rate=0.1):
+                 confirm_hits=1, num_clusters=5, learning_rate=0.1):
         self.trk_id = self.next_id()
         self.start_frame = frame_id
         self.confirm_hits = confirm_hits
@@ -172,10 +172,6 @@ class Track:
         self.last_feat = embedding
         self.clust_feat.update(embedding)
         self.smooth_feat.update(embedding)
-
-    @staticmethod
-    def reset():
-        Track._count = 0
 
     @staticmethod
     def next_id():

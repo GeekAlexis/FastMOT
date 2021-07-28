@@ -69,7 +69,7 @@ class MultiTracker:
             Time interval in seconds between each frame.
         """
         self.kf.reset_dt(dt)
-        Track.reset()
+        Track._count = 0
         MultiTracker._hist_tracks.clear()
 
     def init(self, frame, detections):
@@ -178,6 +178,29 @@ class MultiTracker:
         u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
         updated, aged = [], []
 
+        # reID with track history
+        u_det_ids = {det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh}
+        reid_u_det_ids = list(u_det_ids - occluded_det_ids)
+
+        # u_det_ids = [det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh]
+
+        # reid_u_det_ids = [det_id for det_id in u_det_ids if det_id not in occluded_det_ids
+        #                   and detections[det_id].conf >= self.conf_thresh]
+        u_detections, u_embeddings = detections[reid_u_det_ids], embeddings[reid_u_det_ids]
+        hist_ids = list(MultiTracker._hist_tracks.keys())
+        cost = self._reid_cost(u_detections, u_embeddings)
+        reid_matches, _, reid_u_det_ids = self._linear_assignment(cost, hist_ids, reid_u_det_ids)
+
+        # reinstate matched tracks
+        for trk_id, det_id in reid_matches:
+            track = MultiTracker._hist_tracks.pop(trk_id)
+            det = detections[det_id]
+            LOGGER.info(f"{'Reidentified:':<14}{track}")
+            state = self.kf.create(det.tlbr)
+            track.reinstate(frame_id, det.tlbr, state, embeddings[det_id])
+            self.tracks[trk_id] = track
+            updated.append(trk_id)
+
         # update matched tracks
         for trk_id, det_id in matches:
             track = self.tracks[trk_id]
@@ -208,27 +231,6 @@ class MultiTracker:
             else:
                 aged.append(trk_id)
 
-        # reID with track history
-        u_det_ids = {det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh}
-        reid_u_det_ids = list(u_det_ids - occluded_det_ids)
-
-        # reid_u_det_ids = [det_id for det_id in u_det_ids if det_id not in occluded_det_ids
-        #                   and detections[det_id].conf >= self.conf_thresh]
-        u_detections, u_embeddings = detections[reid_u_det_ids], embeddings[reid_u_det_ids]
-        hist_ids = list(MultiTracker._hist_tracks.keys())
-        cost = self._reid_cost(u_detections, u_embeddings)
-        reid_matches, _, reid_u_det_ids = self._linear_assignment(cost, hist_ids, reid_u_det_ids)
-
-        # reinstate matched tracks
-        for trk_id, det_id in reid_matches:
-            track = MultiTracker._hist_tracks.pop(trk_id)
-            det = detections[det_id]
-            LOGGER.info(f"{'Reidentified:':<14}{track}")
-            state = self.kf.create(det.tlbr)
-            track.reinstate(frame_id, det.tlbr, state, embeddings[det_id])
-            self.tracks[trk_id] = track
-            updated.append(trk_id)
-
         u_det_ids = itertools.chain(u_det_ids & occluded_det_ids, reid_u_det_ids)
         # register new detections
         for det_id in u_det_ids:
@@ -252,18 +254,20 @@ class MultiTracker:
         if n_trk == 0 or n_det == 0:
             return np.empty((n_trk, n_det))
 
-        smooth_feats = np.concatenate([self.tracks[trk_id].smooth_feat()
-                                       for trk_id in trk_ids]).reshape(n_trk, -1)
-        cost = cdist(smooth_feats, embeddings, self.metric)
+        # smooth_feats = np.concatenate([self.tracks[trk_id].smooth_feat()
+        #                                for trk_id in trk_ids]).reshape(n_trk, -1)
+        # cost = cdist(smooth_feats, embeddings, self.metric)
 
-        for i, trk_id in enumerate(trk_ids):
+        cost = np.concatenate([self.tracks[trk_id].clust_feat.distance(embeddings)
+                               for trk_id in trk_ids]).reshape(n_trk, -1)
+        # clust_feats = tuple(self.tracks[trk_id].clust_feat() for trk_id in trk_ids)
+        # cost = self._clusters_vec_dist(clust_feats, embeddings, self.metric)
+
+        for row, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
             m_dist = self.kf.motion_distance(*track.state, detections.tlbr)
             age = track.age / self.max_age
-            # self._fuse_feature(f_smooth_dist, f_clust_dist, detections.label,
-            #                    cost[i], track.label, self.max_feat_cost)
-            # self._fuse_motion(cost[i], m_dist, cost[i], age, self.motion_weight, self.age_weight)
-            self._fuse_motion(cost[i], m_dist, detections.label, age, track.label,
+            self._fuse_motion(cost[row], m_dist, detections.label, age, track.label,
                               self.max_feat_cost, self.motion_weight, self.age_weight)
         return cost
 
@@ -286,9 +290,12 @@ class MultiTracker:
             return np.empty((n_hist, n_det))
 
         t_labels = np.fromiter((t.label for t in MultiTracker._hist_tracks.values()), int, n_hist)
+        # smooth_feats = np.concatenate([t.smooth_feat() for t
+        #                                in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
+        # cost = cdist(smooth_feats, embeddings, self.metric)
         cost = np.concatenate([t.clust_feat.distance(embeddings)
                                for t in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
-        self._gate_cost(cost, t_labels, detections.label, self.max_feat_cost)
+        self._gate_cost(cost, t_labels, detections.label, self.max_reid_cost)
         return cost
 
     def _remove_duplicate(self, updated, aged):
@@ -358,10 +365,9 @@ class MultiTracker:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _fuse_motion(cost, m_dist, d_labels, age, label, max_cost, w1, w2):
-        cost[:] *= 0.5
         gate = (cost > max_cost) | (m_dist > CHI_SQ_INV_95) | (label != d_labels)
         norm_factor = 1. / CHI_SQ_INV_95
-        cost[:] = (1. - w1 - w2) * cost + w1 * norm_factor * m_dist + w2 * age
+        cost[:] = (1. - w1 - w2) * 0.5 * cost + w1 * norm_factor * m_dist + w2 * age
         cost[gate] = INF_COST
 
     @staticmethod
@@ -374,3 +380,12 @@ class MultiTracker:
             else:
                 gate = (cost[i] > thresh) | (t_labels[i] != d_labels)
                 cost[i][gate] = INF_COST
+
+    # @staticmethod
+    # @nb.njit(parallel=True, fastmath=True, cache=True)
+    # def _clusters_vec_dist(clust_feats, embeddings, metric):
+    #     clust_feats = list(clust_feats)
+    #     dist = np.empty((len(clust_feats), len(embeddings)))
+    #     for i in nb.prange(len(clust_feats)):
+    #         dist[i, :] = apply_along_axis(np.min, cdist(clust_feats[i], embeddings, metric), axis=0)
+    #     return dist

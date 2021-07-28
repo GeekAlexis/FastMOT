@@ -163,7 +163,7 @@ FastMOT supports multi-class tracking and can be easily extended to custom class
     OUTPUT_LAYOUT: feature dimension output by the model (e.g. 512)
     METRIC:        distance metric used to match features ('euclidean' or 'cosine')
     ```
-2. Modify cfg/mot.json: set `model` in `feature_extractor` to the added Python class. You may want to play with `max_feat_cost` and `max_reid_cost` - float values from `0` to `1`, based on the accuracy of your model
+2. Modify cfg/mot.json: set `model` in `feature_extractor` to the added Python class. You may want to play with `max_feat_cost` and `max_reid_cost` - float values from `0` to `2`, based on the accuracy of your model
 
  ## Citation
  If you find this repo useful in your project or research, please star and consider citing it:
