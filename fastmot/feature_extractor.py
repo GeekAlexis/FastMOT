@@ -25,19 +25,19 @@ class FeatureExtractor:
         self.pool.close()
         self.pool.join()
 
-    def __call__(self, frame, detections):
-        self.extract_async(frame, detections)
+    def __call__(self, frame, tlbrs):
+        self.extract_async(frame, tlbrs)
         return self.postprocess()
 
     @property
     def metric(self):
         return self.model.METRIC
 
-    def extract_async(self, frame, detections):
+    def extract_async(self, frame, tlbrs):
         """
-        Extract feature embeddings from detections asynchronously.
+        Extract feature embeddings from bounding boxes asynchronously.
         """
-        imgs = multi_crop(frame, detections.tlbr)
+        imgs = multi_crop(frame, tlbrs)
         self.embeddings, cur_imgs = [], []
         # pipeline inference and preprocessing the next batch in parallel
         for offset in range(0, len(imgs), self.batch_size):

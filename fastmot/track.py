@@ -3,7 +3,7 @@ import numba as nb
 
 from .models import LABEL_MAP
 from .utils.distance import cdist
-from .utils.numba import apply_along_axis
+from .utils.numba import apply_along_axis, normalize_vec
 from .utils.rect import get_center
 
 
@@ -40,11 +40,13 @@ class ClusterFeature:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _get_nearest_cluster(clusters, embedding, metric):
+        clusters = normalize_vec(clusters)
         return np.argmin(cdist(np.atleast_2d(embedding), clusters, metric))
 
     @staticmethod
     @nb.njit(cache=True)
     def _nearest_cluster_dist(clusters, embeddings, metric):
+        clusters = normalize_vec(clusters)
         return apply_along_axis(np.min, cdist(clusters, embeddings, metric), axis=0)
 
     @staticmethod

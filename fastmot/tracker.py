@@ -182,10 +182,6 @@ class MultiTracker:
         u_det_ids = {det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh}
         reid_u_det_ids = list(u_det_ids - occluded_det_ids)
 
-        # u_det_ids = [det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh]
-
-        # reid_u_det_ids = [det_id for det_id in u_det_ids if det_id not in occluded_det_ids
-        #                   and detections[det_id].conf >= self.conf_thresh]
         u_detections, u_embeddings = detections[reid_u_det_ids], embeddings[reid_u_det_ids]
         hist_ids = list(MultiTracker._hist_tracks.keys())
         cost = self._reid_cost(u_detections, u_embeddings)

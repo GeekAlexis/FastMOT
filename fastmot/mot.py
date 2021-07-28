@@ -98,7 +98,7 @@ class MOT:
                     detections = self.detector.postprocess()
 
                 with Profiler('extract'):
-                    self.extractor.extract_async(frame, detections)
+                    self.extractor.extract_async(frame, detections.tlbr)
                     with Profiler('track', aggregate=True):
                         self.tracker.apply_kalman()
                     embeddings = self.extractor.postprocess()

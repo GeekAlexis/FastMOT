@@ -20,6 +20,15 @@ def apply_along_axis(func1d, mat, axis):
     return result
 
 
+@nb.njit(parallel=True, fastmath=True, cache=True)
+def normalize_vec(vectors):
+    out = np.empty_like(vectors)
+    for i in nb.prange(len(vectors)):
+        norm_factor = 1. / np.linalg.norm(vectors[i])
+        out[i] = norm_factor * vectors[i]
+    return out
+
+
 @nb.njit(fastmath=True, cache=True)
 def transform(pts, m):
     """
