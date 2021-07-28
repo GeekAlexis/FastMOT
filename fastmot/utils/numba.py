@@ -22,6 +22,9 @@ def apply_along_axis(func1d, mat, axis):
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def normalize_vec(vectors):
+    """
+    Numba utility to normalize an array of vectors.
+    """
     out = np.empty_like(vectors)
     for i in nb.prange(len(vectors)):
         norm_factor = 1. / np.linalg.norm(vectors[i])

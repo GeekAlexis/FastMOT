@@ -30,7 +30,7 @@ class ClusterFeature:
             self.cluster_sizes[self._next_idx] += 1
             self._next_idx += 1
         else:
-            nearest_idx = self._get_nearest_cluster(self.clusters, embedding, self.metric)
+            nearest_idx = self._get_nearest_cluster(self.clusters, embedding)
             self.cluster_sizes[nearest_idx] += 1
             self._seq_kmeans(self.clusters, self.cluster_sizes, embedding, nearest_idx)
 
@@ -39,9 +39,8 @@ class ClusterFeature:
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _get_nearest_cluster(clusters, embedding, metric):
-        clusters = normalize_vec(clusters)
-        return np.argmin(cdist(np.atleast_2d(embedding), clusters, metric))
+    def _get_nearest_cluster(clusters, embedding):
+        return np.argmin(cdist(np.atleast_2d(embedding), clusters, 'cosine'))
 
     @staticmethod
     @nb.njit(cache=True)
