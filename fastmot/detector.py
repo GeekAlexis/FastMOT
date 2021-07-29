@@ -2,6 +2,7 @@ from collections import defaultdict
 from pathlib import Path
 import configparser
 import abc
+from typing import Sequence
 import numpy as np
 import numba as nb
 import cupy as cp
@@ -49,17 +50,30 @@ class Detector(abc.ABC):
 
 
 class SSDDetector(Detector):
-    def __init__(self, size, config):
+    def __init__(self, size,
+                 model='SSDInceptionV2',
+                 class_ids=None,
+                 tile_overlap=0.25,
+                 tiling_grid=(4, 2),
+                 conf_thresh=0.5,
+                 max_area=130000,
+                 merge_thresh=0.6):
         super().__init__(size)
-        self.label_mask = np.zeros(len(models.LABEL_MAP), dtype=bool)
-        self.label_mask[list(config['class_ids'])] = True
+        self.model = getattr(models, model)
+        assert 0 <= tile_overlap <= 1
+        self.tile_overlap = tile_overlap
+        assert tiling_grid[0] >= 1 and tiling_grid[1] >= 1
+        self.tiling_grid = tiling_grid
+        assert 0 <= conf_thresh <= 1
+        self.conf_thresh = conf_thresh
+        assert max_area >= 0
+        self.max_area = max_area
+        assert 0 <= merge_thresh <= 1
+        self.merge_thresh = merge_thresh
 
-        self.model = getattr(models, config['model'])
-        self.tile_overlap = config['tile_overlap']
-        self.tiling_grid = config['tiling_grid']
-        self.conf_thresh = config['conf_thresh']
-        self.max_area = config['max_area']
-        self.merge_thresh = config['merge_thresh']
+        class_ids = [] if class_ids is None else list(class_ids)
+        self.label_mask = np.zeros(len(models.LABEL_MAP), dtype=bool)
+        self.label_mask[class_ids] = True
 
         self.batch_size = int(np.prod(self.tiling_grid))
         self.tiles, self.tiling_region_sz = self._generate_tiles()
@@ -176,13 +190,21 @@ class SSDDetector(Detector):
 
 
 class YOLODetector(Detector):
-    def __init__(self, size, config):
+    def __init__(self, size,
+                 model='YOLOv4',
+                 class_ids=None,
+                 conf_thresh=0.25,
+                 max_area=800000,
+                 nms_thresh=0.5):
         super().__init__(size)
-        self.model = getattr(models, config['model'])
-        self.class_ids = config['class_ids']
-        self.conf_thresh = config['conf_thresh']
-        self.max_area = config['max_area']
-        self.nms_thresh = config['nms_thresh']
+        self.model = getattr(models, model)
+        self.class_ids = tuple() if class_ids is None else class_ids
+        assert 0 <= conf_thresh <= 1
+        self.conf_thresh = conf_thresh
+        assert max_area >= 0
+        self.max_area = max_area
+        assert 0 <= nms_thresh <= 1
+        self.nms_thresh = nms_thresh
 
         self.backend = TRTInference(self.model, 1)
         self.inp_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
@@ -268,12 +290,15 @@ class YOLODetector(Detector):
 
 
 class PublicDetector(Detector):
-    def __init__(self, size, frame_skip, config):
+    def __init__(self, size, frame_skip, sequence_path=None, conf_thresh=0.5, max_area=800000):
         super().__init__(size)
         self.frame_skip = frame_skip
-        self.seq_root = Path(__file__).parents[1] / config['sequence']
-        self.conf_thresh = config['conf_thresh']
-        self.max_area = config['max_area']
+        assert sequence_path is not None
+        self.seq_root = Path(__file__).parents[1] / sequence_path
+        assert 0 <= conf_thresh <= 1
+        self.conf_thresh = conf_thresh
+        assert max_area >= 0
+        self.max_area = max_area
 
         assert self.seq_root.exists()
         seqinfo = configparser.ConfigParser()

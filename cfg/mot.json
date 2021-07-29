@@ -1,19 +1,17 @@
 {   
     "resize_to": [1280, 720],
 
-    "video_io": {
+    "stream_cfg": {
         "resolution": [1920, 1080],
-        "##resolution": [1173, 880],
-        "#resolution": [1654, 1080],
         "frame_rate": 30,
         "buffer_size": 10
     },
 
-    "mot": {
+    "mot_cfg": {
         "detector_type": "YOLO",
         "detector_frame_skip": 5,
 
-        "ssd_detector": {
+        "ssd_detector_cfg": {
             "model": "SSDInceptionV2",
             "class_ids": [1],
             "tile_overlap": 0.25,
@@ -22,24 +20,24 @@
             "max_area": 130000,
             "merge_thresh": 0.6
         },
-        "yolo_detector": {
+        "yolo_detector_cfg": {
             "model": "YOLOv4",
             "class_ids": [1],
             "conf_thresh": 0.25,
             "max_area": 800000,
             "nms_thresh": 0.5
         },
-        "public_detector": {
-            "sequence": "MOT20/train/MOT20-01",
+        "public_detector_cfg": {
+            "sequence_path": "MOT20/train/MOT20-01",
             "conf_thresh": 0.5,
             "max_area": 800000
         },
-        "feature_extractor": {
+        "feature_extractor_cfg": {
             "model": "OSNet025",
             "batch_size": 16
         },
 
-        "multi_tracker": {
+        "tracker_cfg": {
             "max_age": 6,
             "age_penalty": 2,
             "age_weight": 0.05,
@@ -47,13 +45,13 @@
             "max_assoc_cost": 0.9,
             "max_reid_cost": 0.45,
             "iou_thresh": 0.4,
-            "duplicate_iou": 0.8,
+            "duplicate_thresh": 0.8,
             "occlusion_thresh": 0.7,
             "conf_thresh": 0.5,
             "confirm_hits": 1,
             "history_size": 50,
 
-            "kalman_filter": {
+            "kalman_filter_cfg": {
                 "std_factor_acc": 2.25,
                 "std_offset_acc": 78.5,
                 "std_factor_det": [0.08, 0.08],
@@ -66,10 +64,10 @@
                 "vel_half_life": 2
             },
 
-            "flow": {
+            "flow_cfg": {
                 "bg_feat_scale_factor": [0.1, 0.1],
                 "opt_flow_scale_factor": [0.5, 0.5],
-                "feature_density": 0.005,
+                "feat_density": 0.005,
                 "feat_dist_factor": 0.06,
                 "ransac_max_iter": 500,
                 "ransac_conf": 0.99,

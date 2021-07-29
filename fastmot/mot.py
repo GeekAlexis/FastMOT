@@ -1,3 +1,4 @@
+from types import SimpleNamespace as Namespace
 from enum import Enum
 import logging
 import cv2
@@ -37,25 +38,46 @@ class MOT:
         Flag to toggle output verbosity.
     """
 
-    def __init__(self, size, config, draw=False, verbose=False):
+    def __init__(self, size,
+                 detector_type='YOLO',
+                 detector_frame_skip=5,
+                 ssd_detector_cfg=None,
+                 yolo_detector_cfg=None,
+                 public_detector_cfg=None,
+                 feature_extractor_cfg=None,
+                 tracker_cfg=None,
+                 draw=False,
+                 verbose=False):
         self.size = size
+        self.detector_type = DetectorType[detector_type]
+        assert detector_frame_skip >= 1
+        self.detector_frame_skip = detector_frame_skip
         self.draw = draw
         self.verbose = verbose
-        self.detector_type = DetectorType[config['detector_type']]
-        self.detector_frame_skip = config['detector_frame_skip']
+
+        if ssd_detector_cfg is None:
+            ssd_detector_cfg = Namespace()
+        if yolo_detector_cfg is None:
+            yolo_detector_cfg = Namespace()
+        if public_detector_cfg is None:
+            public_detector_cfg = Namespace()
+        if feature_extractor_cfg is None:
+            feature_extractor_cfg = Namespace()
+        if tracker_cfg is None:
+            tracker_cfg = Namespace()
 
         LOGGER.info('Loading detector model...')
         if self.detector_type == DetectorType.SSD:
-            self.detector = SSDDetector(self.size, config['ssd_detector'])
+            self.detector = SSDDetector(self.size, **vars(ssd_detector_cfg))
         elif self.detector_type == DetectorType.YOLO:
-            self.detector = YOLODetector(self.size, config['yolo_detector'])
+            self.detector = YOLODetector(self.size, **vars(yolo_detector_cfg))
         elif self.detector_type == DetectorType.PUBLIC:
             self.detector = PublicDetector(self.size, self.detector_frame_skip,
-                                           config['public_detector'])
+                                           **vars(public_detector_cfg))
 
         LOGGER.info('Loading feature extractor model...')
-        self.extractor = FeatureExtractor(config['feature_extractor'])
-        self.tracker = MultiTracker(self.size, self.extractor.metric, config['multi_tracker'])
+        self.extractor = FeatureExtractor(**vars(feature_extractor_cfg))
+        self.tracker = MultiTracker(self.size, self.extractor.metric, **vars(tracker_cfg))
         self.frame_count = 0
 
     @property

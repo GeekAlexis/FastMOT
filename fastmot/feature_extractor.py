@@ -9,9 +9,10 @@ from .utils.rect import multi_crop
 
 
 class FeatureExtractor:
-    def __init__(self, config):
-        self.model = getattr(models, config['model'])
-        self.batch_size = config['batch_size']
+    def __init__(self, model='OSNet025', batch_size=16):
+        self.model = getattr(models, model)
+        assert batch_size >= 1
+        self.batch_size = batch_size
 
         self.feature_dim = self.model.OUTPUT_LAYOUT
         self.backend = TRTInference(self.model, self.batch_size)

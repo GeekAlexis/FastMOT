@@ -36,25 +36,51 @@ class MultiTracker:
     """
     _hist_tracks = OrderedDict()
 
-    def __init__(self, size, metric, config):
+    def __init__(self, size, metric,
+                 max_age=6,
+                 age_penalty=2,
+                 age_weight=0.05,
+                 motion_weight=0.15,
+                 max_assoc_cost=0.9,
+                 max_reid_cost=0.45,
+                 iou_thresh=0.4,
+                 duplicate_thresh=0.8,
+                 occlusion_thresh=0.7,
+                 conf_thresh=0.5,
+                 confirm_hits=1,
+                 history_size=50,
+                 kalman_filter_cfg=None,
+                 flow_cfg=None):
         self.size = size
         self.metric = metric
-        self.max_age = config['max_age']
-        self.age_penalty = config['age_penalty']
-        self.age_weight = config['age_weight']
-        self.motion_weight = config['motion_weight']
-        self.max_assoc_cost = config['max_assoc_cost']
-        self.max_reid_cost = config['max_reid_cost']
-        self.iou_thresh = config['iou_thresh']
-        self.duplicate_iou = config['duplicate_iou']
-        self.occlusion_thresh = config['occlusion_thresh']
-        self.conf_thresh = config['conf_thresh']
-        self.confirm_hits = config['confirm_hits']
-        self.history_size = config['history_size']
+        assert max_age >= 1
+        self.max_age = max_age
+        assert age_penalty >= 1
+        self.age_penalty = age_penalty
+        assert 0 <= age_weight <= 1
+        self.age_weight = age_weight
+        assert 0 <= motion_weight <= 1
+        self.motion_weight = motion_weight
+        assert 0 <= max_assoc_cost <= 2
+        self.max_assoc_cost = max_assoc_cost
+        assert 0 <= max_reid_cost <= 2
+        self.max_reid_cost = max_reid_cost
+        assert 0 <= iou_thresh <= 1
+        self.iou_thresh = iou_thresh
+        assert 0 <= duplicate_thresh <= 1
+        self.duplicate_thresh = duplicate_thresh
+        assert 0 <= occlusion_thresh <= 1
+        self.occlusion_thresh = occlusion_thresh
+        assert 0 <= conf_thresh <= 1
+        self.conf_thresh = conf_thresh
+        assert confirm_hits >= 1
+        self.confirm_hits = confirm_hits
+        assert history_size >= 0
+        self.history_size = history_size
 
         self.tracks = {}
-        self.kf = KalmanFilter(config['kalman_filter'])
-        self.flow = Flow(self.size, config['flow'])
+        self.kf = KalmanFilter(**vars(kalman_filter_cfg))
+        self.flow = Flow(self.size, **vars(flow_cfg))
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
         self.klt_bboxes = {}
@@ -305,7 +331,7 @@ class MultiTracker:
         aged_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in aged])
 
         ious = bbox_overlaps(updated_bboxes, aged_bboxes)
-        idx = np.where(ious >= self.duplicate_iou)
+        idx = np.where(ious >= self.duplicate_thresh)
         dup_ids = set()
         for row, col in zip(*idx):
             updated_id, aged_id = updated[row], aged[col]

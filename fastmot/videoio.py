@@ -39,15 +39,22 @@ class VideoIO:
         Estimated processing speed. This depends on compute and scene complexity.
     """
 
-    def __init__(self, size, config, input_uri, output_uri=None, proc_fps=30):
+    def __init__(self, size, input_uri,
+                 output_uri=None,
+                 resolution=(1920, 1080),
+                 frame_rate=30,
+                 buffer_size=10,
+                 proc_fps=30):
         self.size = size
         self.input_uri = input_uri
         self.output_uri = output_uri
+        self.resolution = resolution
+        assert frame_rate > 0
+        self.frame_rate = frame_rate
+        assert buffer_size >= 1
+        self.buffer_size = buffer_size
+        assert proc_fps > 0
         self.proc_fps = proc_fps
-
-        self.resolution = config['resolution']
-        self.frame_rate = config['frame_rate']
-        self.buffer_size = config['buffer_size']
 
         self.protocol = self._parse_uri(self.input_uri)
         self.is_live = self.protocol != Protocol.IMAGE and self.protocol != Protocol.VIDEO

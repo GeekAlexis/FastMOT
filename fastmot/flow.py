@@ -26,20 +26,52 @@ class Flow:
         KLT hyperparameters.
     """
 
-    def __init__(self, size, config):
+    def __init__(self, size,
+                 bg_feat_scale_factor=(0.1, 0.1),
+                 opt_flow_scale_factor=(0.5, 0.5),
+                 feat_density=0.005,
+                 feat_dist_factor=0.06,
+                 ransac_max_iter=500,
+                 ransac_conf=0.99,
+                 max_error=100,
+                 inlier_thresh=4,
+                 bg_feat_thresh=10,
+                 target_feat_params=None,
+                 opt_flow_params=None):
         self.size = size
-        self.bg_feat_scale_factor = config['bg_feat_scale_factor']
-        self.opt_flow_scale_factor = config['opt_flow_scale_factor']
-        self.feature_density = config['feature_density']
-        self.feat_dist_factor = config['feat_dist_factor']
-        self.ransac_max_iter = config['ransac_max_iter']
-        self.ransac_conf = config['ransac_conf']
-        self.max_error = config['max_error']
-        self.inlier_thresh = config['inlier_thresh']
+        assert 0 < bg_feat_scale_factor[0] <= 1 and 0 < bg_feat_scale_factor[1] <= 1
+        self.bg_feat_scale_factor = bg_feat_scale_factor
+        assert 0 < opt_flow_scale_factor[0] <= 1 and 0 < opt_flow_scale_factor[1] <= 1
+        self.opt_flow_scale_factor = opt_flow_scale_factor
+        assert 0 <= feat_density <= 1
+        self.feat_density = feat_density
+        assert feat_dist_factor >= 0
+        self.feat_dist_factor = feat_dist_factor
+        assert ransac_max_iter >= 0
+        self.ransac_max_iter = ransac_max_iter
+        assert 0 <= ransac_conf <= 1
+        self.ransac_conf = ransac_conf
+        assert 0 <= max_error <= 255
+        self.max_error = max_error
+        assert inlier_thresh >= 1
+        self.inlier_thresh = inlier_thresh
+        assert bg_feat_thresh >= 0
+        self.bg_feat_thresh = bg_feat_thresh
 
-        self.bg_feat_thresh = config['bg_feat_thresh']
-        self.target_feat_params = config['target_feat_params']
-        self.opt_flow_params = config['opt_flow_params']
+        self.target_feat_params = {
+            "maxCorners": 1000,
+            "qualityLevel": 0.06,
+            "blockSize": 3
+        }
+        self.opt_flow_params = {
+            "winSize": (5, 5),
+            "maxLevel": 5,
+            "criteria": (3, 10, 0.03)
+        }
+        if target_feat_params is not None:
+            self.target_feat_params.update(vars(target_feat_params))
+        if opt_flow_params is None:
+            self.opt_flow_params.update(vars(opt_flow_params))
 
         self.bg_feat_detector = cv2.FastFeatureDetector_create(threshold=self.bg_feat_thresh)
 
@@ -114,7 +146,7 @@ class Flow:
             target_area = mask_area(target_mask)
             keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.fg_mask)
             # only detect new keypoints when too few are propagated
-            if len(keypoints) < self.feature_density * target_area:
+            if len(keypoints) < self.feat_density * target_area:
                 img = crop(self.prev_frame_gray, inside_tlbr)
                 feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
                 keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask,

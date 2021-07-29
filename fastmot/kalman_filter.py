@@ -26,17 +26,36 @@ class KalmanFilter:
         Kalman Filter parameters.
     """
 
-    def __init__(self, config):
-        self.std_factor_acc = config['std_factor_acc']
-        self.std_offset_acc = config['std_offset_acc']
-        self.std_factor_det = config['std_factor_det']
-        self.std_factor_klt = config['std_factor_klt']
-        self.min_std_det = config['min_std_det']
-        self.min_std_klt = config['min_std_klt']
-        self.init_pos_weight = config['init_pos_weight']
-        self.init_vel_weight = config['init_vel_weight']
-        self.vel_coupling = config['vel_coupling']
-        self.vel_half_life = config['vel_half_life']
+    def __init__(self,
+                 std_factor_acc=2.25,
+                 std_offset_acc=78.5,
+                 std_factor_det=(0.08, 0.08),
+                 std_factor_klt=(0.14, 0.14),
+                 min_std_det=(4.0, 4.0),
+                 min_std_klt=(5.0, 5.0),
+                 init_pos_weight=5,
+                 init_vel_weight=12,
+                 vel_coupling=0.6,
+                 vel_half_life=2):
+        assert std_factor_acc >= 0
+        self.std_factor_acc = std_factor_acc
+        self.std_offset_acc = std_offset_acc
+        assert std_factor_det[0] >= 0 and std_factor_det[1] >= 0
+        self.std_factor_det = std_factor_det
+        assert std_factor_klt[0] >= 0 and std_factor_klt[1] >= 0
+        self.std_factor_klt = std_factor_klt
+        assert min_std_det[0] >= 0 and min_std_det[1] >= 0
+        self.min_std_det = min_std_det
+        assert min_std_klt[0] >= 0 and min_std_klt[1] >= 0
+        self.min_std_klt = min_std_klt
+        assert init_pos_weight >= 0
+        self.init_pos_weight = init_pos_weight
+        assert init_vel_weight >= 0
+        self.init_vel_weight = init_vel_weight
+        assert 0 <= vel_coupling <= 1
+        self.vel_coupling = vel_coupling
+        assert vel_half_life > 0
+        self.vel_half_life = vel_half_life
 
         dt = 1 / 30.
         self.acc_cov, self.meas_mat, self.trans_mat = self._init_mat(dt)
