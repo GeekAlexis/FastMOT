@@ -43,7 +43,7 @@ class MultiTracker:
         self.age_penalty = config['age_penalty']
         self.age_weight = config['age_weight']
         self.motion_weight = config['motion_weight']
-        self.max_feat_cost = config['max_feat_cost']
+        self.max_assoc_cost = config['max_assoc_cost']
         self.max_reid_cost = config['max_reid_cost']
         self.iou_thresh = config['iou_thresh']
         self.duplicate_iou = config['duplicate_iou']
@@ -250,6 +250,9 @@ class MultiTracker:
         if n_trk == 0 or n_det == 0:
             return np.empty((n_trk, n_det))
 
+        # make sure associated pair has the same class label
+        t_labels = np.fromiter((self.tracks[trk_id].label for trk_id in trk_ids), int, n_trk)
+
         # smooth_feats = np.concatenate([self.tracks[trk_id].smooth_feat()
         #                                for trk_id in trk_ids]).reshape(n_trk, -1)
         # cost = cdist(smooth_feats, embeddings, self.metric)
@@ -263,8 +266,9 @@ class MultiTracker:
             track = self.tracks[trk_id]
             m_dist = self.kf.motion_distance(*track.state, detections.tlbr)
             age = track.age / self.max_age
-            self._fuse_motion(cost[row], m_dist, detections.label, age, track.label,
-                              self.max_feat_cost, self.motion_weight, self.age_weight)
+            self._fuse_motion(cost[row], m_dist, age, self.motion_weight, self.age_weight)
+
+        self._gate_cost(cost, t_labels, detections.label, self.max_assoc_cost)
         return cost
 
     def _iou_cost(self, trk_ids, detections):
@@ -272,7 +276,6 @@ class MultiTracker:
         if n_trk == 0 or n_det == 0:
             return np.empty((n_trk, n_det))
 
-        # make sure associated pair has the same class label
         t_labels = np.fromiter((self.tracks[trk_id].label for trk_id in trk_ids), int, n_trk)
         t_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
         d_bboxes = detections.tlbr
@@ -349,22 +352,12 @@ class MultiTracker:
                     unmatched_det_ids.append(det_ids[col])
         return matches, unmatched_trk_ids, unmatched_det_ids
 
-    # @staticmethod
-    # @nb.njit(fastmath=True, cache=True)
-    # def _fuse_feature(f_clust_dist, d_labels, out, label, max_feat_cost):
-    #     # out[:] = np.minimum(f_smooth_dist, f_clust_dist) * 0.5
-    #     # out[:] = f_clust_dist * 0.5
-    #     out[:] = f_smooth_dist * 0.5
-    #     gate = (out > max_feat_cost) | (label != d_labels)
-    #     out[gate] = INF_COST
-
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _fuse_motion(cost, m_dist, d_labels, age, label, max_cost, w1, w2):
-        gate = (cost > max_cost) | (m_dist > CHI_SQ_INV_95) | (label != d_labels)
+    def _fuse_motion(cost, m_dist, age, w1, w2):
         norm_factor = 1. / CHI_SQ_INV_95
-        cost[:] = (1. - w1 - w2) * 0.5 * cost + w1 * norm_factor * m_dist + w2 * age
-        cost[gate] = INF_COST
+        cost[:] = (1. - w1 - w2) * cost + w1 * norm_factor * m_dist + w2 * age
+        cost[m_dist > CHI_SQ_INV_95] = INF_COST
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
