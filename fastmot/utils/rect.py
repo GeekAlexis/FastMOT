@@ -95,9 +95,7 @@ def multi_crop(img, tlbrs):
 
 @nb.njit(fastmath=True, cache=True)
 def ios(tlbr1, tlbr2):
-    """
-    Computes intersection over self.
-    """
+    """Computes intersection over self."""
     tlbr = intersection(tlbr1, tlbr2)
     if tlbr is None:
         return 0.
@@ -108,9 +106,7 @@ def ios(tlbr1, tlbr2):
 
 @nb.njit(fastmath=True, cache=True)
 def iom(tlbr1, tlbr2):
-    """
-    Computes intersection over minimum.
-    """
+    """Computes intersection over minimum."""
     tlbr = intersection(tlbr1, tlbr2)
     if tlbr is None:
         return 0.
@@ -121,8 +117,7 @@ def iom(tlbr1, tlbr2):
 
 @nb.njit(fastmath=True, cache=True)
 def nms(tlwhs, scores, nms_thresh):
-    """
-    Applies Non-Maximum Suppression on the bounding boxes [x, y, w, h].
+    """Applies Non-Maximum Suppression on the bounding boxes [x, y, w, h].
     Returns an array with the indexes of the bounding boxes we want to keep.
     """
     areas = tlwhs[:, 2] * tlwhs[:, 3]
@@ -160,9 +155,7 @@ def nms(tlwhs, scores, nms_thresh):
 
 @nb.njit(fastmath=True, cache=True)
 def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
-    """
-    Applies Non-Maximum Suppression using the DIoU metric.
-    """
+    """Applies Non-Maximum Suppression using the DIoU metric."""
     areas = tlwhs[:, 2] * tlwhs[:, 3]
     ordered = scores.argsort()[::-1]
 

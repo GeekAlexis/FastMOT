@@ -35,9 +35,7 @@ class FeatureExtractor:
         return self.model.METRIC
 
     def extract_async(self, frame, tlbrs):
-        """
-        Extract feature embeddings from bounding boxes asynchronously.
-        """
+        """Extract feature embeddings from bounding boxes asynchronously."""
         imgs = multi_crop(frame, tlbrs)
         self.embeddings, cur_imgs = [], []
         # pipeline inference and preprocessing the next batch in parallel
@@ -51,8 +49,7 @@ class FeatureExtractor:
         self.last_num_features = len(cur_imgs)
 
     def postprocess(self):
-        """
-        Synchronizes, applies postprocessing, and returns a NxM matrix of N
+        """Synchronizes, applies postprocessing, and returns a NxM matrix of N
         extracted embeddings with dimension M.
         This API should be called after `extract_async`.
         """
@@ -66,8 +63,7 @@ class FeatureExtractor:
         return embeddings
 
     def null_embeddings(self, detections):
-        """
-        Returns a NxM matrix of N identical embeddings with dimension M.
+        """Returns a NxM matrix of N identical embeddings with dimension M.
         This API effectively disables feature extraction.
         """
         embeddings = np.ones((len(detections), self.feature_dim))

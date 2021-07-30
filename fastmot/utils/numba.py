@@ -4,9 +4,7 @@ import numba as nb
 
 @nb.njit(fastmath=True, cache=True)
 def apply_along_axis(func1d, mat, axis):
-    """
-    Numba utility to apply reduction to a given axis.
-    """
+    """Numba utility to apply reduction to a given axis."""
     assert mat.ndim == 2
     assert axis in [0, 1]
     if axis == 0:
@@ -22,9 +20,7 @@ def apply_along_axis(func1d, mat, axis):
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def normalize_vec(vectors):
-    """
-    Numba utility to normalize an array of vectors.
-    """
+    """Numba utility to normalize an array of vectors."""
     out = np.empty_like(vectors)
     for i in nb.prange(len(vectors)):
         norm_factor = 1. / np.linalg.norm(vectors[i])
@@ -34,9 +30,7 @@ def normalize_vec(vectors):
 
 @nb.njit(fastmath=True, cache=True)
 def transform(pts, m):
-    """
-    Numba implementation of OpenCV's transform.
-    """
+    """Numba implementation of OpenCV's transform."""
     pts = np.asarray(pts)
     pts = np.atleast_2d(pts)
     augment = np.ones((len(pts), 1))
@@ -46,9 +40,7 @@ def transform(pts, m):
 
 @nb.njit(fastmath=True, cache=True)
 def perspective_transform(pts, m):
-    """
-    Numba implementation of OpenCV's perspectiveTransform.
-    """
+    """Numba implementation of OpenCV's perspectiveTransform."""
     pts = np.asarray(pts)
     pts = np.atleast_2d(pts)
     augment = np.ones((len(pts), 1))

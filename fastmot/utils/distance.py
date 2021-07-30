@@ -4,9 +4,7 @@ import numba as nb
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def euclidean(XA, XB):
-    """
-    Numba implementation of Scipy's euclidean
-    """
+    """Numba implementation of Scipy's euclidean"""
     Y = np.empty((XA.shape[0], XB.shape[0]))
     for i in nb.prange(XA.shape[0]):
         for j in range(XB.shape[0]):
@@ -19,9 +17,7 @@ def euclidean(XA, XB):
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def cosine(XA, XB):
-    """
-    Numba implementation of Scipy's cosine
-    """
+    """Numba implementation of Scipy's cosine"""
     Y = np.empty((XA.shape[0], XB.shape[0]))
     for i in nb.prange(XA.shape[0]):
         for j in range(XB.shape[0]):

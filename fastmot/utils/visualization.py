@@ -15,26 +15,24 @@ def draw_tracks(frame, tracks, show_flow=False, show_cov=False):
             draw_covariance(frame, track.tlbr, track.state[1])
 
 
-def draw_detections(frame, detections):
+def draw_detections(frame, detections, color=(255, 255, 255)):
     for det in detections:
-        draw_bbox(frame, det.tlbr, (255, 255, 255), 1)
+        draw_bbox(frame, det.tlbr, color, 1)
 
 
-def draw_klt_bboxes(frame, tracker):
-    for tlbr in tracker.klt_bboxes.values():
-        draw_bbox(frame, tlbr, 0, 1)
+def draw_klt_bboxes(frame, klt_bboxes, color=(0, 0, 0)):
+    for tlbr in klt_bboxes:
+        draw_bbox(frame, tlbr, color, 1)
 
 
-def draw_tiles(frame, detector):
-    assert hasattr(detector, 'tiles')
-    for tile in detector.tiles:
-        tlbr = np.rint(tile * np.tile(detector.scale_factor, 2))
-        draw_bbox(frame, tlbr, 0, 1)
+def draw_tiles(frame, tiles, scale_factor, color=(0, 0, 0)):
+    for tile in tiles:
+        tlbr = np.rint(tile * np.tile(scale_factor, 2))
+        draw_bbox(frame, tlbr, color, 1)
 
 
-def draw_background_flow(frame, tracker):
-    draw_feature_match(frame, tracker.flow.prev_bg_keypoints,
-                       tracker.flow.bg_keypoints, (0, 0, 255))
+def draw_background_flow(frame, prev_bg_keypoints, bg_keypoints, color=(0, 0, 255)):
+    draw_feature_match(frame, prev_bg_keypoints, bg_keypoints, color)
 
 
 def get_color(idx, s=0.8, vmin=0.7):

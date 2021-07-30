@@ -68,7 +68,7 @@ def main():
                 if args.mot:
                     mot.step(frame)
                     if log is not None:
-                        for track in mot.visible_tracks:
+                        for track in mot.get_visible_tracks():
                             tl = track.tlbr[:2] / config.resize_to * stream.resolution
                             br = track.tlbr[2:] / config.resize_to * stream.resolution
                             w, h = br - tl + 1

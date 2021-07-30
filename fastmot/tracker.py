@@ -19,21 +19,6 @@ INF_COST = 1e5
 
 
 class MultiTracker:
-    """
-    Uses optical flow and Kalman filter to track multiple objects and
-    associates detections to tracklets based on motion and appearance.
-    Parameters
-    ----------
-    size : (int, int)
-        Width and height of each frame.
-    dt : float
-        Time interval in seconds between each frame.
-    metric : string
-        Feature distance metric to associate tracklets. Usually
-        `euclidean` or `cosine`.
-    config : Dict
-        Tracker parameters.
-    """
     _hist_tracks = OrderedDict()
 
     def __init__(self, size, metric,
@@ -51,6 +36,44 @@ class MultiTracker:
                  history_size=50,
                  kalman_filter_cfg=None,
                  flow_cfg=None):
+        """Class that uses KLT and Kalman filter to track multiple objects and
+        associates detections to tracklets based on motion and appearance.
+
+        Parameters
+        ----------
+        size : tuple
+            Width and height of each frame.
+        metric : {'euclidean', 'cosine'}
+            Feature distance metric to associate tracklets.
+        max_age : int, optional
+            Max number of undetected frames allowed before a track is terminated.
+        age_penalty : int, optional
+            Scale factor to penalize KLT measurements for track with large age.
+        age_weight : float, optional
+            Weight for tracking age term in matching cost function.
+        motion_weight : float, optional
+            Weight for motion term in matching cost function.
+        max_assoc_cost : float, optional
+            Max matching cost for valid primary association.
+        max_reid_cost : float, optional
+            Max ReID feature dissimilarity for valid reidentification.
+        iou_thresh : float, optional
+            IoU threshold for valid secondary association
+        duplicate_thresh : float, optional
+            Track overlap threshold for removing duplicate tracks.
+        occlusion_thresh : float, optional
+            Detection overlap threshold for nullifying the extracted features for association/reID.
+        conf_thresh : float, optional
+            Detection confidence threshold for starting a new track.
+        confirm_hits : int, optional
+            Min number of detections to confirm a track.
+        history_size : int, optional
+            Max size of track history to keep for reID.
+        kalman_filter_cfg : SimpleNamespace, optional
+            Kalman Filter configuration.
+        flow_cfg : SimpleNamespace, optional
+            Flow configuration.
+        """
         self.size = size
         self.metric = metric
         assert max_age >= 1
@@ -87,8 +110,8 @@ class MultiTracker:
         self.homography = None
 
     def reset(self, dt):
-        """
-        Reset the tracker for new input context.
+        """Reset the tracker for new input context.
+
         Parameters
         ----------
         dt : float
@@ -99,8 +122,8 @@ class MultiTracker:
         MultiTracker._hist_tracks.clear()
 
     def init(self, frame, detections):
-        """
-        Initializes the tracker from detections in the first frame.
+        """Initializes the tracker from detections in the first frame.
+
         Parameters
         ----------
         frame : ndarray
@@ -117,8 +140,8 @@ class MultiTracker:
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")
 
     def track(self, frame):
-        """
-        Convenience function that combines `compute_flow` and `apply_kalman`.
+        """Convenience function that combines `compute_flow` and `apply_kalman`.
+
         Parameters
         ----------
         frame : ndarray
@@ -128,8 +151,8 @@ class MultiTracker:
         self.apply_kalman()
 
     def compute_flow(self, frame):
-        """
-        Computes optical flow to estimate tracklet positions and camera motion.
+        """Computes optical flow to estimate tracklet positions and camera motion.
+
         Parameters
         ----------
         frame : ndarray
@@ -142,8 +165,7 @@ class MultiTracker:
             self.tracks.clear()
 
     def apply_kalman(self):
-        """
-        Performs kalman filter prediction and update from KLT measurements.
+        """Performs kalman filter predict and update from KLT measurements.
         The function should be called after `compute_flow`.
         """
         for trk_id, track in list(self.tracks.items()):
@@ -166,8 +188,8 @@ class MultiTracker:
                     del self.tracks[trk_id]
 
     def update(self, frame_id, detections, embeddings):
-        """
-        Associates detections to tracklets based on motion and feature embeddings.
+        """Associates detections to tracklets based on motion and feature embeddings.
+
         Parameters
         ----------
         frame_id : int
@@ -184,7 +206,7 @@ class MultiTracker:
         unconfirmed = [trk_id for trk_id, track in self.tracks.items() if not track.confirmed]
 
         # association with motion and embeddings
-        cost = self._matching_cost(confirmed, detections, embeddings)
+        cost = self._matching_cost(confirmed, detections, embeddings, occluded_det_ids)
         matches1, u_trk_ids1, u_det_ids = self._linear_assignment(cost, confirmed, det_ids)
 
         # 2nd association with IoU
@@ -271,22 +293,22 @@ class MultiTracker:
         if len(MultiTracker._hist_tracks) > self.history_size:
             MultiTracker._hist_tracks.popitem(last=False)
 
-    def _matching_cost(self, trk_ids, detections, embeddings):
+    def _matching_cost(self, trk_ids, detections, embeddings, occluded_det_ids):
         n_trk, n_det = len(trk_ids), len(detections)
         if n_trk == 0 or n_det == 0:
             return np.empty((n_trk, n_det))
 
-        # make sure associated pair has the same class label
-        t_labels = np.fromiter((self.tracks[trk_id].label for trk_id in trk_ids), int, n_trk)
+        smooth_feats = np.concatenate([self.tracks[trk_id].smooth_feat()
+                                       for trk_id in trk_ids]).reshape(n_trk, -1)
+        cost = cdist(smooth_feats, embeddings, self.metric)
 
-        # smooth_feats = np.concatenate([self.tracks[trk_id].smooth_feat()
-        #                                for trk_id in trk_ids]).reshape(n_trk, -1)
-        # cost = cdist(smooth_feats, embeddings, self.metric)
-
-        cost = np.concatenate([self.tracks[trk_id].clust_feat.distance(embeddings)
-                               for trk_id in trk_ids]).reshape(n_trk, -1)
+        # cost = np.concatenate([self.tracks[trk_id].clust_feat.distance(embeddings)
+        #                        for trk_id in trk_ids]).reshape(n_trk, -1)
         # clust_feats = tuple(self.tracks[trk_id].clust_feat() for trk_id in trk_ids)
         # cost = self._clusters_vec_dist(clust_feats, embeddings, self.metric)
+
+        occluded_det_ids = np.fromiter(occluded_det_ids, int, len(occluded_det_ids))
+        self._invalidate_occluded(cost, occluded_det_ids)
 
         for row, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
@@ -294,6 +316,8 @@ class MultiTracker:
             age = track.age / self.max_age
             self._fuse_motion(cost[row], m_dist, age, self.motion_weight, self.age_weight)
 
+        # make sure associated pair has the same class label
+        t_labels = np.fromiter((self.tracks[trk_id].label for trk_id in trk_ids), int, n_trk)
         self._gate_cost(cost, t_labels, detections.label, self.max_assoc_cost)
         return cost
 
@@ -314,12 +338,12 @@ class MultiTracker:
         if n_hist == 0 or n_det == 0:
             return np.empty((n_hist, n_det))
 
+        smooth_feats = np.concatenate([t.smooth_feat() for t
+                                       in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
+        cost = cdist(smooth_feats, embeddings, self.metric)
+        # cost = np.concatenate([t.clust_feat.distance(embeddings)
+        #                        for t in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
         t_labels = np.fromiter((t.label for t in MultiTracker._hist_tracks.values()), int, n_hist)
-        # smooth_feats = np.concatenate([t.smooth_feat() for t
-        #                                in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
-        # cost = cdist(smooth_feats, embeddings, self.metric)
-        cost = np.concatenate([t.clust_feat.distance(embeddings)
-                               for t in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
         self._gate_cost(cost, t_labels, detections.label, self.max_reid_cost)
         return cost
 
@@ -384,6 +408,11 @@ class MultiTracker:
         norm_factor = 1. / CHI_SQ_INV_95
         cost[:] = (1. - w1 - w2) * cost + w1 * norm_factor * m_dist + w2 * age
         cost[m_dist > CHI_SQ_INV_95] = INF_COST
+
+    @staticmethod
+    @nb.njit(cache=True)
+    def _invalidate_occluded(cost, occluded_det_ids):
+        cost[:, occluded_det_ids] = 1.0
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)

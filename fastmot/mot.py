@@ -1,4 +1,4 @@
-from types import SimpleNamespace as Namespace
+from types import SimpleNamespace
 from enum import Enum
 import logging
 import cv2
@@ -21,23 +21,6 @@ class DetectorType(Enum):
 
 
 class MOT:
-    """
-    This is the top level module that integrates detection, feature extraction,
-    and tracking together.
-    Parameters
-    ----------
-    size : (int, int)
-        Width and height of each frame.
-    cap_dt : float
-        Time interval in seconds between each captured frame.
-    config : Dict
-        Tracker configuration.
-    draw : bool
-        Flag to toggle visualization drawing.
-    verbose : bool
-        Flag to toggle output verbosity.
-    """
-
     def __init__(self, size,
                  detector_type='YOLO',
                  detector_frame_skip=5,
@@ -48,6 +31,32 @@ class MOT:
                  tracker_cfg=None,
                  draw=False,
                  verbose=False):
+        """Top level module that integrates detection, feature extraction,
+        and tracking together.
+
+        Parameters
+        ----------
+        size : tuple
+            Width and height of each frame.
+        detector_type : {'SSD', 'YOLO', 'PUBLIC'}, optional
+            Type of detector to use.
+        detector_frame_skip : int, optional
+            Number of frames to skip for the detector.
+        ssd_detector_cfg : SimpleNamespace, optional
+            SSD detector configuration.
+        yolo_detector_cfg : SimpleNamespace, optional
+            YOLO detector configuration.
+        public_detector_cfg : SimpleNamespace, optional
+            Public detector configuration.
+        feature_extractor_cfg : SimpleNamespace, optional
+            Feature extractor configuration.
+        tracker_cfg : SimpleNamespace, optional
+            Tracker configuration.
+        draw : bool, optional
+            Enable drawing tracks.
+        verbose : bool, optional
+            Enable verbose drawing.
+        """
         self.size = size
         self.detector_type = DetectorType[detector_type]
         assert detector_frame_skip >= 1
@@ -56,15 +65,15 @@ class MOT:
         self.verbose = verbose
 
         if ssd_detector_cfg is None:
-            ssd_detector_cfg = Namespace()
+            ssd_detector_cfg = SimpleNamespace()
         if yolo_detector_cfg is None:
-            yolo_detector_cfg = Namespace()
+            yolo_detector_cfg = SimpleNamespace()
         if public_detector_cfg is None:
-            public_detector_cfg = Namespace()
+            public_detector_cfg = SimpleNamespace()
         if feature_extractor_cfg is None:
-            feature_extractor_cfg = Namespace()
+            feature_extractor_cfg = SimpleNamespace()
         if tracker_cfg is None:
-            tracker_cfg = Namespace()
+            tracker_cfg = SimpleNamespace()
 
         LOGGER.info('Loading detector model...')
         if self.detector_type == DetectorType.SSD:
@@ -80,15 +89,20 @@ class MOT:
         self.tracker = MultiTracker(self.size, self.extractor.metric, **vars(tracker_cfg))
         self.frame_count = 0
 
-    @property
-    def visible_tracks(self):
-        # retrieve confirmed and active tracks from the tracker
+    def get_visible_tracks(self):
+        """Retrieve visible tracks from the tracker
+
+        Returns
+        -------
+        List[Track]
+            Confirmed and active tracks from the tracker
+        """
         return [track for track in self.tracker.tracks.values()
                 if track.confirmed and track.active]
 
     def reset(self, cap_dt):
-        """
-        Resets multiple object tracker. Must be called before `step`.
+        """Resets multiple object tracker. Must be called before `step`.
+
         Parameters
         ----------
         cap_dt : float
@@ -98,8 +112,8 @@ class MOT:
         self.tracker.reset(cap_dt)
 
     def step(self, frame):
-        """
-        Runs multiple object tracker on the next frame.
+        """Runs multiple object tracker on the next frame.
+
         Parameters
         ----------
         frame : ndarray
@@ -146,10 +160,12 @@ class MOT:
         LOGGER.debug(f"{'association time:':<37}{Profiler.get_avg_millis('assoc'):>6.3f} ms")
 
     def _draw(self, frame, detections):
-        draw_tracks(frame, self.visible_tracks, show_flow=self.verbose)
+        visible_tracks = self.get_visible_tracks()
+        draw_tracks(frame, visible_tracks, show_flow=self.verbose)
         if self.verbose:
             draw_detections(frame, detections)
-            draw_klt_bboxes(frame, self.tracker)
-            draw_background_flow(frame, self.tracker)
-        cv2.putText(frame, f'visible: {len(self.visible_tracks)}', (30, 30),
+            draw_klt_bboxes(frame, self.tracker.klt_bboxes.values())
+            draw_background_flow(frame, self.tracker.flow.prev_bg_keypoints,
+                                 self.tracker.flow.bg_keypoints)
+        cv2.putText(frame, f'visible: {len(visible_tracks)}', (30, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

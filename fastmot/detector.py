@@ -2,7 +2,6 @@ from collections import defaultdict
 from pathlib import Path
 import configparser
 import abc
-from typing import Sequence
 import numpy as np
 import numba as nb
 import cupy as cp
@@ -12,7 +11,7 @@ import cv2
 from . import models
 from .utils import TRTInference
 from .utils.rect import as_rect, to_tlbr, get_size, area
-from .utils.rect import intersection, union, multi_crop, iom, diou_nms
+from .utils.rect import union, multi_crop, iom, diou_nms
 
 
 DET_DTYPE = np.dtype(
@@ -34,15 +33,12 @@ class Detector(abc.ABC):
 
     @abc.abstractmethod
     def detect_async(self, frame):
-        """
-        Asynchronous detection.
-        """
+        """Detects objects asynchronously."""
         raise NotImplementedError
 
     @abc.abstractmethod
     def postprocess(self):
-        """
-        Synchronizes, applies postprocessing, and returns a record array
+        """Synchronizes, applies postprocessing, and returns a record array
         of detections (DET_DTYPE).
         This function should be called after `detect_async`.
         """
@@ -241,7 +237,8 @@ class YOLODetector(Detector):
             scale_factor = min(dst_size / src_size)
             scaled_size = np.rint(src_size * scale_factor).astype(int)
             img_offset = (dst_size - scaled_size) / 2
-            roi = np.s_[:, img_offset[1]:scaled_size[1] + 1, img_offset[0]:scaled_size[0] + 1]
+            roi = np.s_[:, img_offset[1]:img_offset[1] + scaled_size[1],
+                        img_offset[0]:img_offset[0] + scaled_size[0]]
             upscaled_sz = np.rint(dst_size / scale_factor).astype(int)
             bbox_offset = (upscaled_sz - src_size) / 2
         else:

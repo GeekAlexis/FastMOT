@@ -14,18 +14,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Flow:
-    """
-    A KLT tracker based on optical flow feature point matching.
-    Camera motion is simultaneously estimated by tracking feature points
-    on the background.
-    Parameters
-    ----------
-    size : (int, int)
-        Width and height of each frame.
-    config : Dict
-        KLT hyperparameters.
-    """
-
     def __init__(self, size,
                  bg_feat_scale_factor=(0.1, 0.1),
                  opt_flow_scale_factor=(0.5, 0.5),
@@ -38,6 +26,37 @@ class Flow:
                  bg_feat_thresh=10,
                  target_feat_params=None,
                  opt_flow_params=None):
+        """A KLT tracker based on optical flow feature point matching.
+        Camera motion is simultaneously estimated by tracking feature points
+        on the background.
+
+        Parameters
+        ----------
+        size : tuple
+            Width and height of each frame.
+        bg_feat_scale_factor : tuple, optional
+            Width and height scale factors to resize frame for background feature detection.
+        opt_flow_scale_factor : tuple, optional
+            Width and height scale factors to resize frame for optical flow.
+        feat_density : float, optional
+            Min feature point density to keep inside the bounding box.
+        feat_dist_factor : float, optional
+            Target size scale factor to estimate min feature point distance.
+        ransac_max_iter : int, optional
+            Max RANSAC iterations to filter matched outliers.
+        ransac_conf : float, optional
+            RANSAC confidence threshold to filter matched outliers.
+        max_error : int, optional
+            Max optical flow error.
+        inlier_thresh : int, optional
+            Min number of inliers for valid matching.
+        bg_feat_thresh : int, optional
+            FAST threshold for background feature detection.
+        target_feat_params : SimpleNamespace, optional
+            GFTT parameters for target feature detection, see `cv2.goodFeaturesToTrack`.
+        opt_flow_params : SimpleNamespace, optional
+            Optical flow parameters, see `cv2.calcOpticalFlowPyrLK`.
+        """
         self.size = size
         assert 0 < bg_feat_scale_factor[0] <= 1 and 0 < bg_feat_scale_factor[1] <= 1
         self.bg_feat_scale_factor = bg_feat_scale_factor
@@ -100,9 +119,8 @@ class Flow:
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
     def init(self, frame):
-        """
-        Preprocesses the first frame to prepare for subsequent optical
-        flow computations.
+        """Preprocesses the first frame to prepare for subsequent `predict`.
+
         Parameters
         ----------
         frame : ndarray
@@ -115,8 +133,8 @@ class Flow:
         self.prev_bg_keypoints = np.empty((0, 2), np.float32)
 
     def predict(self, frame, tracks):
-        """
-        Predicts tracklet positions in the next frame and estimates camera motion.
+        """Predicts tracklet positions in the next frame and estimates camera motion.
+
         Parameters
         ----------
         frame : ndarray
@@ -124,6 +142,7 @@ class Flow:
         tracks : List[Track]
             List of tracks to predict.
             Feature points of each track are updated in place.
+
         Returns
         -------
         Dict[int, ndarray], ndarray
