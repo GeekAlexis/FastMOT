@@ -11,7 +11,7 @@ class ReID:
     PLUGIN_PATH = None
     ENGINE_PATH = None
     MODEL_PATH = None
-    INPUT_SHAPE = ()
+    INPUT_SHAPE = None
 
     @classmethod
     def build_engine(cls, trt_logger, batch_size):
@@ -53,3 +53,19 @@ class OSNet025(ReID):
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
     METRIC = 'euclidean'
+
+
+class OSNet10(ReID):
+    ENGINE_PATH = Path(__file__).parent / 'osnet_x1_0_ms.trt'
+    MODEL_PATH = Path(__file__).parent / 'osnet_x1_0_ms.onnx'
+    INPUT_SHAPE = (3, 256, 128)
+    OUTPUT_LAYOUT = 512
+    METRIC = 'cosine'
+
+
+class OSNetAIN(ReID):
+    ENGINE_PATH = Path(__file__).parent / 'osnet_ain_ms.trt'
+    MODEL_PATH = Path(__file__).parent / 'osnet_ain_ms.onnx'
+    INPUT_SHAPE = (3, 256, 128)
+    OUTPUT_LAYOUT = 512
+    METRIC = 'cosine'

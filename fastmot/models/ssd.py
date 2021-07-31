@@ -10,7 +10,7 @@ class SSD:
     PLUGIN_PATH = None
     ENGINE_PATH = None
     MODEL_PATH = None
-    INPUT_SHAPE = ()
+    INPUT_SHAPE = None
     OUTPUT_NAME = None
 
     @classmethod

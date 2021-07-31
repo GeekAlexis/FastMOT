@@ -15,10 +15,10 @@ class YOLO:
     NUM_CLASSES = None
     LETTERBOX = False
     NEW_COORDS = False
-    INPUT_SHAPE = ()
-    LAYER_FACTORS = []
-    SCALES = []
-    ANCHORS = []
+    INPUT_SHAPE = None
+    LAYER_FACTORS = None
+    SCALES = None
+    ANCHORS = None
 
     @classmethod
     def add_plugin(cls, network):
@@ -28,6 +28,11 @@ class YOLO:
                 if plugin_creator.name == plugin_name:
                     return plugin_creator
             return None
+
+        assert len(cls.LAYER_FACTORS) == network.num_outputs
+        assert len(cls.SCALES) == network.num_outputs
+        assert len(cls.ANCHORS) == network.num_outputs
+        assert all(s >= 1.0 for s in cls.SCALES)
 
         plugin_creator = get_plugin_creator('YoloLayer_TRT')
         if not plugin_creator:

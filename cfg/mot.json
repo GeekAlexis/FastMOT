@@ -43,7 +43,7 @@
             "age_weight": 0.05,
             "motion_weight": 0.15,
             "max_assoc_cost": 0.9,
-            "max_reid_cost": 0.5,
+            "max_reid_cost": 0.6,
             "iou_thresh": 0.4,
             "duplicate_thresh": 0.8,
             "occlusion_thresh": 0.7,

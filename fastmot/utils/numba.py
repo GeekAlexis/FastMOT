@@ -18,6 +18,16 @@ def apply_along_axis(func1d, mat, axis):
     return result
 
 
+@nb.njit(cache=True)
+def delete_row_col(mat, row, col):
+    """Numba utility to delete a row and column of a matrix."""
+    row_mask = np.ones(mat.shape[0], dtype=np.bool_)
+    col_mask = np.ones(mat.shape[1], dtype=np.bool_)
+    row_mask[row] = False
+    col_mask[col] = False
+    return mat[row_mask, :][:, col_mask]
+
+
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def normalize_vec(vectors):
     """Numba utility to normalize an array of vectors."""
