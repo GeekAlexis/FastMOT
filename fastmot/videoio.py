@@ -198,7 +198,7 @@ class VideoIO:
             else:
                 raise RuntimeError('GStreamer V4L2 plugin not found')
         elif self.protocol == Protocol.RTSP:
-            pipeline = 'rtspsrc location=%s latency=0 ! decodebin ! ' % self.input_uri
+            pipeline = 'rtspsrc location=%s latency=0 ! capsfilter caps=application/x-rtp,media=video ! decodebin ! ' % self.input_uri
         elif self.protocol == Protocol.HTTP:
             pipeline = 'souphttpsrc location=%s is-live=true ! decodebin ! ' % self.input_uri
         return pipeline + cvt_pipeline
