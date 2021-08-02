@@ -218,7 +218,8 @@ class YOLODetector(Detector):
             scale_factor = min(dst_size / src_size)
             scaled_size = np.rint(src_size * scale_factor).astype(int)
             img_offset = (dst_size - scaled_size) / 2
-            roi = np.s_[:, img_offset[1]:scaled_size[1] + 1, img_offset[0]:scaled_size[0] + 1]
+            roi = np.s_[:, img_offset[1]:img_offset[1] + scaled_size[1],
+                        img_offset[0]:img_offset[0] + scaled_size[0]]
             upscaled_sz = np.rint(dst_size / scale_factor).astype(int)
             bbox_offset = (upscaled_sz - src_size) / 2
         else:
