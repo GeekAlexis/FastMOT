@@ -27,7 +27,7 @@ if [ ! -x "$(command -v nvcc)" ]; then
     source ~/.bashrc
 fi
 
-# Numpy, PyCUDA, TensorFlow, cython-bbox
+# Numpy, cython-bbox, TensorFlow
 sudo apt-get update
 sudo apt-get install -y python3-pip libhdf5-serial-dev hdf5-tools libcanberra-gtk-module
 sudo -H pip3 install cython

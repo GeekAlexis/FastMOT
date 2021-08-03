@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import itertools
 import logging
+from numba.cuda.simulator.api import detect
 import numpy as np
 import numba as nb
 from scipy.optimize import linear_sum_assignment
@@ -20,8 +21,6 @@ INF_COST = 1e5
 
 
 class MultiTracker:
-    _hist_tracks = OrderedDict()
-
     def __init__(self, size, metric,
                  max_age=6,
                  age_penalty=2,
@@ -48,6 +47,7 @@ class MultiTracker:
             Feature distance metric to associate tracklets.
         max_age : int, optional
             Max number of undetected frames allowed before a track is terminated.
+            Note that skipped frames are not considered.
         age_penalty : int, optional
             Scale factor to penalize KLT measurements for track with large age.
         age_weight : float, optional
@@ -103,6 +103,7 @@ class MultiTracker:
         self.history_size = history_size
 
         self.tracks = {}
+        self.hist_tracks = OrderedDict()
         self.kf = KalmanFilter(**vars(kalman_filter_cfg))
         self.flow = Flow(self.size, **vars(flow_cfg))
         self.frame_rect = to_tlbr((0, 0, *self.size))
@@ -119,8 +120,8 @@ class MultiTracker:
             Time interval in seconds between each frame.
         """
         self.kf.reset_dt(dt)
+        self.hist_tracks.clear()
         Track._count = 0
-        MultiTracker._hist_tracks.clear()
 
     def init(self, frame, detections):
         """Initializes the tracker from detections in the first frame.
@@ -184,9 +185,7 @@ class MultiTracker:
             if iom(next_tlbr, self.frame_rect) < 0.5:
                 if track.confirmed:
                     LOGGER.info(f"{'Out:':<14}{track}")
-                    self._mark_lost(trk_id)
-                else:
-                    del self.tracks[trk_id]
+                self._mark_lost(trk_id)
 
     def update(self, frame_id, detections, embeddings):
         """Associates detections to tracklets based on motion and feature embeddings.
@@ -209,6 +208,19 @@ class MultiTracker:
         # association with motion and embeddings
         cost = self._matching_cost(confirmed, detections, embeddings, occluded_det_ids)
         matches1, u_trk_ids1, u_det_ids = self._linear_assignment(cost, confirmed, det_ids)
+        # print('first', list(filter(lambda match : match[0] == 21 or match[0] == 7, matches1)))
+        # print(len(matches1) / len(detections))
+
+        for trk_id, det_id in matches1:
+            if trk_id == 7:
+                track = self.tracks[trk_id]
+                if not track.active:
+                    LOGGER.info(f"{'Reappeared:':<14}{track}")
+                    print('7 cost: ', cost[confirmed.index(trk_id)][det_id])
+                    correct_id = 126
+                    if correct_id in confirmed:
+                        print('correct_id cost: ', cost[confirmed.index(correct_id)][det_id])
+                        print(cost[:, det_id])
 
         # 2nd association with IoU
         active = [trk_id for trk_id in u_trk_ids1 if self.tracks[trk_id].active]
@@ -223,35 +235,36 @@ class MultiTracker:
         matches3, u_trk_ids3, u_det_ids = self._linear_assignment(cost, unconfirmed,
                                                                   u_det_ids, True)
 
-        matches = itertools.chain(matches1, matches2, matches3)
-        u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
-        updated, aged = [], []
-
         # reID with track history
+        hist_ids = [trk_id for trk_id, track in self.hist_tracks.items() if len(track) >= 2]
+        # hist_ids = np.fromiter((trk_id for trk_id, track in self.hist_tracks.items()
+        #                         if track.avg_feat.is_valid()), int)
         u_det_ids = {det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh}
-        reid_u_det_ids = u_det_ids - occluded_det_ids
-        reid_u_det_ids = np.fromiter(reid_u_det_ids, int, len(reid_u_det_ids))
+        reid_u_det_ids = list(u_det_ids - occluded_det_ids)
+        # reid_u_det_ids = u_det_ids - occluded_det_ids
+        # reid_u_det_ids = np.fromiter(reid_u_det_ids, int, len(reid_u_det_ids))
 
         u_detections, u_embeddings = detections[reid_u_det_ids], embeddings[reid_u_det_ids]
-        # hist_ids = list(MultiTracker._hist_tracks.keys())
-        cost = self._reid_cost(u_detections, u_embeddings)
-        # reid_matches, _, reid_u_det_ids = self._linear_assignment(cost, hist_ids, reid_u_det_ids)
+        cost = self._reid_cost(hist_ids, u_detections, u_embeddings)
 
-        hist_ids = np.fromiter(MultiTracker._hist_tracks.keys(), int,
-                               len(MultiTracker._hist_tracks))
-        # reid_u_det_ids = np.asarray(reid_u_det_ids)
+        hist_ids, reid_u_det_ids = np.asarray(hist_ids), np.asarray(reid_u_det_ids)
         reid_matches, _, reid_u_det_ids = self._greedy_match(cost, hist_ids, reid_u_det_ids,
                                                              self.max_reid_cost)
 
+        matches = itertools.chain(matches1, matches2, matches3)
+        u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
+        matches, u_trk_ids = self._rectify_matches(matches, u_trk_ids, detections)
+        updated, aged = [], []
+
         # reinstate matched tracks
         for trk_id, det_id in reid_matches:
-            track = MultiTracker._hist_tracks.pop(trk_id)
+            track = self.hist_tracks.pop(trk_id)
             det = detections[det_id]
             LOGGER.info(f"{'Reidentified:':<14}{track}")
             state = self.kf.create(det.tlbr)
             track.reinstate(frame_id, det.tlbr, state, embeddings[det_id])
             self.tracks[trk_id] = track
-            updated.append(trk_id)
+            # updated.append(trk_id)
 
         # update matched tracks
         for trk_id, det_id in matches:
@@ -260,23 +273,27 @@ class MultiTracker:
             mean, cov = self.kf.update(*track.state, det.tlbr, MeasType.DETECTOR)
             next_tlbr = as_rect(mean[:4])
             is_valid = (det_id not in occluded_det_ids)
-            track.add_detection(frame_id, next_tlbr, (mean, cov), embeddings[det_id], is_valid)
-            if track.just_confirmed():
+            if track.hits == self.confirm_hits - 1:
                 LOGGER.info(f"{'Found:':<14}{track}")
             if iom(next_tlbr, self.frame_rect) < 0.5:
-                LOGGER.info(f"{'Out:':<14}{track}")
+                is_valid = False
+                if track.confirmed:
+                    LOGGER.info(f"{'Out:':<14}{track}")
                 self._mark_lost(trk_id)
-            else:
+            # else:
+            #     updated.append(trk_id)
+            elif not track.active:
                 updated.append(trk_id)
+            track.add_detection(frame_id, next_tlbr, (mean, cov), embeddings[det_id], is_valid)
 
         # clean up lost tracks
         for trk_id in u_trk_ids:
             track = self.tracks[trk_id]
+            track.mark_missed()
             if not track.confirmed:
                 LOGGER.debug(f"{'Unconfirmed:':<14}{track}")
                 del self.tracks[trk_id]
                 continue
-            track.mark_missed()
             if track.age > self.max_age:
                 LOGGER.info(f"{'Lost:':<14}{track}")
                 self._mark_lost(trk_id)
@@ -284,22 +301,25 @@ class MultiTracker:
                 aged.append(trk_id)
 
         u_det_ids = itertools.chain(u_det_ids & occluded_det_ids, reid_u_det_ids)
-        # register new detections
+        # start new tracks
         for det_id in u_det_ids:
             det = detections[det_id]
             state = self.kf.create(det.tlbr)
             new_trk = Track(frame_id, det.tlbr, state, det.label, self.metric, self.confirm_hits)
             self.tracks[new_trk.trk_id] = new_trk
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")
-            updated.append(new_trk.trk_id)
+            # updated.append(new_trk.trk_id)
 
+        # self._rectify_tracklets()
         # remove duplicate tracks
-        self._remove_duplicate(updated, aged)
+        # self._remove_duplicate(updated, aged)
 
     def _mark_lost(self, trk_id):
-        MultiTracker._hist_tracks[trk_id] = self.tracks.pop(trk_id)
-        if len(MultiTracker._hist_tracks) > self.history_size:
-            MultiTracker._hist_tracks.popitem(last=False)
+        track = self.tracks.pop(trk_id)
+        if track.confirmed:
+            self.hist_tracks[trk_id] = track
+            if len(self.hist_tracks) > self.history_size:
+                self.hist_tracks.popitem(last=False)
 
     def _matching_cost(self, trk_ids, detections, embeddings, occluded_det_ids):
         n_trk, n_det = len(trk_ids), len(detections)
@@ -309,16 +329,18 @@ class MultiTracker:
         features = np.empty((n_trk, embeddings.shape[1]))
         invalid_rows = []
         for row, trk_id in enumerate(trk_ids):
-            avg_feat = self.tracks[trk_id].avg_feat()
-            if avg_feat is None:
-                invalid_rows.append(row)
+            track = self.tracks[trk_id]
+            if track.avg_feat.is_valid():
+                features[row] = track.avg_feat()
             else:
-                features[row] = avg_feat
+                invalid_rows.append(row)
         invalid_rows = np.asarray(invalid_rows, dtype=int)
 
         # features = np.concatenate([self.tracks[trk_id].avg_feat()
         #                            for trk_id in trk_ids]).reshape(n_trk, -1)
         cost = cdist(features, embeddings, self.metric)
+        # cost2 = cdist(features2, embeddings, self.metric)
+        # cost = np.minimum(cost1, cost2)
 
         # cost = np.concatenate([self.tracks[trk_id].clust_feat.distance(embeddings)
         #                        for trk_id in trk_ids]).reshape(n_trk, -1)
@@ -326,11 +348,12 @@ class MultiTracker:
         # cost = self._clusters_vec_dist(clust_feats, embeddings, self.metric)
 
         invalid_cols = np.fromiter(occluded_det_ids, int, len(occluded_det_ids))
-        self._invalidate_cost(cost, invalid_rows, invalid_cols)
+        # self._invalidate_cost(cost, np.empty(0, int), invalid_cols, 1.0)
+        self._invalidate_cost(cost, invalid_rows, invalid_cols, 1.0)
 
         for row, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
-            m_dist = self.kf.motion_distance(*track.state, detections.tlbr)
+            m_dist = self.kf.motion_distance(*track.state, detections.tlbr) # 1 shape changed?
             age = track.age / self.max_age
             self._fuse_motion(cost[row], m_dist, age, self.motion_weight, self.age_weight)
 
@@ -346,62 +369,191 @@ class MultiTracker:
 
         t_labels = np.fromiter((self.tracks[trk_id].label for trk_id in trk_ids), int, n_trk)
         t_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
-        d_bboxes = detections.tlbr
+        d_bboxes = detections.tlbr # 1 shape changed?
         ious = bbox_overlaps(t_bboxes, d_bboxes)
         self._gate_cost(ious, t_labels, detections.label, self.iou_thresh, True)
         return ious
 
-    def _reid_cost(self, detections, embeddings):
-        n_hist, n_det = len(MultiTracker._hist_tracks), len(detections)
+    def _reid_cost(self, hist_ids, detections, embeddings):
+        n_hist, n_det = len(hist_ids), len(detections)
         if n_hist == 0 or n_det == 0:
             return np.empty((n_hist, n_det))
 
-        features = np.empty((n_hist, embeddings.shape[1]))
-        invalid_rows = []
-        for row, track in enumerate(MultiTracker._hist_tracks.values()):
-            avg_feat = track.avg_feat()
-            if avg_feat is None:
-                invalid_rows.append(row)
-            else:
-                features[row] = avg_feat
-        invalid_rows = np.asarray(invalid_rows, dtype=int)
-
-        # features = np.concatenate([t.avg_feat() for t
-        #                            in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
+        features = np.concatenate([self.hist_tracks[trk_id].avg_feat()
+                                   for trk_id in hist_ids]).reshape(n_hist, -1)
         cost = cdist(features, embeddings, self.metric)
-        self._invalidate_cost(cost, invalid_rows)
 
         # cost = np.concatenate([t.clust_feat.distance(embeddings)
-        #                        for t in MultiTracker._hist_tracks.values()]).reshape(n_hist, -1)
+        #                        for t in self.hist_tracks.values()]).reshape(n_hist, -1)
 
-        t_labels = np.fromiter((t.label for t in MultiTracker._hist_tracks.values()), int, n_hist)
-        self._gate_cost(cost, t_labels, detections.label, self.max_reid_cost)
+        t_labels = np.fromiter((t.label for t in self.hist_tracks.values()), int, n_hist)
+        self._gate_cost(cost, t_labels, detections.label, 2.0)
         return cost
 
-    def _remove_duplicate(self, trk_ids_a, trk_ids_b):
-        if len(trk_ids_a) == 0 or len(trk_ids_b) == 0:
+    def _rectify_matches(self, matches, u_trk_ids, detections):
+        matches, u_trk_ids = set(matches), set(u_trk_ids)
+        inactive_matches = list(filter(lambda m : not self.tracks[m[0]].active, matches))
+        u_active = [trk_id for trk_id in u_trk_ids if self.tracks[trk_id].confirmed]
+        # u_active = [trk_id for trk_id in u_trk_ids
+        #             if self.tracks[trk_id].confirmed and self.tracks[trk_id].active]
+
+        if len(inactive_matches) == 0 or len(u_active) == 0:
+            return matches, u_trk_ids
+
+        m_inactive, det_ids = zip(*inactive_matches)
+        m_inactive, det_ids = list(m_inactive), list(det_ids)
+        t_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in u_active])
+        d_bboxes = detections[det_ids].tlbr
+
+        ious = bbox_overlaps(t_bboxes, d_bboxes)
+        idx = np.where(ious >= self.duplicate_thresh)
+        for row, col in zip(*idx):
+            m_trk_id, det_id = m_inactive[col], det_ids[col]
+            u_trk_id = u_active[row]
+            t_u_active, t_m_inactive = self.tracks[u_trk_id], self.tracks[m_trk_id]
+
+            if t_m_inactive.end_frame < t_u_active.start_frame:
+                LOGGER.info(f"{'Merged:':<14}{t_u_active}")
+                t_m_inactive.merge_continuation(t_u_active)
+                u_trk_ids.discard(u_trk_id)
+                self.tracks.pop(u_trk_id, None)
+            else:
+                print(f'potential wrong match: {m_trk_id}->{u_trk_id}')
+                matches.discard((m_trk_id, det_id))
+                matches.add((u_trk_id, det_id))
+                u_trk_ids.discard(u_trk_id)
+                u_trk_ids.add(m_trk_id)
+                # self._mark_lost(trk_id1)
+                # del self.tracks[trk_id1]
+        return matches, u_trk_ids
+
+    def _remove_duplicate(self, updated, aged):
+        if len(updated) == 0 or len(aged) == 0:
             return
 
-        bboxes_a = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids_a])
-        bboxes_b = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids_b])
+        bboxes1 = np.array([self.tracks[trk_id].tlbr for trk_id in updated])
+        bboxes2 = np.array([self.tracks[trk_id].tlbr for trk_id in aged])
 
-        ious = bbox_overlaps(bboxes_a, bboxes_b)
+        ious = bbox_overlaps(bboxes1, bboxes2)
         idx = np.where(ious >= self.duplicate_thresh)
         dup_ids = set()
         for row, col in zip(*idx):
-            trk_id_a, trk_id_b = trk_ids_a[row], trk_ids_b[col]
-            track_a, track_b = self.tracks[trk_id_a], self.tracks[trk_id_b]
-            time_a = (track_a.end_frame - track_a.start_frame, -track_a.start_frame)
-            time_b = (track_b.end_frame - track_b.start_frame, -track_b.start_frame)
-            if time_a > time_b:
-                # track_a.merge_continuation(track_b)
-                dup_ids.add(trk_id_b)
+            trk_id1, trk_id2 = updated[row], aged[col]
+            t_updated, t_aged = self.tracks[trk_id1], self.tracks[trk_id2]
+            time1 = (t_updated.end_frame - t_updated.start_frame, -t_updated.start_frame)
+            time2 = (t_aged.end_frame - t_aged.start_frame, -t_aged.start_frame)
+
+            if t_updated.prev_frame >= t_aged.start_frame:
+                print('wrong match:', trk_id1)
+                dup_ids.add(trk_id1)
             else:
-                # track_b.merge_continuation(track_a)
-                dup_ids.add(trk_id_a)
+                dup_ids.add(trk_id2)
+                t_updated.merge_continuation(t_aged)
+
+            # if time1 > time2:
+            #     dup_ids.add(trk_id2)
+            # else:
+            #     dup_ids.add(trk_id1)
         for trk_id in dup_ids:
-            LOGGER.debug(f"{'Duplicate:':<14}{self.tracks[trk_id]}")
+            LOGGER.info(f"{'Duplicate:':<14}{self.tracks[trk_id]}")
             del self.tracks[trk_id]
+
+    def _merge_duplicate(self):
+        confirmed = [trk_id for trk_id, track in self.tracks.items()
+                     if track.confirmed and track.avg_feat.is_valid()]
+        inactive = [trk_id for trk_id in confirmed if self.tracks[trk_id].age > 0]
+        active = [trk_id for trk_id in confirmed if self.tracks[trk_id].age == 0]
+
+        n_inactive, n_active = len(inactive), len(active)
+        if n_inactive == 0 or n_active == 0:
+            return
+
+        features1 = np.concatenate([self.tracks[trk_id].avg_feat()
+                                    for trk_id in inactive]).reshape(n_inactive, -1)
+        features2 = np.concatenate([self.tracks[trk_id].avg_feat()
+                                    for trk_id in active]).reshape(n_active, -1)
+        cost = cdist(features1, features2, self.metric)
+
+        active_tlbrs = np.array([self.tracks[trk_id].tlbr for trk_id in active])
+        for row, trk_id in enumerate(inactive):
+            track = self.tracks[trk_id]
+            m_dist = self.kf.motion_distance(*track.state, active_tlbrs)
+            self._fuse_motion(cost[row], m_dist, 0., 0., 0.)
+
+        t_labels1 = np.fromiter((self.tracks[trk_id].label
+                                 for trk_id in inactive), int, n_inactive)
+        t_labels2 = np.fromiter((self.tracks[trk_id].label for trk_id in active), int, n_active)
+        self._gate_cost(cost, t_labels1, t_labels2, 0.4)
+
+        inactive, active = np.asarray(inactive), np.asarray(active)
+        # matches, _, _ = self._linear_assignment(cost, inactive, active)
+        matches, _, _ = self._greedy_match(cost, inactive, active, 0.4)
+
+        for trk_id1, trk_id2 in matches:
+            t_inactive, t_active = self.tracks[trk_id1], self.tracks[trk_id2]
+            if t_inactive.end_frame < t_active.start_frame:
+                t_inactive.merge_continuation(t_active)
+                LOGGER.info(f"{'Merged:':<14}{t_active}")
+                del self.tracks[trk_id2]
+            else:
+                LOGGER.info(f"{'Terminated early:':<14}{t_inactive}")
+                print(f'potential wrong match: {trk_id1}->{trk_id2}')
+                self._mark_lost(trk_id1)
+                # del self.tracks[trk_id1]
+
+    # def _rectify_tracklets(self):
+    #     active = []
+    #     inactive = []
+    #     for trk_id, track in self.tracks.items():
+    #         if track.confirmed:
+    #             if track.active and len(track) >= 4:
+    #                 active.append(trk_id)
+    #             elif len(track) >= 4:
+    #                 inactive.append(trk_id)
+
+    #     n_active, n_inactive = len(active), len(inactive)
+    #     if n_active == 0 or n_inactive == 0:
+    #         return
+
+    #     invalid_rows, invalid_cols = [], []
+    #     for row, trk_id1 in enumerate(active):
+    #         for col, trk_id2 in enumerate(inactive):
+    #             track1, track2 = self.tracks[trk_id1], self.tracks[trk_id2]
+    #             if (track1.start_frame <= track2.end_frame
+    #                and track2.start_frame <= track1.end_frame):
+    #                invalid_rows.append(row)
+    #                invalid_cols.append(col)
+    #     invalid_rows = np.asarray(invalid_rows, dtype=int)
+    #     invalid_cols = np.asarray(invalid_cols, dtype=int)
+
+    #     features1 = np.concatenate([self.tracks[trk_id].avg_feat()
+    #                                 for trk_id in active]).reshape(n_active, -1)
+    #     features2 = np.concatenate([self.tracks[trk_id].avg_feat()
+    #                                 for trk_id in inactive]).reshape(n_inactive, -1)
+
+    #     cost = cdist(features1, features2, self.metric)
+    #     self._invalidate_cost(cost, invalid_rows, invalid_cols, separate=False, val=INF_COST)
+
+    #     t_labels1 = np.fromiter((self.tracks[trk_id].label for trk_id in active), int, n_active)
+    #     t_labels2 = np.fromiter((self.tracks[trk_id].label
+    #                              for trk_id in inactive), int, n_inactive)
+    #     self._gate_cost(cost, t_labels1, t_labels2, 2.0)
+
+    #     active, inactive = np.asarray(active), np.asarray(inactive)
+    #     matches, _, _ = self._greedy_match(cost, active, inactive, 0.6)
+
+    #     for trk_id1, trk_id2 in matches:
+    #         track1, track2 = self.tracks[trk_id1], self.tracks[trk_id2]
+    #         if track1.end_frame < track2.start_frame:
+    #             track1.merge_continuation(track2)
+    #             LOGGER.info(f"{'Rectified:':<14}{track2}")
+    #             del self.tracks[trk_id2]
+    #         elif track2.end_frame < track1.start_frame:
+    #             track2.merge_continuation(track1)
+    #             LOGGER.info(f"{'Rectified:':<14}{track1}")
+    #             del self.tracks[trk_id1]
+    #         else:
+    #             raise RuntimeError()
 
     @staticmethod
     @nb.njit(cache=True)
@@ -469,22 +621,31 @@ class MultiTracker:
 
     @staticmethod
     @nb.njit(cache=True)
-    def _invalidate_cost(cost, invalid_rows=None, invalid_cols=None, val=1.0):
-        if invalid_rows is not None:
-            cost[invalid_rows, :] = val
-        if invalid_cols is not None:
-            cost[:, invalid_cols] = val
+    def _invalidate_cost(cost, rows, cols, separate=True, val=1.0):
+        if separate:
+            cost[rows, :] = val
+            cost[:, cols] = val
+        else:
+            indices = rows * cost.shape[1] + cols
+            cost.ravel()[indices] = val
 
     @staticmethod
     @nb.njit(parallel=True, fastmath=True, cache=True)
-    def _gate_cost(cost, t_labels, d_labels, thresh, maximize=False):
+    def _gate_cost(cost, row_labels, col_labels, thresh, maximize=False):
         for i in nb.prange(len(cost)):
             if maximize:
-                gate = (cost[i] < thresh) | (t_labels[i] != d_labels)
+                gate = (cost[i] < thresh) | (row_labels[i] != col_labels)
                 cost[i][gate] = 0.
             else:
-                gate = (cost[i] > thresh) | (t_labels[i] != d_labels)
+                gate = (cost[i] > thresh) | (row_labels[i] != col_labels)
                 cost[i][gate] = INF_COST
+
+    # @staticmethod
+    # @nb.njit(parallel=True, fastmath=True, cache=True)
+    # def _gate_greedy_cost(cost, t_labels, d_labels, rows, cols):
+    #     for i in nb.prange(len(cost)):
+    #         gate = (cost[i] > thresh) | (t_labels[i] != d_labels)
+    #         cost[i][gate] = INF_COST
 
     # @staticmethod
     # @nb.njit(parallel=True, fastmath=True, cache=True)

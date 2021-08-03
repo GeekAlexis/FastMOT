@@ -9,7 +9,7 @@
 
     "mot_cfg": {
         "detector_type": "YOLO",
-        "detector_frame_skip": 5,
+        "detector_frame_skip": 1,
 
         "ssd_detector_cfg": {
             "model": "SSDInceptionV2",
@@ -38,11 +38,11 @@
         },
 
         "tracker_cfg": {
-            "max_age": 6,
+            "max_age": 60,
             "age_penalty": 2,
             "age_weight": 0.05,
             "motion_weight": 0.15,
-            "max_assoc_cost": 0.9,
+            "max_assoc_cost": 0.85,
             "max_reid_cost": 0.6,
             "iou_thresh": 0.4,
             "duplicate_thresh": 0.8,
@@ -54,7 +54,7 @@
             "kalman_filter_cfg": {
                 "std_factor_acc": 2.25,
                 "std_offset_acc": 78.5,
-                "std_factor_det": [0.08, 0.08],
+                "std_factor_det": [0.1, 0.1],
                 "std_factor_klt": [0.14, 0.14],
                 "min_std_det": [4.0, 4.0],
                 "min_std_klt": [5.0, 5.0],

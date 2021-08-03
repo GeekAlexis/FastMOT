@@ -218,7 +218,7 @@ class VideoIO:
         if 'omxh264enc' in gst_elements:
             h264_encoder = 'omxh264enc preset-level=2'
         elif 'x264enc' in gst_elements:
-            h264_encoder = 'x264enc'
+            h264_encoder = 'x264enc pass=4'
         else:
             raise RuntimeError('GStreamer H.264 encoder not found')
         pipeline = (

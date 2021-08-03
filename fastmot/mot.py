@@ -89,7 +89,7 @@ class MOT:
         self.tracker = MultiTracker(self.size, self.extractor.metric, **vars(tracker_cfg))
         self.frame_count = 0
 
-    def get_visible_tracks(self):
+    def visible_tracks(self):
         """Retrieve visible tracks from the tracker
 
         Returns
@@ -97,8 +97,10 @@ class MOT:
         List[Track]
             Confirmed and active tracks from the tracker
         """
-        return [track for track in self.tracker.tracks.values()
-                if track.confirmed and track.active]
+        # return (track for track in self.tracker.tracks.values()
+        #         if track.confirmed and track.active)
+        return (track for track in self.tracker.tracks.values()
+                if track.confirmed)
 
     def reset(self, cap_dt):
         """Resets multiple object tracker. Must be called before `step`.
@@ -160,8 +162,8 @@ class MOT:
         LOGGER.debug(f"{'association time:':<37}{Profiler.get_avg_millis('assoc'):>6.3f} ms")
 
     def _draw(self, frame, detections):
-        visible_tracks = self.get_visible_tracks()
-        draw_tracks(frame, visible_tracks, show_flow=self.verbose)
+        visible_tracks = list(self.visible_tracks())
+        draw_tracks(frame, visible_tracks, show_flow=self.verbose, show_cov=True)
         if self.verbose:
             draw_detections(frame, detections)
             draw_klt_bboxes(frame, self.tracker.klt_bboxes.values())
