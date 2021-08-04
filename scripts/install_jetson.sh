@@ -22,8 +22,8 @@ fi
 
 # Set up CUDA environment
 if [ ! -x "$(command -v nvcc)" ]; then
-    echo "export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}" >> ~/.bashrc
-    echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> ~/.bashrc
+    echo "export PATH=/usr/local/cuda/bin\${PATH:+:\${PATH}}" >> ~/.bashrc
+    echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64\${LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}" >> ~/.bashrc
     source ~/.bashrc
 fi
 
@@ -32,6 +32,7 @@ sudo apt-get update
 sudo apt-get install -y python3-pip libhdf5-serial-dev hdf5-tools libcanberra-gtk-module
 sudo -H pip3 install cython
 sudo -H pip3 install numpy cython-bbox
+sudo ln -s /usr/include/locale.h /usr/include/xlocale.h
 sudo -H pip3 install --no-cache-dir --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v$JP_VERSION tensorflow==$TF_VERSION+nv$NV_VERSION
 
 # Scipy
