@@ -156,8 +156,8 @@ class Track:
         self.prev_keypoints = np.empty((0, 2), np.float32)
 
     def __str__(self):
-        coord = get_center(self.tlbr).astype(int)
-        return f'{LABEL_MAP[self.label]} {self.trk_id:>3} at ({coord[0]:>4}, {coord[1]:>3})'
+        x, y = get_center(self.tlbr)
+        return f'{LABEL_MAP[self.label]} {self.trk_id:>3} at ({int(x):>4}, {int(y):>3})'
 
     def __repr__(self):
         return self.__str__()

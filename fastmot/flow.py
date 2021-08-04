@@ -276,17 +276,16 @@ class Flow:
         scale = np.linalg.norm(affine_mat[:2, 0])
         scale = 1. if scale < 0.9 or scale > 1.1 else scale
         size = scale * get_size(tlbr)
-        return to_tlbr(np.append(tl, size))
+        return to_tlbr((tl[0], tl[1], size[0], size[1]))
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _rect_filter(pts, tlbr, fg_mask):
         if len(pts) == 0:
             return np.empty((0, 2), np.float32)
-        tl, br = tlbr[:2], tlbr[2:]
         pts2i = np.rint(pts).astype(np.int32)
         # filter out points outside the rectangle
-        ge_le = (pts2i >= tl) & (pts2i <= br)
+        ge_le = (pts2i >= tlbr[:2]) & (pts2i <= tlbr[2:])
         inside = np.where(ge_le[:, 0] & ge_le[:, 1])
         pts, pts2i = pts[inside], pts2i[inside]
         # keep points inside the foreground area
@@ -298,10 +297,10 @@ class Flow:
     @nb.njit(fastmath=True, cache=True)
     def _ellipse_filter(pts, tlbr, offset):
         offset = np.asarray(offset, np.float32)
+        center = np.asarray(get_center(tlbr))
+        semi_axes = get_size(tlbr) * 0.5
         pts = pts.reshape(-1, 2)
         pts = pts + offset
-        center = get_center(tlbr)
-        semi_axes = get_size(tlbr) * 0.5
         # filter out points outside the ellipse
         keep = np.sum(((pts - center) / semi_axes)**2, axis=1) <= 1.
         return pts[keep]

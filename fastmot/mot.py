@@ -94,7 +94,7 @@ class MOT:
 
         Returns
         -------
-        List[Track]
+        Iterator[Track]
             Confirmed and active tracks from the tracker
         """
         # return (track for track in self.tracker.tracks.values()

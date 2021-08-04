@@ -2,117 +2,143 @@ import numpy as np
 import numba as nb
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True,  inline='always')
 def as_rect(tlbr):
     tlbr = np.asarray(tlbr, np.float64)
     tlbr = np.rint(tlbr)
     return tlbr
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True, inline='always')
 def get_size(tlbr):
-    tl, br = tlbr[:2], tlbr[2:]
-    size = br - tl + 1
-    return size
+    return tlbr[2:] - tlbr[:2] + 1
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True,  inline='always')
 def aspect_ratio(tlbr):
-    w, h = get_size(tlbr)
-    return h / w
+    w = tlbr[2] - tlbr[0] + 1
+    h = tlbr[3] - tlbr[1] + 1
+    return h / w if w > 0 else 0.
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True, inline='always')
 def area(tlbr):
-    w, h = get_size(tlbr)
+    w = tlbr[2] - tlbr[0] + 1
+    h = tlbr[3] - tlbr[1] + 1
     if w <= 0 or h <= 0:
-        return 0
-    return int(w * h)
+        return 0.
+    return w * h
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True, inline='always')
 def mask_area(mask):
     return np.count_nonzero(mask)
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True,  inline='always')
 def get_center(tlbr):
-    xmin, ymin, xmax, ymax = tlbr
-    return np.array([(xmin + xmax) / 2, (ymin + ymax) / 2])
+    return ((tlbr[0] + tlbr[2]) / 2, (tlbr[1] + tlbr[3]) / 2)
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True, inline='always')
 def to_tlwh(tlbr):
-    return np.append(tlbr[:2], get_size(tlbr))
+    tlwh = np.empty(4)
+    tlwh[:2] = tlbr[:2]
+    tlwh[2:] = get_size(tlbr)
+    return tlwh
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True, inline='always')
 def to_tlbr(tlwh):
     tlwh = np.asarray(tlwh, np.float64)
     tlwh = np.rint(tlwh)
-    tl, size = tlwh[:2], tlwh[2:]
-    br = tl + size - 1
-    return np.append(tl, br)
+    tlbr = np.empty(4)
+    tlbr[:2] = tlwh[:2]
+    tlbr[2:] = tlwh[:2] + tlwh[2:] - 1
+    return tlbr
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True, inline='always')
 def intersection(tlbr1, tlbr2):
-    tl1, br1 = tlbr1[:2], tlbr1[2:]
-    tl2, br2 = tlbr2[:2], tlbr2[2:]
-    tl = np.maximum(tl1, tl2)
-    br = np.minimum(br1, br2)
-    tlbr = np.append(tl, br)
-    if np.any(get_size(tlbr) <= 0):
+    tlbr = np.empty(4)
+    tlbr[0] = max(tlbr1[0], tlbr2[0])
+    tlbr[1] = max(tlbr1[1], tlbr2[1])
+    tlbr[2] = min(tlbr1[2], tlbr2[2])
+    tlbr[3] = min(tlbr1[3], tlbr2[3])
+    if tlbr[2] < tlbr[0] or tlbr[3] < tlbr[1]:
         return None
     return tlbr
 
 
-@nb.njit(cache=True)
-def union(tlbr1, tlbr2):
-    tl1, br1 = tlbr1[:2], tlbr1[2:]
-    tl2, br2 = tlbr2[:2], tlbr2[2:]
-    tl = np.minimum(tl1, tl2)
-    br = np.maximum(br1, br2)
-    tlbr = np.append(tl, br)
+@nb.njit(cache=True, inline='always')
+def enclosing(tlbr1, tlbr2):
+    tlbr = np.empty(4)
+    tlbr[0] = min(tlbr1[0], tlbr2[0])
+    tlbr[1] = min(tlbr1[1], tlbr2[1])
+    tlbr[2] = max(tlbr1[2], tlbr2[2])
+    tlbr[3] = max(tlbr1[3], tlbr2[3])
     return tlbr
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True, inline='always')
 def crop(img, tlbr):
-    _tlbr = tlbr.astype(np.int_)
-    _tlbr = np.maximum(_tlbr, 0)
-    xmin, ymin, xmax, ymax = _tlbr
+    xmin = max(int(tlbr[0]), 0)
+    ymin = max(int(tlbr[1]), 0)
+    xmax = max(int(tlbr[2]), 0)
+    ymax = max(int(tlbr[3]), 0)
     return img[ymin:ymax + 1, xmin:xmax + 1]
 
 
-@nb.njit(cache=True)
+@nb.njit(cache=True, inline='always')
 def multi_crop(img, tlbrs):
     _tlbrs = tlbrs.astype(np.int_)
     _tlbrs = np.maximum(_tlbrs, 0)
-    return [img[_tlbrs[i][1]:_tlbrs[i][3] + 1, _tlbrs[i][0]:_tlbrs[i][2] + 1]
+    return [img[_tlbrs[i, 1]:_tlbrs[i, 3] + 1, _tlbrs[i, 0]:_tlbrs[i, 2] + 1]
             for i in range(len(_tlbrs))]
 
 
-@nb.njit(fastmath=True, cache=True)
+@nb.njit(fastmath=True, cache=True, inline='always')
+def iou(tlbr1, tlbr2):
+    """Computes intersection over union."""
+    tlbr = intersection(tlbr1, tlbr2)
+    if tlbr is None:
+        return 0.
+    area_inter = area(tlbr)
+    area_union = area(tlbr1) + area(tlbr2) - area_inter
+    return area_inter / area_union
+
+
+@nb.njit(fastmath=True, cache=True, inline='always')
+def diou(tlbr1, tlbr2):
+    """Computes distance intersection over union."""
+    tlbr = enclosing(tlbr1, tlbr2)
+    w, h = get_size(tlbr)
+    c = w**2 + h**2
+    dx, dy = get_center(tlbr1) - get_center(tlbr2)
+    d = dx**2 + dy**2
+    return iou(tlbr1, tlbr2) - (d / c)**0.6
+
+
+@nb.njit(fastmath=True, cache=True, inline='always')
 def ios(tlbr1, tlbr2):
     """Computes intersection over self."""
     tlbr = intersection(tlbr1, tlbr2)
     if tlbr is None:
         return 0.
-    area_intersection = area(tlbr)
+    area_inter = area(tlbr)
     area_self = area(tlbr1)
-    return area_intersection / area_self if area_self > 0 else 0
+    return area_inter / area_self
 
 
-@nb.njit(fastmath=True, cache=True)
+@nb.njit(fastmath=True, cache=True, inline='always')
 def iom(tlbr1, tlbr2):
     """Computes intersection over minimum."""
     tlbr = intersection(tlbr1, tlbr2)
     if tlbr is None:
         return 0.
-    area_intersection = area(tlbr)
-    area_minimum = min(area(tlbr1), area(tlbr2))
-    return area_intersection / area_minimum if area_minimum > 0 else 0
+    area_inter = area(tlbr)
+    area_min = min(area(tlbr1), area(tlbr2))
+    return area_inter / area_min
 
 
 @nb.njit(fastmath=True, cache=True)
@@ -123,8 +149,8 @@ def nms(tlwhs, scores, nms_thresh):
     areas = tlwhs[:, 2] * tlwhs[:, 3]
     ordered = scores.argsort()[::-1]
 
-    tl = tlwhs[:, :2]
-    br = tlwhs[:, :2] + tlwhs[:, 2:] - 1
+    tls = tlwhs[:, :2]
+    brs = tlwhs[:, :2] + tlwhs[:, 2:] - 1
 
     keep = []
     while ordered.size > 0:
@@ -132,14 +158,14 @@ def nms(tlwhs, scores, nms_thresh):
         i = ordered[0]
         keep.append(i)
 
-        other_tl = tl[ordered[1:]]
-        other_br = br[ordered[1:]]
+        other_tls = tls[ordered[1:]]
+        other_brs = brs[ordered[1:]]
 
         # compute IoU
-        inter_xmin = np.maximum(tl[i, 0], other_tl[:, 0])
-        inter_ymin = np.maximum(tl[i, 1], other_tl[:, 1])
-        inter_xmax = np.minimum(br[i, 0], other_br[:, 0])
-        inter_ymax = np.minimum(br[i, 1], other_br[:, 1])
+        inter_xmin = np.maximum(tls[i, 0], other_tls[:, 0])
+        inter_ymin = np.maximum(tls[i, 1], other_tls[:, 1])
+        inter_xmax = np.minimum(brs[i, 0], other_brs[:, 0])
+        inter_ymax = np.minimum(brs[i, 1], other_brs[:, 1])
 
         inter_w = np.maximum(0, inter_xmax - inter_xmin + 1)
         inter_h = np.maximum(0, inter_ymax - inter_ymin + 1)
@@ -159,9 +185,9 @@ def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
     areas = tlwhs[:, 2] * tlwhs[:, 3]
     ordered = scores.argsort()[::-1]
 
-    tl = tlwhs[:, :2]
-    br = tlwhs[:, :2] + tlwhs[:, 2:] - 1
-    centers = (tl + br) / 2
+    tls = tlwhs[:, :2]
+    brs = tlwhs[:, :2] + tlwhs[:, 2:] - 1
+    centers = (tls + brs) / 2
 
     keep = []
     while ordered.size > 0:
@@ -169,14 +195,14 @@ def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
         i = ordered[0]
         keep.append(i)
 
-        other_tl = tl[ordered[1:]]
-        other_br = br[ordered[1:]]
+        other_tls = tls[ordered[1:]]
+        other_brs = brs[ordered[1:]]
 
         # compute IoU
-        inter_xmin = np.maximum(tl[i, 0], other_tl[:, 0])
-        inter_ymin = np.maximum(tl[i, 1], other_tl[:, 1])
-        inter_xmax = np.minimum(br[i, 0], other_br[:, 0])
-        inter_ymax = np.minimum(br[i, 1], other_br[:, 1])
+        inter_xmin = np.maximum(tls[i, 0], other_tls[:, 0])
+        inter_ymin = np.maximum(tls[i, 1], other_tls[:, 1])
+        inter_xmax = np.minimum(brs[i, 0], other_brs[:, 0])
+        inter_ymax = np.minimum(brs[i, 1], other_brs[:, 1])
 
         inter_w = np.maximum(0, inter_xmax - inter_xmin + 1)
         inter_h = np.maximum(0, inter_ymax - inter_ymin + 1)
@@ -185,14 +211,14 @@ def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
         iou = inter_area / union_area
 
         # compute DIoU
-        union_xmin = np.minimum(tl[i, 0], other_tl[:, 0])
-        union_ymin = np.minimum(tl[i, 1], other_tl[:, 1])
-        union_xmax = np.maximum(br[i, 0], other_br[:, 0])
-        union_ymax = np.maximum(br[i, 1], other_br[:, 1])
+        encls_xmin = np.minimum(tls[i, 0], other_tls[:, 0])
+        encls_ymin = np.minimum(tls[i, 1], other_tls[:, 1])
+        encls_xmax = np.maximum(brs[i, 0], other_brs[:, 0])
+        encls_ymax = np.maximum(brs[i, 1], other_brs[:, 1])
 
-        union_w = union_xmax - union_xmin + 1
-        union_h = union_ymax - union_ymin + 1
-        c = union_w**2 + union_h**2
+        encls_w = encls_xmax - encls_xmin + 1
+        encls_h = encls_ymax - encls_ymin + 1
+        c = encls_w**2 + encls_h**2
         d = np.sum((centers[i] - centers[ordered[1:]])**2, axis=1)
         diou = iou - (d / c)**beta
 

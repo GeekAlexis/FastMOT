@@ -11,7 +11,7 @@ import cv2
 from . import models
 from .utils import TRTInference
 from .utils.rect import as_rect, to_tlbr, get_size, area
-from .utils.rect import union, multi_crop, iom, diou_nms
+from .utils.rect import enclosing, multi_crop, iom, diou_nms
 
 
 DET_DTYPE = np.dtype(
@@ -142,7 +142,7 @@ class SSDDetector(Detector):
                 if label_mask[label]:
                     tl = (det_out[offset + 3:offset + 5] * size + tile[:2]) * scale_factor
                     br = (det_out[offset + 5:offset + 7] * size + tile[:2]) * scale_factor
-                    tlbr = as_rect(np.append(tl, br))
+                    tlbr = as_rect((tl[0], tl[1], br[0], br[1]))
                     if 0 < area(tlbr) <= max_area:
                         detections.append((tlbr, label, conf))
                         tile_ids.append(tile_idx)
@@ -178,7 +178,7 @@ class SSDDetector(Detector):
                             tile_ids[j] = -1
                             stack.append(j)
                 for k in candidates:
-                    dets[i].tlbr[:] = union(dets[i].tlbr, dets[k].tlbr)
+                    dets[i].tlbr[:] = enclosing(dets[i].tlbr, dets[k].tlbr)
                     dets[i].conf = max(dets[i].conf, dets[k].conf)
                     keep.discard(k)
         keep = np.asarray(list(keep))
