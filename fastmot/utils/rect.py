@@ -98,34 +98,13 @@ def multi_crop(img, tlbrs):
 
 
 @nb.njit(fastmath=True, cache=True, inline='always')
-def iou(tlbr1, tlbr2):
-    """Computes intersection over union."""
-    tlbr = intersection(tlbr1, tlbr2)
-    if tlbr is None:
-        return 0.
-    area_inter = area(tlbr)
-    area_union = area(tlbr1) + area(tlbr2) - area_inter
-    return area_inter / area_union
-
-
-@nb.njit(fastmath=True, cache=True, inline='always')
-def diou(tlbr1, tlbr2):
-    """Computes distance intersection over union."""
-    tlbr = enclosing(tlbr1, tlbr2)
-    w, h = get_size(tlbr)
-    c = w**2 + h**2
-    dx, dy = get_center(tlbr1) - get_center(tlbr2)
-    d = dx**2 + dy**2
-    return iou(tlbr1, tlbr2) - (d / c)**0.6
-
-
-@nb.njit(fastmath=True, cache=True, inline='always')
 def ios(tlbr1, tlbr2):
     """Computes intersection over self."""
-    tlbr = intersection(tlbr1, tlbr2)
-    if tlbr is None:
+    iw = min(tlbr1[2], tlbr2[2]) - max(tlbr1[0], tlbr2[0]) + 1
+    ih = min(tlbr1[3], tlbr2[3]) - max(tlbr1[1], tlbr2[1]) + 1
+    if iw <= 0 or ih <= 0:
         return 0.
-    area_inter = area(tlbr)
+    area_inter = iw * ih
     area_self = area(tlbr1)
     return area_inter / area_self
 
@@ -133,10 +112,11 @@ def ios(tlbr1, tlbr2):
 @nb.njit(fastmath=True, cache=True, inline='always')
 def iom(tlbr1, tlbr2):
     """Computes intersection over minimum."""
-    tlbr = intersection(tlbr1, tlbr2)
-    if tlbr is None:
+    iw = min(tlbr1[2], tlbr2[2]) - max(tlbr1[0], tlbr2[0]) + 1
+    ih = min(tlbr1[3], tlbr2[3]) - max(tlbr1[1], tlbr2[1]) + 1
+    if iw <= 0 or ih <= 0:
         return 0.
-    area_inter = area(tlbr)
+    area_inter = iw * ih
     area_min = min(area(tlbr1), area(tlbr2))
     return area_inter / area_min
 

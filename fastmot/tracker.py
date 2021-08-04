@@ -356,7 +356,7 @@ class MultiTracker:
 
         t_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
         d_bboxes = detections.tlbr
-        iou_dist = bbox_dist(t_bboxes, d_bboxes)
+        iou_dist = bbox_dist(t_bboxes, d_bboxes, metric='diou')
 
         for row, trk_id in enumerate(trk_ids):
             track = self.tracks[trk_id]
