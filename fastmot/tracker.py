@@ -4,14 +4,13 @@ import logging
 import numpy as np
 import numba as nb
 from scipy.optimize import linear_sum_assignment
-from cython_bbox import bbox_overlaps
 
 from .track import Track
 from .flow import Flow
 from .kalman_filter import MeasType, KalmanFilter
 from .utils.distance import cdist, bbox_dist
 from .utils.numba import delete_row_col
-from .utils.rect import as_rect, to_tlbr, ios
+from .utils.rect import as_rect, to_tlbr, ios, bbox_ious
 
 
 LOGGER = logging.getLogger(__name__)
@@ -414,7 +413,7 @@ class MultiTracker:
         t_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in u_active])
         d_bboxes = detections[det_ids].tlbr
 
-        ious = bbox_overlaps(t_bboxes, d_bboxes)
+        ious = bbox_ious(t_bboxes, d_bboxes)
         idx = np.where(ious >= self.duplicate_thresh)
         for row, col in zip(*idx):
             m_trk_id, det_id = m_inactive[col], det_ids[col]
@@ -443,7 +442,7 @@ class MultiTracker:
         bboxes1 = np.array([self.tracks[trk_id].tlbr for trk_id in updated])
         bboxes2 = np.array([self.tracks[trk_id].tlbr for trk_id in aged])
 
-        ious = bbox_overlaps(bboxes1, bboxes2)
+        ious = bbox_ious(bboxes1, bboxes2)
         idx = np.where(ious >= self.duplicate_thresh)
         dup_ids = set()
         for row, col in zip(*idx):

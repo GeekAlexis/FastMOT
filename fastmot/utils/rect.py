@@ -121,6 +121,24 @@ def iom(tlbr1, tlbr2):
     return area_inter / area_min
 
 
+@nb.njit(parallel=False, fastmath=True, cache=True)
+def bbox_ious(tlbrs1, tlbrs2):
+    """Computes pairwise IoU."""
+    Y = np.empty((tlbrs1.shape[0], tlbrs2.shape[0]))
+    for i in nb.prange(tlbrs1.shape[0]):
+        area1 = area(tlbrs1[i, :])
+        for j in range(tlbrs2.shape[0]):
+            iw = min(tlbrs1[i, 2], tlbrs2[j, 2]) - max(tlbrs1[i, 0], tlbrs2[j, 0]) + 1
+            ih = min(tlbrs1[i, 3], tlbrs2[j, 3]) - max(tlbrs1[i, 1], tlbrs2[j, 1]) + 1
+            if iw > 0 and ih > 0:
+                area_inter = iw * ih
+                area_union = area1 + area(tlbrs2[j, :]) - area_inter
+                Y[i, j] = area_inter / area_union
+            else:
+                Y[i, j] = 0.
+    return Y
+
+
 @nb.njit(fastmath=True, cache=True)
 def nms(tlwhs, scores, nms_thresh):
     """Applies Non-Maximum Suppression on the bounding boxes [x, y, w, h].

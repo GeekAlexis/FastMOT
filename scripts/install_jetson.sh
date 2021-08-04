@@ -27,14 +27,13 @@ if [ ! -x "$(command -v nvcc)" ]; then
     source ~/.bashrc
 fi
 
-# Numpy, cython-bbox, TensorFlow
+# NumPy and TensorFlow
 sudo apt-get update
 sudo apt-get install -y python3-pip libhdf5-serial-dev hdf5-tools libcanberra-gtk-module
-sudo -H pip3 install cython
-sudo -H pip3 install numpy cython-bbox
+sudo -H pip3 install numpy
 sudo -H pip3 install --no-cache-dir --extra-index-url https://developer.download.nvidia.com/compute/redist/jp/v$JP_VERSION tensorflow==$TF_VERSION+nv$NV_VERSION
 
-# Scipy
+# SciPy
 sudo apt-get install -y libatlas-base-dev gfortran
 sudo -H pip3 install scipy==1.5
 
