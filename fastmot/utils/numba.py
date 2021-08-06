@@ -18,17 +18,6 @@ def apply_along_axis(func1d, mat, axis):
     return result
 
 
-@nb.njit(cache=True)
-def delete_row_col(mat, row, col):
-    """Numba utility to delete a row and column of a matrix."""
-    assert mat.ndim == 2
-    row_mask = np.ones(mat.shape[0], dtype=np.bool_)
-    col_mask = np.ones(mat.shape[1], dtype=np.bool_)
-    row_mask[row] = False
-    col_mask[col] = False
-    return mat[row_mask, :][:, col_mask]
-
-
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def normalize_vec(vectors):
     """Numba utility to normalize an array of vectors."""
@@ -40,24 +29,22 @@ def normalize_vec(vectors):
     return out
 
 
-@nb.njit(fastmath=True, cache=True)
+@nb.njit(fastmath=True, cache=True, inline='always')
 def transform(pts, m):
     """Numba implementation of OpenCV's transform."""
     pts = np.asarray(pts, dtype=np.float64)
     pts = np.atleast_2d(pts)
-    assert m.ndim == 2 and m.shape == (2, 3)
 
     augment = np.ones((len(pts), 1))
     pts = np.concatenate((pts, augment), axis=1)
     return pts @ m.T
 
 
-@nb.njit(fastmath=True, cache=True)
+@nb.njit(fastmath=True, cache=True, inline='always')
 def perspective_transform(pts, m):
     """Numba implementation of OpenCV's perspectiveTransform."""
     pts = np.asarray(pts, dtype=np.float64)
     pts = np.atleast_2d(pts)
-    assert m.ndim == 2 and m.shape == (3, 3)
 
     augment = np.ones((len(pts), 1))
     pts = np.concatenate((pts, augment), axis=1).T

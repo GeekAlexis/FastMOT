@@ -8,12 +8,14 @@ INF_DIST = 1e5
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def euclidean(XA, XB, symmetric=False):
+def euclidean(XA, XB, unknown_mask=None, symmetric=False, filler=1.):
     """Numba implementation of Scipy's euclidean"""
     Y = np.empty((XA.shape[0], XB.shape[0]))
     for i in nb.prange(XA.shape[0]):
         for j in range(XB.shape[0]):
-            if not symmetric or i < j:
+            if unknown_mask is not None and unknown_mask[i, j]:
+                Y[i, j] = filler
+            elif not symmetric or i < j:
                 norm = 0.
                 for k in range(XA.shape[1]):
                     norm += (XA[i, k] - XB[j, k])**2
@@ -24,12 +26,14 @@ def euclidean(XA, XB, symmetric=False):
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def cosine(XA, XB, symmetric=False):
+def cosine(XA, XB, unknown_mask=None, symmetric=False, filler=1.):
     """Numba implementation of Scipy's cosine"""
     Y = np.empty((XA.shape[0], XB.shape[0]))
     for i in nb.prange(XA.shape[0]):
         for j in range(XB.shape[0]):
-            if not symmetric or i < j:
+            if unknown_mask is not None and unknown_mask[i, j]:
+                Y[i, j] = filler
+            elif not symmetric or i < j:
                 dot    = 0.
                 a_norm = 0.
                 b_norm = 0.
@@ -46,15 +50,19 @@ def cosine(XA, XB, symmetric=False):
 
 
 @nb.njit(cache=True)
-def cdist(XA, XB, metric='euclidean'):
+def cdist(XA, XB, metric='euclidean', unknown_mask=None):
     """Numba implementation of Scipy's cdist"""
     assert XA.ndim == XB.ndim == 2
     assert XA.shape[1] == XB.shape[1]
+    if unknown_mask is not None:
+        assert unknown_mask.ndim == 2
+        assert unknown_mask.shape[0] == XA.shape[0]
+        assert unknown_mask.shape[1] == XB.shape[0]
 
     if metric == 'euclidean':
-        return euclidean(XA, XB)
+        return euclidean(XA, XB, unknown_mask)
     elif metric == 'cosine':
-        return cosine(XA, XB)
+        return cosine(XA, XB, unknown_mask)
     else:
         raise RuntimeError("Unsupported distance metric, use 'euclidean' or 'cosine'")
 
@@ -65,9 +73,9 @@ def pdist(X, metric='euclidean'):
     assert X.ndim == 2
 
     if metric == 'euclidean':
-        return euclidean(X, X, True)
+        return euclidean(X, X, symmetric=True)
     elif metric == 'cosine':
-        return cosine(X, X, True)
+        return cosine(X, X, symmetric=True)
     else:
         raise RuntimeError("Unsupported distance metric, use 'euclidean' or 'cosine'")
 
@@ -87,6 +95,29 @@ def iou_dist(tlbrs1, tlbrs2):
                 Y[i, j] = 1. - area_inter / area_union
             else:
                 Y[i, j] = 1.
+    return Y
+
+
+@nb.njit(parallel=False, fastmath=True, cache=True)
+def giou_dist(tlbrs1, tlbrs2):
+    """Computes pairwise GIoU distance."""
+    Y = np.empty((tlbrs1.shape[0], tlbrs2.shape[0]))
+    for i in nb.prange(tlbrs1.shape[0]):
+        area1 = area(tlbrs1[i, :])
+        for j in range(tlbrs2.shape[0]):
+            iou = 0.
+            area_union = area1 + area(tlbrs2[j, :])
+            iw = min(tlbrs1[i, 2], tlbrs2[j, 2]) - max(tlbrs1[i, 0], tlbrs2[j, 0]) + 1
+            ih = min(tlbrs1[i, 3], tlbrs2[j, 3]) - max(tlbrs1[i, 1], tlbrs2[j, 1]) + 1
+            if iw > 0 and ih > 0:
+                area_inter = iw * ih
+                area_union -= area_inter
+                iou = area_inter / area_union
+            ew = max(tlbrs1[i, 2], tlbrs2[j, 2]) - min(tlbrs1[i, 0], tlbrs2[j, 0]) + 1
+            eh = max(tlbrs1[i, 3], tlbrs2[j, 3]) - min(tlbrs1[i, 1], tlbrs2[j, 1]) + 1
+            area_encls = ew * eh
+            giou = iou - (area_encls - area_union) / area_encls
+            Y[i, j] = (1. - giou) * 0.5
     return Y
 
 
@@ -123,7 +154,9 @@ def bbox_dist(tlbrs1, tlbrs2, metric='iou'):
 
     if metric == 'iou':
         return iou_dist(tlbrs1, tlbrs2)
+    elif metric == 'giou':
+        return giou_dist(tlbrs1, tlbrs2)
     elif metric == 'diou':
         return diou_dist(tlbrs1, tlbrs2)
     else:
-        raise RuntimeError("Unsupported distance metric, use 'iou' or 'diou'")
+        raise RuntimeError("Unsupported distance metric, use 'iou', 'giou', or 'diou'")

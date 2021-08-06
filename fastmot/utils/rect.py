@@ -123,8 +123,8 @@ def iom(tlbr1, tlbr2):
 
 @nb.njit(parallel=False, fastmath=True, cache=True)
 def bbox_ious(tlbrs1, tlbrs2):
-    """Computes pairwise IoU."""
-    Y = np.empty((tlbrs1.shape[0], tlbrs2.shape[0]))
+    """Computes pairwise bounding box overlaps using IoU."""
+    ious = np.empty((tlbrs1.shape[0], tlbrs2.shape[0]))
     for i in nb.prange(tlbrs1.shape[0]):
         area1 = area(tlbrs1[i, :])
         for j in range(tlbrs2.shape[0]):
@@ -133,10 +133,28 @@ def bbox_ious(tlbrs1, tlbrs2):
             if iw > 0 and ih > 0:
                 area_inter = iw * ih
                 area_union = area1 + area(tlbrs2[j, :]) - area_inter
-                Y[i, j] = area_inter / area_union
+                ious[i, j] = area_inter / area_union
             else:
-                Y[i, j] = 0.
-    return Y
+                ious[i, j] = 0.
+    return ious
+
+
+@nb.njit(parallel=False, fastmath=True, cache=True)
+def find_occluded(tlbrs, occlusion_thresh):
+    """Computes a mask of occluded bounding boxes."""
+    occluded_mask = np.zeros(tlbrs.shape[0], dtype=np.bool_)
+    for i in nb.prange(tlbrs.shape[0]):
+        area_self = area(tlbrs[i, :])
+        for j in range(tlbrs.shape[0]):
+            if i != j:
+                iw = min(tlbrs[i, 2], tlbrs[j, 2]) - max(tlbrs[i, 0], tlbrs[j, 0]) + 1
+                ih = min(tlbrs[i, 3], tlbrs[j, 3]) - max(tlbrs[i, 1], tlbrs[j, 1]) + 1
+                if iw > 0 and ih > 0:
+                    ios = iw * ih / area_self
+                    if ios > occlusion_thresh:
+                        occluded_mask[i] = True
+                        break
+    return occluded_mask
 
 
 @nb.njit(fastmath=True, cache=True)
