@@ -10,7 +10,7 @@ import cv2
 
 from . import models
 from .utils import TRTInference
-from .utils.rect import as_rect, to_tlbr, get_size, area
+from .utils.rect import as_tlbr, to_tlbr, get_size, area
 from .utils.rect import enclosing, multi_crop, iom, diou_nms
 
 
@@ -104,8 +104,8 @@ class SSDDetector(Detector):
         return tiles, tuple(total_size)
 
     def _merge_dets(self, detections, tile_ids):
-        detections = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
-        tile_ids = np.asarray(tile_ids)
+        detections = np.fromiter(detections, DET_DTYPE, len(detections)).view(np.recarray)
+        tile_ids = np.fromiter(tile_ids, int, len(tile_ids))
         if len(detections) == 0:
             return detections
         detections = self._merge(detections, tile_ids, self.batch_size, self.merge_thresh)
@@ -142,7 +142,7 @@ class SSDDetector(Detector):
                 if label_mask[label]:
                     tl = (det_out[offset + 3:offset + 5] * size + tile[:2]) * scale_factor
                     br = (det_out[offset + 5:offset + 7] * size + tile[:2]) * scale_factor
-                    tlbr = as_rect((tl[0], tl[1], br[0], br[1]))
+                    tlbr = as_tlbr((tl[0], tl[1], br[0], br[1]))
                     if 0 < area(tlbr) <= max_area:
                         detections.append((tlbr, label, conf))
                         tile_ids.append(tile_idx)
@@ -214,7 +214,7 @@ class YOLODetector(Detector):
         det_out = np.concatenate(det_out).reshape(-1, 7)
         detections = self._filter_dets(det_out, self.upscaled_sz, self.class_ids, self.conf_thresh,
                                        self.nms_thresh, self.max_area, self.bbox_offset)
-        detections = np.asarray(detections, dtype=DET_DTYPE).view(np.recarray)
+        detections = np.fromiter(detections, DET_DTYPE, len(detections)).view(np.recarray)
         return detections
 
     def _preprocess(self, frame):
@@ -314,7 +314,7 @@ class PublicDetector(Detector):
             # scale inside frame
             tlbr[:2] = tlbr[:2] / self.seq_size * self.size
             tlbr[2:] = tlbr[2:] / self.seq_size * self.size
-            tlbr = as_rect(tlbr)
+            tlbr = np.rint(tlbr)
             if conf >= self.conf_thresh and area(tlbr) <= self.max_area:
                 self.detections[frame_id].append((tlbr, label, conf))
 

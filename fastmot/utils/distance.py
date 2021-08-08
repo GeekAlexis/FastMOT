@@ -1,3 +1,4 @@
+from enum import Enum
 import numpy as np
 import numba as nb
 
@@ -7,13 +8,49 @@ from .rect import area, get_center
 INF_DIST = 1e5
 
 
+class Metric(Enum):
+    EUCLIDEAN = 0
+    COSINE = 1
+
+
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def euclidean(XA, XB, unknown_mask=None, symmetric=False, filler=1.):
+def cdist(XA, XB, metric=Metric.EUCLIDEAN, empty_mask=None):
+    """Numba implementation of Scipy's cdist"""
+    assert XA.ndim == XB.ndim == 2
+    assert XA.shape[1] == XB.shape[1]
+    if empty_mask is not None:
+        assert empty_mask.ndim == 2
+        assert empty_mask.shape[0] == XA.shape[0]
+        assert empty_mask.shape[1] == XB.shape[0]
+
+    if metric == Metric.EUCLIDEAN:
+        return euclidean(XA, XB, empty_mask)
+    elif metric == Metric.COSINE:
+        return cosine(XA, XB, empty_mask)
+    else:
+        raise RuntimeError("Unsupported distance metric")
+
+
+@nb.njit(parallel=True, fastmath=True, cache=True)
+def pdist(X, metric=Metric.EUCLIDEAN):
+    """Numba implementation of Scipy's pdist"""
+    assert X.ndim == 2
+
+    if metric == Metric.EUCLIDEAN:
+        return euclidean(X, X, symmetric=True)
+    elif metric == Metric.COSINE:
+        return cosine(X, X, symmetric=True)
+    else:
+        raise RuntimeError("Unsupported distance metric")
+
+
+@nb.njit(parallel=True, fastmath=True, cache=True, inline='always')
+def euclidean(XA, XB, empty_mask=None, symmetric=False, filler=1.):
     """Numba implementation of Scipy's euclidean"""
     Y = np.empty((XA.shape[0], XB.shape[0]))
     for i in nb.prange(XA.shape[0]):
         for j in range(XB.shape[0]):
-            if unknown_mask is not None and unknown_mask[i, j]:
+            if empty_mask is not None and empty_mask[i, j]:
                 Y[i, j] = filler
             elif not symmetric or i < j:
                 norm = 0.
@@ -25,13 +62,13 @@ def euclidean(XA, XB, unknown_mask=None, symmetric=False, filler=1.):
     return Y
 
 
-@nb.njit(parallel=True, fastmath=True, cache=True)
-def cosine(XA, XB, unknown_mask=None, symmetric=False, filler=1.):
+@nb.njit(parallel=True, fastmath=True, cache=True, inline='always')
+def cosine(XA, XB, empty_mask=None, symmetric=False, filler=1.):
     """Numba implementation of Scipy's cosine"""
     Y = np.empty((XA.shape[0], XB.shape[0]))
     for i in nb.prange(XA.shape[0]):
         for j in range(XB.shape[0]):
-            if unknown_mask is not None and unknown_mask[i, j]:
+            if empty_mask is not None and empty_mask[i, j]:
                 Y[i, j] = filler
             elif not symmetric or i < j:
                 dot    = 0.
@@ -49,40 +86,12 @@ def cosine(XA, XB, unknown_mask=None, symmetric=False, filler=1.):
     return Y
 
 
-@nb.njit(cache=True)
-def cdist(XA, XB, metric='euclidean', unknown_mask=None):
-    """Numba implementation of Scipy's cdist"""
-    assert XA.ndim == XB.ndim == 2
-    assert XA.shape[1] == XB.shape[1]
-    if unknown_mask is not None:
-        assert unknown_mask.ndim == 2
-        assert unknown_mask.shape[0] == XA.shape[0]
-        assert unknown_mask.shape[1] == XB.shape[0]
-
-    if metric == 'euclidean':
-        return euclidean(XA, XB, unknown_mask)
-    elif metric == 'cosine':
-        return cosine(XA, XB, unknown_mask)
-    else:
-        raise RuntimeError("Unsupported distance metric, use 'euclidean' or 'cosine'")
-
-
-@nb.njit(cache=True)
-def pdist(X, metric='euclidean'):
-    """Numba implementation of Scipy's pdist"""
-    assert X.ndim == 2
-
-    if metric == 'euclidean':
-        return euclidean(X, X, symmetric=True)
-    elif metric == 'cosine':
-        return cosine(X, X, symmetric=True)
-    else:
-        raise RuntimeError("Unsupported distance metric, use 'euclidean' or 'cosine'")
-
-
 @nb.njit(parallel=False, fastmath=True, cache=True)
 def iou_dist(tlbrs1, tlbrs2):
     """Computes pairwise IoU distance."""
+    assert tlbrs1.ndim == tlbrs2.ndim == 2
+    assert tlbrs1.shape[1] == tlbrs2.shape[1] == 4
+
     Y = np.empty((tlbrs1.shape[0], tlbrs2.shape[0]))
     for i in nb.prange(tlbrs1.shape[0]):
         area1 = area(tlbrs1[i, :])
@@ -101,6 +110,9 @@ def iou_dist(tlbrs1, tlbrs2):
 @nb.njit(parallel=False, fastmath=True, cache=True)
 def giou_dist(tlbrs1, tlbrs2):
     """Computes pairwise GIoU distance."""
+    assert tlbrs1.ndim == tlbrs2.ndim == 2
+    assert tlbrs1.shape[1] == tlbrs2.shape[1] == 4
+
     Y = np.empty((tlbrs1.shape[0], tlbrs2.shape[0]))
     for i in nb.prange(tlbrs1.shape[0]):
         area1 = area(tlbrs1[i, :])
@@ -124,6 +136,9 @@ def giou_dist(tlbrs1, tlbrs2):
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def diou_dist(tlbrs1, tlbrs2):
     """Computes pairwise DIoU distance."""
+    assert tlbrs1.ndim == tlbrs2.ndim == 2
+    assert tlbrs1.shape[1] == tlbrs2.shape[1] == 4
+
     Y = np.empty((tlbrs1.shape[0], tlbrs2.shape[0]))
     for i in nb.prange(tlbrs1.shape[0]):
         area1 = area(tlbrs1[i, :])
@@ -144,19 +159,3 @@ def diou_dist(tlbrs1, tlbrs2):
             diou = iou - (d / c)**0.6
             Y[i, j] = (1. - diou) * 0.5
     return Y
-
-
-@nb.njit(cache=True)
-def bbox_dist(tlbrs1, tlbrs2, metric='iou'):
-    """Computes pairwise bounding box distance."""
-    assert tlbrs1.ndim == tlbrs2.ndim == 2
-    assert tlbrs1.shape[1] == tlbrs2.shape[1] == 4
-
-    if metric == 'iou':
-        return iou_dist(tlbrs1, tlbrs2)
-    elif metric == 'giou':
-        return giou_dist(tlbrs1, tlbrs2)
-    elif metric == 'diou':
-        return diou_dist(tlbrs1, tlbrs2)
-    else:
-        raise RuntimeError("Unsupported distance metric, use 'iou', 'giou', or 'diou'")

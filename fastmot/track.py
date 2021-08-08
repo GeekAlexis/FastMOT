@@ -3,7 +3,7 @@ import numpy as np
 import numba as nb
 
 from .models import LABEL_MAP
-from .utils.distance import cdist
+from .utils.distance import cdist, cosine
 from .utils.numba import apply_along_axis, normalize_vec
 from .utils.rect import get_center
 
@@ -38,7 +38,8 @@ class ClusterFeature:
     def distance(self, embeddings):
         if self.clusters is None:
             return np.full(len(embeddings), 1.0)
-        return self._nearest_cluster_dist(self.clusters[:self._next_idx], embeddings, self.metric)
+        clusters = normalize_vec(self.clusters[:self._next_idx])
+        return apply_along_axis(np.min, cdist(clusters, embeddings, self.metric), axis=0)
 
     def merge(self, features, other, other_features):
         if len(features) > len(other_features):
@@ -56,13 +57,7 @@ class ClusterFeature:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _get_nearest_cluster(clusters, embedding):
-        return np.argmin(cdist(np.atleast_2d(embedding), clusters, 'cosine'))
-
-    @staticmethod
-    @nb.njit(cache=True)
-    def _nearest_cluster_dist(clusters, embeddings, metric):
-        clusters = normalize_vec(clusters)
-        return apply_along_axis(np.min, cdist(clusters, embeddings, metric), axis=0)
+        return np.argmin(cosine(np.atleast_2d(embedding), clusters))
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
@@ -140,7 +135,7 @@ class Track:
         self.start_frame = frame_id
         self.frame_ids = deque([frame_id], maxlen=2)
         self.confirm_hits = confirm_hits
-        self.tlbr = tlbr # deque here too?
+        self.tlbr = tlbr # deque here too? add conf?
         self.state = state
         self.label = label
 
@@ -231,8 +226,8 @@ class Track:
         if is_valid:
             self.last_feat = embedding
             self.avg_feat.update(embedding)
-            self.smooth_feat.update(embedding)
-            self.clust_feat.update(embedding)
+            # self.smooth_feat.update(embedding)
+            # self.clust_feat.update(embedding)
 
     @staticmethod
     def next_id():

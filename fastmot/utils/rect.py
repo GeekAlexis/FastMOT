@@ -3,10 +3,14 @@ import numba as nb
 
 
 @nb.njit(cache=True,  inline='always')
-def as_rect(tlbr):
-    tlbr = np.asarray(tlbr, np.float64)
-    tlbr = np.rint(tlbr)
-    return tlbr
+def as_tlbr(tlbr):
+    """Construct a rectangle from a tuple or np.ndarray."""
+    _tlbr = np.empty(4)
+    _tlbr[0] = round(float(tlbr[0]), 0)
+    _tlbr[1] = round(float(tlbr[1]), 0)
+    _tlbr[2] = round(float(tlbr[2]), 0)
+    _tlbr[3] = round(float(tlbr[3]), 0)
+    return _tlbr
 
 
 @nb.njit(cache=True, inline='always')
@@ -37,7 +41,7 @@ def mask_area(mask):
 
 @nb.njit(cache=True,  inline='always')
 def get_center(tlbr):
-    return ((tlbr[0] + tlbr[2]) / 2, (tlbr[1] + tlbr[3]) / 2)
+    return (tlbr[0] + tlbr[2]) / 2, (tlbr[1] + tlbr[3]) / 2
 
 
 @nb.njit(cache=True, inline='always')
@@ -50,11 +54,13 @@ def to_tlwh(tlbr):
 
 @nb.njit(cache=True, inline='always')
 def to_tlbr(tlwh):
-    tlwh = np.asarray(tlwh, np.float64)
-    tlwh = np.rint(tlwh)
     tlbr = np.empty(4)
-    tlbr[:2] = tlwh[:2]
-    tlbr[2:] = tlwh[:2] + tlwh[2:] - 1
+    xmin = float(tlwh[0])
+    ymin = float(tlwh[1])
+    tlbr[0] = round(xmin, 0)
+    tlbr[1] = round(ymin, 0)
+    tlbr[2] = round(xmin + float(tlwh[2]) - 1., 0)
+    tlbr[3] = round(ymin + float(tlwh[3]) - 1., 0)
     return tlbr
 
 

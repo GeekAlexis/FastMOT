@@ -58,7 +58,7 @@ class MOT:
             Enable verbose drawing.
         """
         self.size = size
-        self.detector_type = DetectorType[detector_type]
+        self.detector_type = DetectorType[detector_type.upper()] # add register model func?
         assert detector_frame_skip >= 1
         self.detector_frame_skip = detector_frame_skip
         self.draw = draw
@@ -160,6 +160,11 @@ class MOT:
         LOGGER.debug(f"{'feature extract/kalman filter time:':<37}"
                      f"{Profiler.get_avg_millis('extract'):>6.3f} ms")
         LOGGER.debug(f"{'association time:':<37}{Profiler.get_avg_millis('assoc'):>6.3f} ms")
+        LOGGER.debug(f"{'match time:':<37}{Profiler.get_avg_millis('match'):>6.3f} ms")
+        LOGGER.debug(f"{'match time1:':<37}{Profiler.get_avg_millis('match1'):>6.3f} ms")
+        LOGGER.debug(f"{'match time2:':<37}{Profiler.get_avg_millis('match2'):>6.3f} ms")
+        LOGGER.debug(f"{'iou cost time:':<37}{Profiler.get_avg_millis('iou_cost'):>6.3f} ms")
+        LOGGER.debug(f"{'update time:':<37}{Profiler.get_avg_millis('update'):>6.3f} ms")
 
     def _draw(self, frame, detections):
         visible_tracks = list(self.visible_tracks())
