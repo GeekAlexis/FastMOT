@@ -6,8 +6,8 @@ import cupyx
 import cv2
 
 from .utils.rect import to_tlbr, get_size, get_center
-from .utils.rect import mask_area, intersection, crop
-from .utils.numba import transform
+from .utils.rect import intersection, crop
+from .utils.numba import mask_area, transform
 
 
 LOGGER = logging.getLogger(__name__)
@@ -275,8 +275,8 @@ class Flow:
         tl = transform(tlbr[:2], affine_mat).ravel()
         scale = np.linalg.norm(affine_mat[:2, 0])
         scale = 1. if scale < 0.9 or scale > 1.1 else scale
-        size = scale * get_size(tlbr)
-        return to_tlbr((tl[0], tl[1], size[0], size[1]))
+        w, h = get_size(tlbr)
+        return to_tlbr((tl[0], tl[1], w * scale, h * scale))
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
@@ -297,8 +297,8 @@ class Flow:
     @nb.njit(fastmath=True, cache=True)
     def _ellipse_filter(pts, tlbr, offset):
         offset = np.asarray(offset, np.float32)
-        center = np.asarray(get_center(tlbr))
-        semi_axes = get_size(tlbr) * 0.5
+        center = np.array(get_center(tlbr))
+        semi_axes = np.array(get_size(tlbr)) * 0.5
         pts = pts.reshape(-1, 2)
         pts = pts + offset
         # filter out points outside the ellipse
@@ -310,7 +310,7 @@ class Flow:
     def _fg_filter(prev_pts, cur_pts, fg_mask, frame_sz):
         if len(cur_pts) == 0:
             return prev_pts, cur_pts
-        size = np.asarray(frame_sz)
+        size = np.array(frame_sz)
         pts2i = np.rint(cur_pts).astype(np.int32)
         # filter out points outside the frame
         ge_lt = (pts2i >= 0) & (pts2i < size)
@@ -325,7 +325,7 @@ class Flow:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _scale_pts(pts, scale_factor):
-        scale_factor = np.asarray(scale_factor, np.float32)
+        scale_factor = np.array(scale_factor, np.float32)
         pts = pts * scale_factor
         pts = pts.reshape(-1, 1, 2)
         return pts
@@ -333,7 +333,7 @@ class Flow:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _unscale_pts(pts, scale_factor, mask=None):
-        scale_factor = np.asarray(scale_factor, np.float32)
+        scale_factor = np.array(scale_factor, np.float32)
         unscale_factor = 1 / scale_factor
         pts = pts.reshape(-1, 2)
         if mask is None:

@@ -10,7 +10,7 @@ import cv2
 
 from . import models
 from .utils import TRTInference
-from .utils.rect import as_tlbr, to_tlbr, get_size, area
+from .utils.rect import as_tlbr, aspect_ratio, to_tlbr, get_size, area
 from .utils.rect import enclosing, multi_crop, iom, diou_nms
 
 
@@ -52,8 +52,8 @@ class SSDDetector(Detector):
                  tile_overlap=0.25,
                  tiling_grid=(4, 2),
                  conf_thresh=0.5,
-                 max_area=130000,
-                 merge_thresh=0.6):
+                 merge_thresh=0.6,
+                 max_area=120000):
         super().__init__(size)
         self.model = getattr(models, model)
         assert 0 <= tile_overlap <= 1
@@ -62,18 +62,18 @@ class SSDDetector(Detector):
         self.tiling_grid = tiling_grid
         assert 0 <= conf_thresh <= 1
         self.conf_thresh = conf_thresh
-        assert max_area >= 0
-        self.max_area = max_area
         assert 0 <= merge_thresh <= 1
         self.merge_thresh = merge_thresh
+        assert max_area >= 0
+        self.max_area = max_area
 
         class_ids = [] if class_ids is None else list(class_ids)
-        self.label_mask = np.zeros(len(models.LABEL_MAP), dtype=bool)
+        self.label_mask = np.zeros(len(models.LABEL_MAP), dtype=np.bool_)
         self.label_mask[class_ids] = True
 
         self.batch_size = int(np.prod(self.tiling_grid))
         self.tiles, self.tiling_region_sz = self._generate_tiles()
-        self.scale_factor = np.asarray(self.size) / self.tiling_region_sz
+        self.scale_factor = np.array(self.size) / self.tiling_region_sz
         self.backend = TRTInference(self.model, self.batch_size)
         self.inp_handle = self.backend.input.host.reshape(self.batch_size, *self.model.INPUT_SHAPE)
 
@@ -94,8 +94,8 @@ class SSDDetector(Detector):
         self._normalize(frame, self.tiles, self.inp_handle)
 
     def _generate_tiles(self):
-        tile_size = np.asarray(self.model.INPUT_SHAPE[:0:-1])
-        tiling_grid = np.asarray(self.tiling_grid)
+        tile_size = np.array(self.model.INPUT_SHAPE[:0:-1])
+        tiling_grid = np.array(self.tiling_grid)
         step_size = (1 - self.tile_overlap) * tile_size
         total_size = (tiling_grid - 1) * step_size + tile_size
         total_size = np.rint(total_size).astype(int)
@@ -131,7 +131,7 @@ class SSDDetector(Detector):
         tile_ids = []
         for tile_idx in range(len(tiles)):
             tile = tiles[tile_idx]
-            size = get_size(tile)
+            w, h = get_size(tile)
             tile_offset = tile_idx * topk
             for det_idx in range(topk):
                 offset = (tile_offset + det_idx) * 7
@@ -140,9 +140,11 @@ class SSDDetector(Detector):
                 if conf < thresh:
                     break
                 if label_mask[label]:
-                    tl = (det_out[offset + 3:offset + 5] * size + tile[:2]) * scale_factor
-                    br = (det_out[offset + 5:offset + 7] * size + tile[:2]) * scale_factor
-                    tlbr = as_tlbr((tl[0], tl[1], br[0], br[1]))
+                    xmin = (det_out[offset + 3] * w + tile[0]) * scale_factor[0]
+                    ymin = (det_out[offset + 4] * h + tile[1]) * scale_factor[1]
+                    xmax = (det_out[offset + 5] * w + tile[0]) * scale_factor[0]
+                    ymax = (det_out[offset + 6] * h + tile[1]) * scale_factor[1]
+                    tlbr = as_tlbr((xmin, ymin, xmax, ymax))
                     if 0 < area(tlbr) <= max_area:
                         detections.append((tlbr, label, conf))
                         tile_ids.append(tile_idx)
@@ -181,7 +183,7 @@ class SSDDetector(Detector):
                     dets[i].tlbr[:] = enclosing(dets[i].tlbr, dets[k].tlbr)
                     dets[i].conf = max(dets[i].conf, dets[k].conf)
                     keep.discard(k)
-        keep = np.asarray(list(keep))
+        keep = np.array(list(keep))
         return dets[keep]
 
 
@@ -190,17 +192,20 @@ class YOLODetector(Detector):
                  model='YOLOv4',
                  class_ids=None,
                  conf_thresh=0.25,
+                 nms_thresh=0.5,
                  max_area=800000,
-                 nms_thresh=0.5):
+                 min_aspect_ratio=1.2):
         super().__init__(size)
         self.model = getattr(models, model)
         self.class_ids = tuple() if class_ids is None else class_ids
         assert 0 <= conf_thresh <= 1
         self.conf_thresh = conf_thresh
-        assert max_area >= 0
-        self.max_area = max_area
         assert 0 <= nms_thresh <= 1
         self.nms_thresh = nms_thresh
+        assert max_area >= 0
+        self.max_area = max_area
+        assert min_aspect_ratio >= 0
+        self.min_aspect_ratio = min_aspect_ratio
 
         self.backend = TRTInference(self.model, 1)
         self.inp_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
@@ -213,7 +218,8 @@ class YOLODetector(Detector):
         det_out = self.backend.synchronize()
         det_out = np.concatenate(det_out).reshape(-1, 7)
         detections = self._filter_dets(det_out, self.upscaled_sz, self.class_ids, self.conf_thresh,
-                                       self.nms_thresh, self.max_area, self.bbox_offset)
+                                       self.nms_thresh, self.max_area, self.min_aspect_ratio,
+                                       self.bbox_offset)
         detections = np.fromiter(detections, DET_DTYPE, len(detections)).view(np.recarray)
         return detections
 
@@ -231,8 +237,8 @@ class YOLODetector(Detector):
             cp.multiply(chw_dev, 1 / 255., out=self.inp_handle)
 
     def _create_letterbox(self):
-        src_size = np.asarray(self.size)
-        dst_size = np.asarray(self.model.INPUT_SHAPE[:0:-1])
+        src_size = np.array(self.size)
+        dst_size = np.array(self.model.INPUT_SHAPE[:0:-1])
         if self.model.LETTERBOX:
             scale_factor = min(dst_size / src_size)
             scaled_size = np.rint(src_size * scale_factor).astype(int)
@@ -252,7 +258,7 @@ class YOLODetector(Detector):
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _filter_dets(det_out, size, class_ids, conf_thresh, nms_thresh, max_area, offset):
+    def _filter_dets(det_out, size, class_ids, conf_thresh, nms_thresh, max_area, min_ar, offset):
         """
         det_out: a list of 3 tensors, where each tensor
                  contains a multiple of 7 float32 numbers in
@@ -273,7 +279,7 @@ class YOLODetector(Detector):
             class_dets = det_out[class_idx]
             class_keep = diou_nms(class_dets[:, :4], class_dets[:, 4], nms_thresh)
             keep.extend(class_idx[class_keep])
-        keep = np.asarray(keep)
+        keep = np.array(keep)
         nms_dets = det_out[keep]
 
         detections = []
@@ -281,7 +287,7 @@ class YOLODetector(Detector):
             tlbr = to_tlbr(nms_dets[i, :4])
             label = int(nms_dets[i, 5])
             conf = nms_dets[i, 4] * nms_dets[i, 6]
-            if 0 < area(tlbr) <= max_area:
+            if 0 < area(tlbr) <= max_area and aspect_ratio(tlbr) >= min_ar:
                 detections.append((tlbr, label, conf))
         return detections
 
@@ -322,6 +328,6 @@ class PublicDetector(Detector):
         pass
 
     def postprocess(self):
-        detections = np.asarray(self.detections[self.frame_id], dtype=DET_DTYPE).view(np.recarray)
+        detections = np.array(self.detections[self.frame_id], DET_DTYPE).view(np.recarray)
         self.frame_id += self.frame_skip
         return detections

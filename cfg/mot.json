@@ -17,15 +17,16 @@
             "tile_overlap": 0.25,
             "tiling_grid": [4, 2],
             "conf_thresh": 0.5,
-            "max_area": 130000,
-            "merge_thresh": 0.6
+            "merge_thresh": 0.6,
+            "max_area": 120000
         },
         "yolo_detector_cfg": {
             "model": "YOLOv4",
             "class_ids": [1],
             "conf_thresh": 0.25,
+            "nms_thresh": 0.5,
             "max_area": 800000,
-            "nms_thresh": 0.5
+            "min_aspect_ratio": 1.2
         },
         "public_detector_cfg": {
             "sequence_path": "MOT20/train/MOT20-01",

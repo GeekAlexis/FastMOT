@@ -23,10 +23,21 @@ def normalize_vec(vectors):
     """Numba utility to normalize an array of vectors."""
     assert vectors.ndim == 2
     out = np.empty_like(vectors)
-    for i in nb.prange(len(vectors)):
+    for i in nb.prange(vectors.shape[0]):
         norm_factor = 1. / np.linalg.norm(vectors[i, :])
         out[i, :] = norm_factor * vectors[i, :]
     return out
+
+
+@nb.njit(fastmath=True, cache=True)
+def mask_area(mask):
+    """Utility to calculate the area of a mask."""
+    count = 0
+    m_raveled = mask.ravel()
+    for i in range(mask.size):
+        if m_raveled[i] != 0:
+            count += 1
+    return count
 
 
 @nb.njit(fastmath=True, cache=True, inline='always')

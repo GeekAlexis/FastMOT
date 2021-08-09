@@ -28,7 +28,7 @@ def cdist(XA, XB, metric=Metric.EUCLIDEAN, empty_mask=None):
     elif metric == Metric.COSINE:
         return cosine(XA, XB, empty_mask)
     else:
-        raise RuntimeError("Unsupported distance metric")
+        raise ValueError('Unsupported distance metric')
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
@@ -41,7 +41,7 @@ def pdist(X, metric=Metric.EUCLIDEAN):
     elif metric == Metric.COSINE:
         return cosine(X, X, symmetric=True)
     else:
-        raise RuntimeError("Unsupported distance metric")
+        raise ValueError('Unsupported distance metric')
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True, inline='always')

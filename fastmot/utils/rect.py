@@ -15,28 +15,21 @@ def as_tlbr(tlbr):
 
 @nb.njit(cache=True, inline='always')
 def get_size(tlbr):
-    return tlbr[2:] - tlbr[:2] + 1
+    return tlbr[2] - tlbr[0] + 1, tlbr[3] - tlbr[1] + 1
 
 
 @nb.njit(cache=True,  inline='always')
 def aspect_ratio(tlbr):
-    w = tlbr[2] - tlbr[0] + 1
-    h = tlbr[3] - tlbr[1] + 1
+    w, h = get_size(tlbr)
     return h / w if w > 0 else 0.
 
 
 @nb.njit(cache=True, inline='always')
 def area(tlbr):
-    w = tlbr[2] - tlbr[0] + 1
-    h = tlbr[3] - tlbr[1] + 1
+    w, h = get_size(tlbr)
     if w <= 0 or h <= 0:
         return 0.
     return w * h
-
-
-@nb.njit(cache=True, inline='always')
-def mask_area(mask):
-    return np.count_nonzero(mask)
 
 
 @nb.njit(cache=True,  inline='always')
@@ -197,7 +190,7 @@ def nms(tlwhs, scores, nms_thresh):
 
         idx = np.where(iou <= nms_thresh)[0]
         ordered = ordered[idx + 1]
-    keep = np.asarray(keep)
+    keep = np.array(keep)
     return keep
 
 
@@ -246,5 +239,5 @@ def diou_nms(tlwhs, scores, nms_thresh, beta=0.6):
 
         idx = np.where(diou <= nms_thresh)[0]
         ordered = ordered[idx + 1]
-    keep = np.asarray(keep)
+    keep = np.array(keep)
     return keep

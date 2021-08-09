@@ -182,7 +182,7 @@ class MultiTracker:
                 std_multiplier = max(self.age_penalty * track.age, 1) / track.inlier_ratio
                 mean, cov = self.kf.update(mean, cov, klt_tlbr, MeasType.FLOW, std_multiplier)
             next_tlbr = as_tlbr(mean[:4])
-            track.update_location(next_tlbr, (mean, cov))
+            track.update(next_tlbr, (mean, cov))
             if ios(next_tlbr, self.frame_rect) < 0.5:
                 if track.confirmed:
                     LOGGER.info(f"{'Out:':<14}{track}")
@@ -276,7 +276,9 @@ class MultiTracker:
         with Profiler('update'):
             matches = itertools.chain(matches1, matches2, matches3)
             u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
-            matches, u_trk_ids = self._rectify_matches(matches, u_trk_ids, detections)
+
+            # rectify matches that may cause duplicate tracks
+            # matches, u_trk_ids = self._rectify_matches(matches, u_trk_ids, detections)
             updated, aged = [], []
 
             # reinstate matched tracks
@@ -335,7 +337,7 @@ class MultiTracker:
 
             # self._rectify_tracklets()
             # remove duplicate tracks
-            # self._remove_duplicate(updated, aged)
+            self._remove_duplicate(updated, aged)
 
     def _mark_lost(self, trk_id):
         track = self.tracks.pop(trk_id)
@@ -365,10 +367,6 @@ class MultiTracker:
         #                        for trk_id in trk_ids]).reshape(n_trk, -1)
         # clust_feats = tuple(self.tracks[trk_id].clust_feat() for trk_id in trk_ids)
         # cost = self._clusters_vec_dist(clust_feats, embeddings, self.metric)
-
-        # invalid_cols = np.fromiter(occluded_det_ids, int, len(occluded_det_ids))
-        # self._invalidate_cost(cost, np.empty(0, int), invalid_cols, 1.0)
-        # self._invalidate_cost(cost, invalid_rows, invalid_cols, 1.0)
 
         # t_bboxes = np.array([self.tracks[trk_id].tlbr for trk_id in trk_ids])
         # d_bboxes = detections.tlbr
@@ -470,17 +468,17 @@ class MultiTracker:
             time1 = (t_updated.end_frame - t_updated.start_frame, -t_updated.start_frame)
             time2 = (t_aged.end_frame - t_aged.start_frame, -t_aged.start_frame)
 
-            if t_updated.prev_frame >= t_aged.start_frame:
-                print('wrong match:', trk_id1)
-                dup_ids.add(trk_id1)
-            else:
-                dup_ids.add(trk_id2)
-                t_updated.merge_continuation(t_aged)
-
-            # if time1 > time2:
-            #     dup_ids.add(trk_id2)
-            # else:
+            # if t_updated.prev_frame >= t_aged.start_frame:
+            #     print('wrong match:', trk_id1)
             #     dup_ids.add(trk_id1)
+            # else:
+            #     dup_ids.add(trk_id2)
+            #     t_updated.merge_continuation(t_aged)
+
+            if time1 > time2:
+                dup_ids.add(trk_id2)
+            else:
+                dup_ids.add(trk_id1)
         for trk_id in dup_ids:
             LOGGER.info(f"{'Duplicate:':<14}{self.tracks[trk_id]}")
             del self.tracks[trk_id]
