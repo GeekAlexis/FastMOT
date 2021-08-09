@@ -45,9 +45,10 @@ class VideoIO:
             Frame rate of the input source.
         buffer_size : int, optional
             Number of frames to buffer.
+            For live sources, a larger buffer drops less frames but increases latency.
         proc_fps : int, optional
             Estimated processing speed that may limit the capture interval `cap_dt`.
-            This depends on hardware and complexity.
+            This depends on hardware and processing complexity.
         """
         self.size = size
         self.input_uri = input_uri
