@@ -58,7 +58,7 @@ class MOT:
             Enable verbose drawing.
         """
         self.size = size
-        self.detector_type = DetectorType[detector_type.upper()] # add register model func?
+        self.detector_type = DetectorType[detector_type.upper()]
         assert detector_frame_skip >= 1
         self.detector_frame_skip = detector_frame_skip
         self.draw = draw
@@ -97,10 +97,10 @@ class MOT:
         Iterator[Track]
             Confirmed and active tracks from the tracker
         """
-        # return (track for track in self.tracker.tracks.values()
-        #         if track.confirmed and track.active)
         return (track for track in self.tracker.tracks.values()
-                if track.confirmed)
+                if track.confirmed and track.active)
+        # return (track for track in self.tracker.tracks.values()
+        #         if track.confirmed)
 
     def reset(self, cap_dt):
         """Resets multiple object tracker. Must be called before `step`.

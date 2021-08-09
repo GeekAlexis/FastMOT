@@ -55,7 +55,7 @@ class SSDDetector(Detector):
                  merge_thresh=0.6,
                  max_area=120000):
         super().__init__(size)
-        self.model = getattr(models, model)
+        self.model = models.SSD.get_model(model)
         assert 0 <= tile_overlap <= 1
         self.tile_overlap = tile_overlap
         assert tiling_grid[0] >= 1 and tiling_grid[1] >= 1
@@ -196,7 +196,7 @@ class YOLODetector(Detector):
                  max_area=800000,
                  min_aspect_ratio=1.2):
         super().__init__(size)
-        self.model = getattr(models, model)
+        self.model = models.YOLO.get_model(model)
         self.class_ids = tuple() if class_ids is None else class_ids
         assert 0 <= conf_thresh <= 1
         self.conf_thresh = conf_thresh

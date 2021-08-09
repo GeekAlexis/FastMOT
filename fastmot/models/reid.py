@@ -8,10 +8,20 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ReID:
+    __registry = {}
+
     PLUGIN_PATH = None
     ENGINE_PATH = None
     MODEL_PATH = None
     INPUT_SHAPE = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.__registry[cls.__name__] = cls
+
+    @classmethod
+    def get_model(cls, name):
+        return cls.__registry[name]
 
     @classmethod
     def build_engine(cls, trt_logger, batch_size):

@@ -138,7 +138,7 @@ class MultiTracker:
         self.flow.init(frame)
         for det in detections:
             state = self.kf.create(det.tlbr)
-            new_trk = Track(0, det.tlbr, state, det.label, self.metric, self.confirm_hits)
+            new_trk = Track(0, det.tlbr, state, det.label, self.confirm_hits)
             self.tracks[new_trk.trk_id] = new_trk
             LOGGER.debug(f"{'Detected:':<14}{new_trk}")
 
@@ -258,8 +258,6 @@ class MultiTracker:
 
             # reID with track history
             hist_ids = [trk_id for trk_id, track in self.hist_tracks.items() if len(track) >= 2]
-            # hist_ids = np.fromiter((trk_id for trk_id, track in self.hist_tracks.items()
-            #                         if track.avg_feat.is_valid()), int)
             # u_det_ids = {det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh}
             # reid_u_det_ids = list(u_det_ids - occluded_det_ids)
 
@@ -278,7 +276,7 @@ class MultiTracker:
             u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
 
             # rectify matches that may cause duplicate tracks
-            # matches, u_trk_ids = self._rectify_matches(matches, u_trk_ids, detections)
+            matches, u_trk_ids = self._rectify_matches(matches, u_trk_ids, detections)
             updated, aged = [], []
 
             # reinstate matched tracks
@@ -330,14 +328,13 @@ class MultiTracker:
             for det_id in u_det_ids:
                 det = detections[det_id]
                 state = self.kf.create(det.tlbr)
-                new_trk = Track(frame_id, det.tlbr, state, det.label, self.metric, self.confirm_hits)
+                new_trk = Track(frame_id, det.tlbr, state, det.label, self.confirm_hits)
                 self.tracks[new_trk.trk_id] = new_trk
                 LOGGER.debug(f"{'Detected:':<14}{new_trk}")
                 # updated.append(new_trk.trk_id)
 
-            # self._rectify_tracklets()
             # remove duplicate tracks
-            self._remove_duplicate(updated, aged)
+            # self._remove_duplicate(updated, aged)
 
     def _mark_lost(self, trk_id):
         track = self.tracks.pop(trk_id)

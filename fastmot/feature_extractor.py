@@ -10,7 +10,7 @@ from .utils.rect import multi_crop
 
 class FeatureExtractor:
     def __init__(self, model='OSNet025', batch_size=16):
-        self.model = getattr(models, model)
+        self.model = models.ReID.get_model(model)
         assert batch_size >= 1
         self.batch_size = batch_size
 

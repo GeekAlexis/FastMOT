@@ -9,6 +9,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class YOLO:
+    __registry = {}
+
     PLUGIN_PATH = Path(__file__).parents[1] / 'plugins' / 'libyolo_layer.so'
     ENGINE_PATH = None
     MODEL_PATH = None
@@ -19,6 +21,14 @@ class YOLO:
     LAYER_FACTORS = None
     SCALES = None
     ANCHORS = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.__registry[cls.__name__] = cls
+
+    @classmethod
+    def get_model(cls, name):
+        return cls.__registry[name]
 
     @classmethod
     def add_plugin(cls, network):

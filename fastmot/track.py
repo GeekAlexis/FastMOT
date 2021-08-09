@@ -129,20 +129,17 @@ class AverageFeature:
 class Track:
     _count = 0
 
-    def __init__(self, frame_id, tlbr, state, label, metric,
-                 confirm_hits=1, num_clusters=5, buffer_size=30):
+    def __init__(self, frame_id, tlbr, state, label, confirm_hits=1, buffer_size=30):
         self.trk_id = self.next_id()
         self.start_frame = frame_id
         self.frame_ids = deque([frame_id], maxlen=buffer_size)
-        self.bboxes = deque([tlbr], maxlen=buffer_size) # add conf?
+        self.bboxes = deque([tlbr], maxlen=buffer_size)
         self.confirm_hits = confirm_hits
         self.state = state
         self.label = label
 
         self.age = 0
         self.hits = 0
-        self.clust_feat = ClusterFeature(num_clusters, metric)
-        # self.smooth_feat = SmoothFeature(learning_rate)
         self.avg_feat = AverageFeature()
         self.last_feat = None
 
@@ -213,8 +210,6 @@ class Track:
 
     def merge_continuation(self, other):
         print("merge continuation: ", self.trk_id, other.trk_id)
-        # print(self.start_frame, other.start_frame)
-        # print(self.end_frame, other.end_frame)
         # assert self.end_frame < other.start_frame
 
         self.frame_ids.extend(other.frame_ids)
