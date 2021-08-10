@@ -42,7 +42,6 @@
             "max_age": 60,
             "age_penalty": 2,
             "age_weight": 0.0,
-            "diou_weight": 0.0,
             "motion_weight": 0.2,
             "max_assoc_cost": 0.8,
             "max_reid_cost": 0.6,

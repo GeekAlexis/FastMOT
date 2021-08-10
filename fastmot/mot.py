@@ -97,10 +97,10 @@ class MOT:
         Iterator[Track]
             Confirmed and active tracks from the tracker
         """
-        return (track for track in self.tracker.tracks.values()
-                if track.confirmed and track.active)
         # return (track for track in self.tracker.tracks.values()
-        #         if track.confirmed)
+        #         if track.confirmed and track.active)
+        return (track for track in self.tracker.tracks.values()
+                if track.confirmed)
 
     def reset(self, cap_dt):
         """Resets multiple object tracker. Must be called before `step`.
