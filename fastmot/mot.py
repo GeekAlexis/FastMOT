@@ -7,8 +7,7 @@ from .detector import SSDDetector, YOLODetector, PublicDetector
 from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import Profiler
-from .utils.visualization import draw_tracks, draw_detections
-from .utils.visualization import draw_klt_bboxes, draw_background_flow
+from .utils.visualization import Visualizer
 
 
 LOGGER = logging.getLogger(__name__)
@@ -29,8 +28,8 @@ class MOT:
                  public_detector_cfg=None,
                  feature_extractor_cfg=None,
                  tracker_cfg=None,
-                 draw=False,
-                 verbose=False):
+                 visualizer_cfg=None,
+                 draw=False):
         """Top level module that integrates detection, feature extraction,
         and tracking together.
 
@@ -52,17 +51,16 @@ class MOT:
             Feature extractor configuration.
         tracker_cfg : SimpleNamespace, optional
             Tracker configuration.
+        visualizer_cfg : SimpleNamespace, optional
+            Visualization configuration.
         draw : bool, optional
-            Enable drawing tracks.
-        verbose : bool, optional
-            Enable verbose drawing.
+            Enable visualization.
         """
         self.size = size
         self.detector_type = DetectorType[detector_type.upper()]
         assert detector_frame_skip >= 1
         self.detector_frame_skip = detector_frame_skip
         self.draw = draw
-        self.verbose = verbose
 
         if ssd_detector_cfg is None:
             ssd_detector_cfg = SimpleNamespace()
@@ -74,6 +72,8 @@ class MOT:
             feature_extractor_cfg = SimpleNamespace()
         if tracker_cfg is None:
             tracker_cfg = SimpleNamespace()
+        if visualizer_cfg is None:
+            visualizer_cfg = SimpleNamespace()
 
         LOGGER.info('Loading detector model...')
         if self.detector_type == DetectorType.SSD:
@@ -87,6 +87,8 @@ class MOT:
         LOGGER.info('Loading feature extractor model...')
         self.extractor = FeatureExtractor(**vars(feature_extractor_cfg))
         self.tracker = MultiTracker(self.size, self.extractor.metric, **vars(tracker_cfg))
+
+        self.visualizer = Visualizer(**vars(visualizer_cfg))
         self.frame_count = 0
 
     def visible_tracks(self):
@@ -97,10 +99,10 @@ class MOT:
         Iterator[Track]
             Confirmed and active tracks from the tracker
         """
-        # return (track for track in self.tracker.tracks.values()
-        #         if track.confirmed and track.active)
         return (track for track in self.tracker.tracks.values()
-                if track.confirmed)
+                if track.confirmed and track.active)
+        # return (track for track in self.tracker.tracks.values()
+        #         if track.confirmed)
 
     def reset(self, cap_dt):
         """Resets multiple object tracker. Must be called before `step`.
@@ -168,11 +170,7 @@ class MOT:
 
     def _draw(self, frame, detections):
         visible_tracks = list(self.visible_tracks())
-        draw_tracks(frame, visible_tracks, show_flow=self.verbose, show_cov=True)
-        if self.verbose:
-            draw_detections(frame, detections)
-            draw_klt_bboxes(frame, self.tracker.klt_bboxes.values())
-            draw_background_flow(frame, self.tracker.flow.prev_bg_keypoints,
-                                 self.tracker.flow.bg_keypoints)
+        self.visualizer.render(frame, visible_tracks, detections, self.tracker.klt_bboxes.values(),
+                               self.tracker.flow.prev_bg_keypoints, self.tracker.flow.bg_keypoints)
         cv2.putText(frame, f'visible: {len(visible_tracks)}', (30, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, 0, 2, cv2.LINE_AA)

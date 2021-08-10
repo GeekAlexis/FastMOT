@@ -9,7 +9,7 @@
 
     "mot_cfg": {
         "detector_type": "YOLO",
-        "detector_frame_skip": 1,
+        "detector_frame_skip": 5,
 
         "ssd_detector_cfg": {
             "model": "SSDInceptionV2",
@@ -39,23 +39,23 @@
         },
 
         "tracker_cfg": {
-            "max_age": 60,
+            "max_age": 6,
             "age_penalty": 2,
             "age_weight": 0.0,
             "motion_weight": 0.2,
-            "max_assoc_cost": 0.8,
+            "max_assoc_cost": 0.85,
             "max_reid_cost": 0.6,
-            "iou_thresh": 0.5,
+            "iou_thresh": 0.4,
             "duplicate_thresh": 0.8,
             "occlusion_thresh": 0.7,
-            "conf_thresh": 0.7,
+            "conf_thresh": 0.5,
             "confirm_hits": 1,
             "history_size": 50,
 
             "kalman_filter_cfg": {
                 "std_factor_acc": 2.25,
                 "std_offset_acc": 78.5,
-                "std_factor_det": [0.1, 0.1],
+                "std_factor_det": [0.08, 0.08],
                 "std_factor_klt": [0.14, 0.14],
                 "min_std_det": [4.0, 4.0],
                 "min_std_klt": [5.0, 5.0],
@@ -75,7 +75,7 @@
                 "max_error": 100,
                 "inlier_thresh": 4,
                 "bg_feat_thresh": 10,
-                "target_feat_params": {
+                "obj_feat_params": {
                     "maxCorners": 1000,
                     "qualityLevel": 0.06,
                     "blockSize": 3
@@ -86,6 +86,15 @@
                     "criteria": [3, 10, 0.03]
                 }
             }
+        },
+
+        "visualizer_cfg": {
+            "draw_detections": false,
+            "draw_confidence": false,
+            "draw_covariance": false,
+            "draw_klt": false,
+            "draw_obj_flow": false,
+            "draw_bg_flow": false
         }
     }
 }

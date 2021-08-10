@@ -24,7 +24,7 @@ class Flow:
                  max_error=100,
                  inlier_thresh=4,
                  bg_feat_thresh=10,
-                 target_feat_params=None,
+                 obj_feat_params=None,
                  opt_flow_params=None):
         """A KLT tracker based on optical flow feature point matching.
         Camera motion is simultaneously estimated by tracking feature points
@@ -52,8 +52,8 @@ class Flow:
             Min number of inliers for valid matching.
         bg_feat_thresh : int, optional
             FAST threshold for background feature detection.
-        target_feat_params : SimpleNamespace, optional
-            GFTT parameters for target feature detection, see `cv2.goodFeaturesToTrack`.
+        obj_feat_params : SimpleNamespace, optional
+            GFTT parameters for object feature detection, see `cv2.goodFeaturesToTrack`.
         opt_flow_params : SimpleNamespace, optional
             Optical flow parameters, see `cv2.calcOpticalFlowPyrLK`.
         """
@@ -77,7 +77,7 @@ class Flow:
         assert bg_feat_thresh >= 0
         self.bg_feat_thresh = bg_feat_thresh
 
-        self.target_feat_params = {
+        self.obj_feat_params = {
             "maxCorners": 1000,
             "qualityLevel": 0.06,
             "blockSize": 3
@@ -87,8 +87,8 @@ class Flow:
             "maxLevel": 5,
             "criteria": (3, 10, 0.03)
         }
-        if target_feat_params is not None:
-            self.target_feat_params.update(vars(target_feat_params))
+        if obj_feat_params is not None:
+            self.obj_feat_params.update(vars(obj_feat_params))
         if opt_flow_params is None:
             self.opt_flow_params.update(vars(opt_flow_params))
 
@@ -170,7 +170,7 @@ class Flow:
                 feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
                 keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask,
                                                     minDistance=feature_dist,
-                                                    **self.target_feat_params)
+                                                    **self.obj_feat_params)
                 if keypoints is None:
                     keypoints = np.empty((0, 2), np.float32)
                 else:
