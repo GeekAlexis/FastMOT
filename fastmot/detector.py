@@ -33,15 +33,10 @@ class Detector(abc.ABC):
 
     @abc.abstractmethod
     def detect_async(self, frame):
-        """Detects objects asynchronously."""
         raise NotImplementedError
 
     @abc.abstractmethod
     def postprocess(self):
-        """Synchronizes, applies postprocessing, and returns a record array
-        of detections (DET_DTYPE).
-        This function should be called after `detect_async`.
-        """
         raise NotImplementedError
 
 
@@ -54,6 +49,28 @@ class SSDDetector(Detector):
                  conf_thresh=0.5,
                  merge_thresh=0.6,
                  max_area=120000):
+        """An object detector for SSD models.
+
+        Parameters
+        ----------
+        size : tuple
+            Width and height of each frame.
+        model : str, optional
+            SSD model to use.
+            Must be the name of a class that inherits `models.SSD`.
+        class_ids : tuple, optional
+            Class IDs to detect.
+        tile_overlap : float, optional
+            Ratio of overlap to width and height of each tile.
+        tiling_grid : tuple, optional
+            Width and height of tile layout to split each frame for batch inference.
+        conf_thresh : float, optional
+            Detection confidence threshold.
+        merge_thresh : float, optional
+            Overlap threshold to merge bounding boxes across tiles.
+        max_area : int, optional
+            Max area of bounding boxes to detect.
+        """
         super().__init__(size)
         self.model = models.SSD.get_model(model)
         assert 0 <= tile_overlap <= 1
@@ -78,10 +95,15 @@ class SSDDetector(Detector):
         self.inp_handle = self.backend.input.host.reshape(self.batch_size, *self.model.INPUT_SHAPE)
 
     def detect_async(self, frame):
+        """Detects objects asynchronously."""
         self._preprocess(frame)
         self.backend.infer_async()
 
     def postprocess(self):
+        """Synchronizes, applies postprocessing, and returns a record array
+        of detections (DET_DTYPE).
+        This function should be called after `detect_async`.
+        """
         det_out = self.backend.synchronize()[0]
         detections, tile_ids = self._filter_dets(det_out, self.tiles, self.model.TOPK,
                                                  self.label_mask, self.max_area,
@@ -195,6 +217,28 @@ class YOLODetector(Detector):
                  nms_thresh=0.5,
                  max_area=800000,
                  min_aspect_ratio=1.2):
+        """An object detector for YOLO models.
+
+        Parameters
+        ----------
+        size : tuple
+            Width and height of each frame.
+        model : str, optional
+            YOLO model to use.
+            Must be the name of a class that inherits `models.YOLO`.
+        class_ids : tuple, optional
+            Class IDs to detect.
+        conf_thresh : float, optional
+            Detection confidence threshold.
+        nms_thresh : float, optional
+            Nonmaximum suppression overlap threshold.
+            Set higher to detect crowded objects.
+        max_area : int, optional
+            Max area of bounding boxes to detect.
+        min_aspect_ratio : float, optional
+            Min aspect ratio (height over width) of bounding boxes to detect.
+            Set to 0.1 for square shaped objects.
+        """
         super().__init__(size)
         self.model = models.YOLO.get_model(model)
         self.class_ids = tuple() if class_ids is None else class_ids
@@ -211,10 +255,15 @@ class YOLODetector(Detector):
         self.inp_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
 
     def detect_async(self, frame):
+        """Detects objects asynchronously."""
         self._preprocess(frame)
         self.backend.infer_async(from_device=True)
 
     def postprocess(self):
+        """Synchronizes, applies postprocessing, and returns a record array
+        of detections (DET_DTYPE).
+        This function should be called after `detect_async`.
+        """
         det_out = self.backend.synchronize()
         det_out = np.concatenate(det_out).reshape(-1, 7)
         detections = self._filter_dets(det_out, self.upscaled_sz, self.class_ids, self.conf_thresh,
@@ -294,6 +343,21 @@ class YOLODetector(Detector):
 
 class PublicDetector(Detector):
     def __init__(self, size, frame_skip, sequence_path=None, conf_thresh=0.5, max_area=800000):
+        """Class to use MOT Challenge's public detections.
+
+        Parameters
+        ----------
+        size : tuple
+            Width and height of each frame.
+        frame_skip : int
+            Detector frame skip.
+        sequence_path : str, optional
+            Relative path to MOT Challenge's sequence directory.
+        conf_thresh : float, optional
+            Detection confidence threshold.
+        max_area : int, optional
+            Max area of bounding boxes to detect.
+        """
         super().__init__(size)
         self.frame_skip = frame_skip
         assert sequence_path is not None
@@ -315,8 +379,10 @@ class PublicDetector(Detector):
         for mot_challenge_det in np.loadtxt(det_txt, delimiter=','):
             frame_id = int(mot_challenge_det[0]) - 1
             tlbr = to_tlbr(mot_challenge_det[2:6])
-            conf = 1.0 # mot_challenge_det[6]
-            label = 1 # mot_challenge_det[7] (person)
+            # mot_challenge_det[6]
+            conf = 1.0
+            # mot_challenge_det[7]
+            label = 1 # person
             # scale inside frame
             tlbr[:2] = tlbr[:2] / self.seq_size * self.size
             tlbr[2:] = tlbr[2:] / self.seq_size * self.size

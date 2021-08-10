@@ -209,7 +209,6 @@ class Track:
         self.age += 1
 
     def merge_continuation(self, other):
-        print("merge continuation: ", self.trk_id, other.trk_id)
         # assert self.end_frame < other.start_frame
 
         self.frame_ids.extend(other.frame_ids)

@@ -10,6 +10,16 @@ from .utils.rect import multi_crop
 
 class FeatureExtractor:
     def __init__(self, model='OSNet025', batch_size=16):
+        """A feature extractor for ReID embeddings.
+
+        Parameters
+        ----------
+        model : str, optional
+            ReID model to use.
+            Must be the name of a class that inherits `models.ReID`.
+        batch_size : int, optional
+            Batch size for inference.
+        """
         self.model = models.ReID.get_model(model)
         assert batch_size >= 1
         self.batch_size = batch_size
