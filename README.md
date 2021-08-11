@@ -51,7 +51,6 @@ FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Chal
 - Numba == 0.48
 - CuPy == 9.2
 - TensorFlow < 2.0 (for SSD support)
-- cython-bbox
 
 ### Install for x86 Ubuntu
 Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires an NVIDIA Driver version >= 450 for Ubuntu 18.04 and >= 465.19.01 for Ubuntu 20.04. Build and run the docker image:
@@ -118,11 +117,9 @@ Only required for SSD (not supported on Ubuntu 20.04)
     ```bash
     v4l2-ctl -d /dev/video0 --list-formats-ext
     ```
-  - To change detector, modify `detector_type`. This can be either `YOLO` or `SSD`
-  - To change classes, set `class_ids` under the correct detector. Default class is `1`, which corresponds to person
-  - To swap model, modify `model` under a detector. For SSD, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2`
-  - Note that with SSD, the detector splits a frame into tiles and processes them in batches for the best accuracy. Change `tiling_grid` to `[2, 2]`, `[2, 1]`, or `[1, 1]` if a smaller batch size is preferred
+  - To swap model, modify `model` under a detector. For example, you can choose from `SSDInceptionV2`, `SSDMobileNetV1`, or `SSDMobileNetV2` for SSD.
   - If more accuracy is desired and processing power is not an issue, reduce `detector_frame_skip`. Similarly, increase `detector_frame_skip` to speed up tracking at the cost of accuracy. You may also want to change `max_age` such that `max_age × detector_frame_skip ≈ 30`
+  - All parameters are documented in the API.
 
 </details>
 
@@ -153,7 +150,7 @@ FastMOT supports multi-class tracking and can be easily extended to custom class
     Note that anchors may not follow the same order in the Darknet cfg file. You need to mask out the anchors for each yolo layer using the indices in `mask` in Darknet cfg.
     Unlike YOLOv4, the anchors are usually in reverse for YOLOv3 and YOLOv3/v4-tiny
 2. Change class labels [here](https://github.com/GeekAlexis/FastMOT/blob/master/fastmot/models/label.py) to your object classes
-3. Modify cfg/mot.json: set `model` in `yolo_detector` to the added Python class and set `class_ids` you want to detect. You may want to play with `conf_thresh` based on the accuracy of your model
+3. Modify cfg/mot.json: set `model` in `yolo_detector` to the added Python class name and set `class_ids` of interest. You may want to play with `conf_thresh` based on the accuracy of your model
 ### Add custom ReID
 1. Subclass `ReID` like here: https://github.com/GeekAlexis/FastMOT/blob/32c217a7d289f15a3bb0c1820982df947c82a650/fastmot/models/reid.py#L50-L55
     ```
@@ -163,7 +160,7 @@ FastMOT supports multi-class tracking and can be easily extended to custom class
     OUTPUT_LAYOUT: feature dimension output by the model (e.g. 512)
     METRIC:        distance metric used to match features ('euclidean' or 'cosine')
     ```
-2. Modify cfg/mot.json: set `model` in `feature_extractor` to the added Python class. You may want to play with `max_feat_cost` and `max_reid_cost` - float values from `0` to `2`, based on the accuracy of your model
+2. Modify cfg/mot.json: set `model` in `feature_extractor` to the added Python class name. You may want to play with `max_assoc_cost` and `max_reid_cost` - float values from `0` to `2`, based on the accuracy of your model
 
  ## Citation
  If you find this repo useful in your project or research, please star and consider citing it:
