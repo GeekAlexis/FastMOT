@@ -3,4 +3,3 @@ scipy >= 1.5
 numba == 0.48
 tensorflow < 2.0
 cupy == 9.2
-cython-bbox

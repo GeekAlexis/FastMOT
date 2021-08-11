@@ -83,7 +83,6 @@ ARG CUPY_NVCC_GENERATE_CODE
 RUN if [[ -z ${CUPY_NVCC_GENERATE_CODE} ]]; then \
         echo "CUPY_NVCC_GENERATE_CODE not set, building CuPy for all architectures (slower)"; \
     fi && \
-    pip install --no-cache-dir cython && \
     if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
         CUPY_NUM_BUILD_JOBS=$(nproc) pip install --no-cache-dir -r <(grep -ivE "tensorflow" requirements.txt); \
     else \

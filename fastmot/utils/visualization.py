@@ -15,26 +15,25 @@ def draw_tracks(frame, tracks, show_flow=False, show_cov=False):
             draw_covariance(frame, track.tlbr, track.state[1])
 
 
-def draw_detections(frame, detections):
+def draw_detections(frame, detections, color=(255, 255, 255), show_conf=False):
     for det in detections:
-        draw_bbox(frame, det.tlbr, (255, 255, 255), 1)
+        text = f'{det.conf:.2f}' if show_conf else None
+        draw_bbox(frame, det.tlbr, color, 1, text)
 
 
-def draw_flow_bboxes(frame, tracker):
-    for tlbr in tracker.flow_bboxes.values():
-        draw_bbox(frame, tlbr, 0, 1)
+def draw_klt_bboxes(frame, klt_bboxes, color=(0, 0, 0)):
+    for tlbr in klt_bboxes:
+        draw_bbox(frame, tlbr, color, 1)
 
 
-def draw_tiles(frame, detector):
-    assert hasattr(detector, 'tiles')
-    for tile in detector.tiles:
-        tlbr = np.rint(tile * np.tile(detector.scale_factor, 2))
-        draw_bbox(frame, tlbr, 0, 1)
+def draw_tiles(frame, tiles, scale_factor, color=(0, 0, 0)):
+    for tile in tiles:
+        tlbr = np.rint(tile * np.tile(scale_factor, 2))
+        draw_bbox(frame, tlbr, color, 1)
 
 
-def draw_background_flow(frame, tracker):
-    draw_feature_match(frame, tracker.flow.prev_bg_keypoints,
-                       tracker.flow.bg_keypoints, (0, 0, 255))
+def draw_background_flow(frame, prev_bg_keypoints, bg_keypoints, color=(0, 0, 255)):
+    draw_feature_match(frame, prev_bg_keypoints, bg_keypoints, color)
 
 
 def get_color(idx, s=0.8, vmin=0.7):
@@ -84,3 +83,46 @@ def draw_covariance(frame, tlbr, covariance):
     cv2.ellipse(frame, tl, axes, angle, 0, 360, (255, 255, 255), 1, cv2.LINE_AA)
     axes, angle = ellipse(covariance[2:4, 2:4])
     cv2.ellipse(frame, br, axes, angle, 0, 360, (255, 255, 255), 1, cv2.LINE_AA)
+
+
+class Visualizer:
+    def __init__(self,
+                 draw_detections=False,
+                 draw_confidence=False,
+                 draw_covariance=False,
+                 draw_klt=False,
+                 draw_obj_flow=False,
+                 draw_bg_flow=False):
+        """Class for visualization.
+
+        Parameters
+        ----------
+        draw_detections : bool, optional
+            Enable drawing detections.
+        draw_confidence : bool, optional
+            Enable drawing detection confidence, ignored if `draw_detections` is disabled.
+        draw_covariance : bool, optional
+            Enable drawing Kalman filter position covariance.
+        draw_klt : bool, optional
+            Enable drawing KLT bounding boxes.
+        draw_obj_flow : bool, optional
+            Enable drawing object flow matches.
+        draw_bg_flow : bool, optional
+            Enable drawing background flow matches.
+        """
+        self.draw_detections = draw_detections
+        self.draw_confidence = draw_confidence
+        self.draw_covariance = draw_covariance
+        self.draw_klt = draw_klt
+        self.draw_obj_flow = draw_obj_flow
+        self.draw_bg_flow = draw_bg_flow
+
+    def render(self, frame, tracks, detections, klt_bboxes, prev_bg_keypoints, bg_keypoints):
+        """Render visualizations onto the frame."""
+        draw_tracks(frame, tracks, show_flow=self.draw_obj_flow, show_cov=self.draw_covariance)
+        if self.draw_detections:
+            draw_detections(frame, detections, show_conf=self.draw_confidence)
+        if self.draw_klt:
+            draw_klt_bboxes(frame, klt_bboxes)
+        if self.draw_bg_flow:
+            draw_background_flow(frame, prev_bg_keypoints, bg_keypoints)

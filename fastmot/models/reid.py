@@ -8,10 +8,20 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ReID:
+    __registry = {}
+
     PLUGIN_PATH = None
     ENGINE_PATH = None
     MODEL_PATH = None
-    INPUT_SHAPE = ()
+    INPUT_SHAPE = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.__registry[cls.__name__] = cls
+
+    @classmethod
+    def get_model(cls, name):
+        return cls.__registry[name]
 
     @classmethod
     def build_engine(cls, trt_logger, batch_size):
@@ -53,3 +63,12 @@ class OSNet025(ReID):
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
     METRIC = 'euclidean'
+
+
+class OSNet10(ReID):
+    """Multi-source model trained on MSMT17, DukeMTMC, and CUHK03, not provided."""
+    ENGINE_PATH = Path(__file__).parent / 'osnet_x1_0_msdc.trt'
+    MODEL_PATH = Path(__file__).parent / 'osnet_x1_0_msdc.onnx'
+    INPUT_SHAPE = (3, 256, 128)
+    OUTPUT_LAYOUT = 512
+    METRIC = 'cosine'

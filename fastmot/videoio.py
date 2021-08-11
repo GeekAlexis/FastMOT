@@ -22,32 +22,44 @@ class Protocol(Enum):
 
 
 class VideoIO:
-    """
-    Class for capturing from a video file, an image sequence, or a camera, and saving video output.
-    Encoding, decoding, and scaling can be accelerated using the GStreamer backend.
-    Parameters
-    ----------
-    size : (int, int)
-        Width and height of each frame to output.
-    config : Dict
-        Camera and buffer configuration.
-    input_uri : string
-        URI to an input video file or capturing device.
-    output_uri : string
-        URI to an output video file.
-    proc_fps : int
-        Estimated processing speed. This depends on compute and scene complexity.
-    """
+    def __init__(self, size, input_uri,
+                 output_uri=None,
+                 resolution=(1920, 1080),
+                 frame_rate=30,
+                 buffer_size=10,
+                 proc_fps=30):
+        """Class for capturing from a video/image sequence/camera, and saving video output.
+        Encoding, decoding, and scaling can be accelerated using the GStreamer backend.
 
-    def __init__(self, size, config, input_uri, output_uri=None, proc_fps=30):
+        Parameters
+        ----------
+        size : tuple
+            Width and height of each frame to output.
+        input_uri : str
+            URI to an input video file or capturing device.
+        output_uri : str, optional
+            URI to an output video file.
+        resolution : tuple, optional
+            Resolution of the input source.
+        frame_rate : int, optional
+            Frame rate of the input source.
+        buffer_size : int, optional
+            Number of frames to buffer.
+            For live sources, a larger buffer drops less frames but increases latency.
+        proc_fps : int, optional
+            Estimated processing speed that may limit the capture interval `cap_dt`.
+            This depends on hardware and processing complexity.
+        """
         self.size = size
         self.input_uri = input_uri
         self.output_uri = output_uri
+        self.resolution = resolution
+        assert frame_rate > 0
+        self.frame_rate = frame_rate
+        assert buffer_size >= 1
+        self.buffer_size = buffer_size
+        assert proc_fps > 0
         self.proc_fps = proc_fps
-
-        self.resolution = config['resolution']
-        self.frame_rate = config['frame_rate']
-        self.buffer_size = config['buffer_size']
 
         self.protocol = self._parse_uri(self.input_uri)
         self.is_live = self.protocol != Protocol.IMAGE and self.protocol != Protocol.VIDEO
@@ -90,18 +102,14 @@ class VideoIO:
         return 1 / min(self.cap_fps, self.proc_fps) if self.is_live else 1 / self.cap_fps
 
     def start_capture(self):
-        """
-        Start capturing from file or device.
-        """
+        """Start capturing from file or device."""
         if not self.source.isOpened():
             self.source.open(self._gst_cap_pipeline(), cv2.CAP_GSTREAMER)
         if not self.cap_thread.is_alive():
             self.cap_thread.start()
 
     def stop_capture(self):
-        """
-        Stop capturing from file or device.
-        """
+        """Stop capturing from file or device."""
         with self.cond:
             self.exit_event.set()
             self.cond.notify()
@@ -109,9 +117,12 @@ class VideoIO:
         self.cap_thread.join()
 
     def read(self):
-        """
-        Returns the next video frame.
-        Returns None if there are no more frames.
+        """Reads the next video frame.
+
+        Returns
+        -------
+        ndarray
+            Returns None if there are no more frames.
         """
         with self.cond:
             while len(self.frame_queue) == 0 and not self.exit_event.is_set():
@@ -125,16 +136,12 @@ class VideoIO:
         return frame
 
     def write(self, frame):
-        """
-        Writes the next video frame.
-        """
+        """Writes the next video frame."""
         assert hasattr(self, 'writer')
         self.writer.write(frame)
 
     def release(self):
-        """
-        Closes video file or capturing device.
-        """
+        """Cleans up input and output sources."""
         self.stop_capture()
         if hasattr(self, 'writer'):
             self.writer.release()
@@ -198,7 +205,10 @@ class VideoIO:
             else:
                 raise RuntimeError('GStreamer V4L2 plugin not found')
         elif self.protocol == Protocol.RTSP:
-            pipeline = 'rtspsrc location=%s latency=0 ! capsfilter caps=application/x-rtp,media=video ! decodebin ! ' % self.input_uri
+            pipeline = (
+                'rtspsrc location=%s latency=0 ! '
+                'capsfilter caps=application/x-rtp,media=video ! decodebin ! ' % self.input_uri
+            )
         elif self.protocol == Protocol.HTTP:
             pipeline = 'souphttpsrc location=%s is-live=true ! decodebin ! ' % self.input_uri
         return pipeline + cvt_pipeline
@@ -209,7 +219,7 @@ class VideoIO:
         if 'omxh264enc' in gst_elements:
             h264_encoder = 'omxh264enc preset-level=2'
         elif 'x264enc' in gst_elements:
-            h264_encoder = 'x264enc'
+            h264_encoder = 'x264enc pass=4'
         else:
             raise RuntimeError('GStreamer H.264 encoder not found')
         pipeline = (

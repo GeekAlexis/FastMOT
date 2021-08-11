@@ -7,11 +7,21 @@ LOGGER = logging.getLogger(__name__)
 
 
 class SSD:
+    __registry = {}
+
     PLUGIN_PATH = None
     ENGINE_PATH = None
     MODEL_PATH = None
-    INPUT_SHAPE = ()
+    INPUT_SHAPE = None
     OUTPUT_NAME = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.__registry[cls.__name__] = cls
+
+    @classmethod
+    def get_model(cls, name):
+        return cls.__registry[name]
 
     @classmethod
     def add_plugin(cls, graph):

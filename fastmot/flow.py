@@ -6,39 +6,91 @@ import cupyx
 import cv2
 
 from .utils.rect import to_tlbr, get_size, get_center
-from .utils.rect import mask_area, intersection, crop, transform
+from .utils.rect import intersection, crop
+from .utils.numba import mask_area, transform
 
 
 LOGGER = logging.getLogger(__name__)
 
 
 class Flow:
-    """
-    A KLT tracker based on optical flow feature point matching.
-    Camera motion is simultaneously estimated by tracking feature points
-    on the background.
-    Parameters
-    ----------
-    size : (int, int)
-        Width and height of each frame.
-    config : Dict
-        KLT hyperparameters.
-    """
+    def __init__(self, size,
+                 bg_feat_scale_factor=(0.1, 0.1),
+                 opt_flow_scale_factor=(0.5, 0.5),
+                 feat_density=0.005,
+                 feat_dist_factor=0.06,
+                 ransac_max_iter=500,
+                 ransac_conf=0.99,
+                 max_error=100,
+                 inlier_thresh=4,
+                 bg_feat_thresh=10,
+                 obj_feat_params=None,
+                 opt_flow_params=None):
+        """A KLT tracker based on optical flow feature point matching.
+        Camera motion is simultaneously estimated by tracking feature points
+        on the background.
 
-    def __init__(self, size, config):
+        Parameters
+        ----------
+        size : tuple
+            Width and height of each frame.
+        bg_feat_scale_factor : tuple, optional
+            Width and height scale factors to resize frame for background feature detection.
+        opt_flow_scale_factor : tuple, optional
+            Width and height scale factors to resize frame for optical flow.
+        feat_density : float, optional
+            Min feature point density to keep inside the bounding box.
+        feat_dist_factor : float, optional
+            Target size scale factor to estimate min feature point distance.
+        ransac_max_iter : int, optional
+            Max RANSAC iterations to filter matched outliers.
+        ransac_conf : float, optional
+            RANSAC confidence threshold to filter matched outliers.
+        max_error : int, optional
+            Max optical flow error.
+        inlier_thresh : int, optional
+            Min number of inliers for valid matching.
+        bg_feat_thresh : int, optional
+            FAST threshold for background feature detection.
+        obj_feat_params : SimpleNamespace, optional
+            GFTT parameters for object feature detection, see `cv2.goodFeaturesToTrack`.
+        opt_flow_params : SimpleNamespace, optional
+            Optical flow parameters, see `cv2.calcOpticalFlowPyrLK`.
+        """
         self.size = size
-        self.bg_feat_scale_factor = config['bg_feat_scale_factor']
-        self.opt_flow_scale_factor = config['opt_flow_scale_factor']
-        self.feature_density = config['feature_density']
-        self.feat_dist_factor = config['feat_dist_factor']
-        self.ransac_max_iter = config['ransac_max_iter']
-        self.ransac_conf = config['ransac_conf']
-        self.max_error = config['max_error']
-        self.inlier_thresh = config['inlier_thresh']
+        assert 0 < bg_feat_scale_factor[0] <= 1 and 0 < bg_feat_scale_factor[1] <= 1
+        self.bg_feat_scale_factor = bg_feat_scale_factor
+        assert 0 < opt_flow_scale_factor[0] <= 1 and 0 < opt_flow_scale_factor[1] <= 1
+        self.opt_flow_scale_factor = opt_flow_scale_factor
+        assert 0 <= feat_density <= 1
+        self.feat_density = feat_density
+        assert feat_dist_factor >= 0
+        self.feat_dist_factor = feat_dist_factor
+        assert ransac_max_iter >= 0
+        self.ransac_max_iter = ransac_max_iter
+        assert 0 <= ransac_conf <= 1
+        self.ransac_conf = ransac_conf
+        assert 0 <= max_error <= 255
+        self.max_error = max_error
+        assert inlier_thresh >= 1
+        self.inlier_thresh = inlier_thresh
+        assert bg_feat_thresh >= 0
+        self.bg_feat_thresh = bg_feat_thresh
 
-        self.bg_feat_thresh = config['bg_feat_thresh']
-        self.target_feat_params = config['target_feat_params']
-        self.opt_flow_params = config['opt_flow_params']
+        self.obj_feat_params = {
+            "maxCorners": 1000,
+            "qualityLevel": 0.06,
+            "blockSize": 3
+        }
+        self.opt_flow_params = {
+            "winSize": (5, 5),
+            "maxLevel": 5,
+            "criteria": (3, 10, 0.03)
+        }
+        if obj_feat_params is not None:
+            self.obj_feat_params.update(vars(obj_feat_params))
+        if opt_flow_params is None:
+            self.opt_flow_params.update(vars(opt_flow_params))
 
         self.bg_feat_detector = cv2.FastFeatureDetector_create(threshold=self.bg_feat_thresh)
 
@@ -67,9 +119,8 @@ class Flow:
         self.frame_rect = to_tlbr((0, 0, *self.size))
 
     def init(self, frame):
-        """
-        Preprocesses the first frame to prepare for subsequent optical
-        flow computations.
+        """Preprocesses the first frame to prepare for subsequent `predict`.
+
         Parameters
         ----------
         frame : ndarray
@@ -82,8 +133,8 @@ class Flow:
         self.prev_bg_keypoints = np.empty((0, 2), np.float32)
 
     def predict(self, frame, tracks):
-        """
-        Predicts tracklet positions in the next frame and estimates camera motion.
+        """Predicts tracklet positions in the next frame and estimates camera motion.
+
         Parameters
         ----------
         frame : ndarray
@@ -91,6 +142,7 @@ class Flow:
         tracks : List[Track]
             List of tracks to predict.
             Feature points of each track are updated in place.
+
         Returns
         -------
         Dict[int, ndarray], ndarray
@@ -113,12 +165,12 @@ class Flow:
             target_area = mask_area(target_mask)
             keypoints = self._rect_filter(track.keypoints, inside_tlbr, self.fg_mask)
             # only detect new keypoints when too few are propagated
-            if len(keypoints) < self.feature_density * target_area:
+            if len(keypoints) < self.feat_density * target_area:
                 img = crop(self.prev_frame_gray, inside_tlbr)
                 feature_dist = self._estimate_feature_dist(target_area, self.feat_dist_factor)
                 keypoints = cv2.goodFeaturesToTrack(img, mask=target_mask,
                                                     minDistance=feature_dist,
-                                                    **self.target_feat_params)
+                                                    **self.obj_feat_params)
                 if keypoints is None:
                     keypoints = np.empty((0, 2), np.float32)
                 else:
@@ -223,18 +275,17 @@ class Flow:
         tl = transform(tlbr[:2], affine_mat).ravel()
         scale = np.linalg.norm(affine_mat[:2, 0])
         scale = 1. if scale < 0.9 or scale > 1.1 else scale
-        size = scale * get_size(tlbr)
-        return to_tlbr(np.append(tl, size))
+        w, h = get_size(tlbr)
+        return to_tlbr((tl[0], tl[1], w * scale, h * scale))
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _rect_filter(pts, tlbr, fg_mask):
         if len(pts) == 0:
             return np.empty((0, 2), np.float32)
-        tl, br = tlbr[:2], tlbr[2:]
         pts2i = np.rint(pts).astype(np.int32)
         # filter out points outside the rectangle
-        ge_le = (pts2i >= tl) & (pts2i <= br)
+        ge_le = (pts2i >= tlbr[:2]) & (pts2i <= tlbr[2:])
         inside = np.where(ge_le[:, 0] & ge_le[:, 1])
         pts, pts2i = pts[inside], pts2i[inside]
         # keep points inside the foreground area
@@ -246,20 +297,20 @@ class Flow:
     @nb.njit(fastmath=True, cache=True)
     def _ellipse_filter(pts, tlbr, offset):
         offset = np.asarray(offset, np.float32)
+        center = np.array(get_center(tlbr))
+        semi_axes = np.array(get_size(tlbr)) * 0.5
         pts = pts.reshape(-1, 2)
         pts = pts + offset
-        center = get_center(tlbr)
-        semi_axes = get_size(tlbr) * 0.5
         # filter out points outside the ellipse
         keep = np.sum(((pts - center) / semi_axes)**2, axis=1) <= 1.
         return pts[keep]
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _fg_filter(prev_pts, cur_pts, fg_mask, frame_size):
+    def _fg_filter(prev_pts, cur_pts, fg_mask, frame_sz):
         if len(cur_pts) == 0:
             return prev_pts, cur_pts
-        size = np.asarray(frame_size)
+        size = np.array(frame_sz)
         pts2i = np.rint(cur_pts).astype(np.int32)
         # filter out points outside the frame
         ge_lt = (pts2i >= 0) & (pts2i < size)
@@ -274,7 +325,7 @@ class Flow:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _scale_pts(pts, scale_factor):
-        scale_factor = np.asarray(scale_factor, np.float32)
+        scale_factor = np.array(scale_factor, np.float32)
         pts = pts * scale_factor
         pts = pts.reshape(-1, 1, 2)
         return pts
@@ -282,13 +333,14 @@ class Flow:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def _unscale_pts(pts, scale_factor, mask=None):
-        scale_factor = np.asarray(scale_factor, np.float32)
+        scale_factor = np.array(scale_factor, np.float32)
+        unscale_factor = 1 / scale_factor
         pts = pts.reshape(-1, 2)
         if mask is None:
-            pts = pts / scale_factor
+            pts = pts * unscale_factor
         else:
             idx = np.where(mask)
-            pts[idx] = pts[idx] / scale_factor
+            pts[idx] = pts[idx] * unscale_factor
         return pts
 
     @staticmethod

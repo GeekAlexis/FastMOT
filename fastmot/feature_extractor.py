@@ -9,9 +9,20 @@ from .utils.rect import multi_crop
 
 
 class FeatureExtractor:
-    def __init__(self, config):
-        self.model = getattr(models, config['model'])
-        self.batch_size = config['batch_size']
+    def __init__(self, model='OSNet025', batch_size=16):
+        """A feature extractor for ReID embeddings.
+
+        Parameters
+        ----------
+        model : str, optional
+            ReID model to use.
+            Must be the name of a class that inherits `models.ReID`.
+        batch_size : int, optional
+            Batch size for inference.
+        """
+        self.model = models.ReID.get_model(model)
+        assert batch_size >= 1
+        self.batch_size = batch_size
 
         self.feature_dim = self.model.OUTPUT_LAYOUT
         self.backend = TRTInference(self.model, self.batch_size)
@@ -25,19 +36,18 @@ class FeatureExtractor:
         self.pool.close()
         self.pool.join()
 
-    def __call__(self, frame, detections):
-        self.extract_async(frame, detections)
+    def __call__(self, frame, tlbrs):
+        """Extract feature embeddings from bounding boxes synchronously."""
+        self.extract_async(frame, tlbrs)
         return self.postprocess()
 
     @property
     def metric(self):
         return self.model.METRIC
 
-    def extract_async(self, frame, detections):
-        """
-        Extract feature embeddings from detections asynchronously.
-        """
-        imgs = multi_crop(frame, detections.tlbr)
+    def extract_async(self, frame, tlbrs):
+        """Extract feature embeddings from bounding boxes asynchronously."""
+        imgs = multi_crop(frame, tlbrs)
         self.embeddings, cur_imgs = [], []
         # pipeline inference and preprocessing the next batch in parallel
         for offset in range(0, len(imgs), self.batch_size):
@@ -50,8 +60,7 @@ class FeatureExtractor:
         self.last_num_features = len(cur_imgs)
 
     def postprocess(self):
-        """
-        Synchronizes, applies postprocessing, and returns a NxM matrix of N
+        """Synchronizes, applies postprocessing, and returns a NxM matrix of N
         extracted embeddings with dimension M.
         This API should be called after `extract_async`.
         """
@@ -65,8 +74,7 @@ class FeatureExtractor:
         return embeddings
 
     def null_embeddings(self, detections):
-        """
-        Returns returns a NxM matrix of N identical embeddings with dimension M.
+        """Returns a NxM matrix of N identical embeddings with dimension M.
         This API effectively disables feature extraction.
         """
         embeddings = np.ones((len(detections), self.feature_dim))

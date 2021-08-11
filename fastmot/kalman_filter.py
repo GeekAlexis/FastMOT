@@ -11,39 +11,81 @@ class MeasType(Enum):
 
 
 class KalmanFilter:
-    """
-    A simple Kalman filter for tracking bounding boxes in image space.
-    The 8-dimensional state space
-        x1, y1, x2, y2, v_x1, v_y1, v_x2, v_y2
-    contains the bounding box top left corner, bottom right corner,
-    and their respective velocities.
-    Object motion follows a modified constant velocity model.
-    Velocity will decay over time without measurement and bounding box
-    corners are coupled together to minimize drifting.
-    Parameters
-    ----------
-    config : Dict
-        Kalman Filter parameters.
-    """
+    def __init__(self,
+                 std_factor_acc=2.25,
+                 std_offset_acc=78.5,
+                 std_factor_det=(0.08, 0.08),
+                 std_factor_klt=(0.14, 0.14),
+                 min_std_det=(4.0, 4.0),
+                 min_std_klt=(5.0, 5.0),
+                 init_pos_weight=5,
+                 init_vel_weight=12,
+                 vel_coupling=0.6,
+                 vel_half_life=2):
+        """A simple Kalman filter for tracking bounding boxes in image space.
+        The 8-dimensional state space
+            x1, y1, x2, y2, v_x1, v_y1, v_x2, v_y2
+        contains the bounding box top left corner, bottom right corner,
+        and their respective velocities.
+        Object motion follows a modified constant velocity model.
+        Velocity will decay over time without measurement and bounding box
+        corners are coupled together to minimize drifting.
 
-    def __init__(self, config):
-        self.std_factor_acc = config['std_factor_acc']
-        self.std_offset_acc = config['std_offset_acc']
-        self.std_factor_det = config['std_factor_det']
-        self.std_factor_flow = config['std_factor_flow']
-        self.min_std_det = config['min_std_det']
-        self.min_std_flow = config['min_std_flow']
-        self.init_pos_weight = config['init_pos_weight']
-        self.init_vel_weight = config['init_vel_weight']
-        self.vel_coupling = config['vel_coupling']
-        self.vel_half_life = config['vel_half_life']
+        Parameters
+        ----------
+        std_factor_acc : float, optional
+            Object size scale factor to calculate acceleration standard deviation
+            for process noise.
+        std_offset_acc : float, optional
+            Object size offset to calculate acceleration standard deviation
+            for process noise. Set larger for fast moving objects.
+        std_factor_det : tuple, optional
+            Object width and height scale factors to calculate detector measurement
+            noise standard deviation.
+        std_factor_klt : tuple, optional
+            Object wdith and height scale factors to calculate KLT measurement
+            noise standard deviation.
+        min_std_det : tuple, optional
+            Min detector measurement noise standard deviations.
+        min_std_klt : tuple, optional
+            Min KLT measurement noise standard deviations.
+        init_pos_weight : int, optional
+            Scale factor to initialize position state standard deviation.
+        init_vel_weight : int, optional
+            Scale factor to initialize velocity state standard deviation.
+            Set larger for fast moving objects.
+        vel_coupling : float, optional
+            Factor to couple bounding box corners.
+            Set 0.5 for max coupling and 1.0 to disable coupling.
+        vel_half_life : int, optional
+            Half life in seconds to decay velocity state.
+        """
+        assert std_factor_acc >= 0
+        self.std_factor_acc = std_factor_acc
+        self.std_offset_acc = std_offset_acc
+        assert std_factor_det[0] >= 0 and std_factor_det[1] >= 0
+        self.std_factor_det = std_factor_det
+        assert std_factor_klt[0] >= 0 and std_factor_klt[1] >= 0
+        self.std_factor_klt = std_factor_klt
+        assert min_std_det[0] >= 0 and min_std_det[1] >= 0
+        self.min_std_det = min_std_det
+        assert min_std_klt[0] >= 0 and min_std_klt[1] >= 0
+        self.min_std_klt = min_std_klt
+        assert init_pos_weight >= 0
+        self.init_pos_weight = init_pos_weight
+        assert init_vel_weight >= 0
+        self.init_vel_weight = init_vel_weight
+        assert 0 <= vel_coupling <= 1
+        self.vel_coupling = vel_coupling
+        assert vel_half_life > 0
+        self.vel_half_life = vel_half_life
 
         dt = 1 / 30.
         self.acc_cov, self.meas_mat, self.trans_mat = self._init_mat(dt)
 
     def reset_dt(self, dt):
-        """
-        Resets process noise, measurement and transition matrices from dt.
+        """Resets process noise, measurement and transition matrices from dt.
+
         Parameters
         ----------
         dt : float
@@ -52,15 +94,16 @@ class KalmanFilter:
         self.acc_cov, self.meas_mat, self.trans_mat = self._init_mat(dt)
 
     def create(self, det_meas):
-        """
-        Creates Kalman filter state from unassociated measurement.
+        """Creates Kalman filter state from unassociated measurement.
+
         Parameters
         ----------
         det_meas : ndarray
             Detected bounding box of [x1, x2, y1, y2].
+
         Returns
         -------
-        (ndarray, ndarray)
+        ndarray, ndarray
             Returns the mean vector (8 dimensional) and covariance matrix (8x8
             dimensional) of the new track.
         """
@@ -83,8 +126,8 @@ class KalmanFilter:
         return mean, covariance
 
     def predict(self, mean, covariance):
-        """
-        Runs Kalman filter prediction step.
+        """Runs Kalman filter prediction step.
+
         Parameters
         ----------
         mean : ndarray
@@ -93,9 +136,10 @@ class KalmanFilter:
         covariance : ndarray
             The 8x8 dimensional covariance matrix of the object state at the
             previous time step.
+
         Returns
         -------
-        (ndarray, ndarray)
+        ndarray, ndarray
             Returns the mean vector and covariance matrix of the predicted
             state.
         """
@@ -103,8 +147,8 @@ class KalmanFilter:
                              self.std_factor_acc, self.std_offset_acc)
 
     def project(self, mean, covariance, meas_type, multiplier=1.):
-        """
-        Projects state distribution to measurement space.
+        """Projects state distribution to measurement space.
+
         Parameters
         ----------
         mean : ndarray
@@ -115,15 +159,16 @@ class KalmanFilter:
             Measurement type indicating where the measurement comes from.
         multiplier : float
             Multiplier used to adjust the measurement std.
+
         Returns
         -------
-        (ndarray, ndarray)
+        ndarray, ndarray
             Returns the projected mean and covariance matrix of the given state
             estimate.
         """
         if meas_type == MeasType.FLOW:
-            std_factor = self.std_factor_flow
-            min_std = self.min_std_flow
+            std_factor = self.std_factor_klt
+            min_std = self.min_std_klt
         elif meas_type == MeasType.DETECTOR:
             std_factor = self.std_factor_det
             min_std = self.min_std_det
@@ -133,8 +178,8 @@ class KalmanFilter:
         return self._project(mean, covariance, self.meas_mat, std_factor, min_std, multiplier)
 
     def update(self, mean, covariance, measurement, meas_type, multiplier=1.):
-        """
-        Runs Kalman filter correction step.
+        """Runs Kalman filter correction step.
+
         Parameters
         ----------
         mean : ndarray
@@ -147,9 +192,10 @@ class KalmanFilter:
             Measurement type indicating where the measurement comes from.
         multiplier : float
             Multiplier used to adjust the measurement std.
+
         Returns
         -------
-        (ndarray, ndarray)
+        ndarray, ndarray
             Returns the measurement-corrected state distribution.
         """
         projected_mean, projected_cov = self.project(mean, covariance, meas_type, multiplier)
@@ -158,8 +204,8 @@ class KalmanFilter:
                             projected_cov, measurement, self.meas_mat)
 
     def motion_distance(self, mean, covariance, measurements):
-        """
-        Computes mahalanobis distance between `measurements` and state distribution.
+        """Computes mahalanobis distance between `measurements` and state distribution.
+
         Parameters
         ----------
         mean : ndarray
@@ -168,6 +214,7 @@ class KalmanFilter:
             The state's covariance matrix (8x8 dimensional).
         measurements : array_like
             An Nx4 matrix of N samples of [x1, x2, y1, y2].
+
         Returns
         -------
         ndarray
@@ -180,9 +227,10 @@ class KalmanFilter:
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
     def warp(mean, covariance, H):
-        """
-        Warps kalman filter state using a homography transformation.
+        """Warps kalman filter state using a homography transformation.
         https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1301&context=studentpub
+
+        Parameters
         ----------
         mean : ndarray
             The predicted state's mean vector (8 dimensional).
@@ -190,9 +238,10 @@ class KalmanFilter:
             The state's covariance matrix (8x8 dimensional).
         H : ndarray
             A 3x3 homography matrix.
+
         Returns
         -------
-        (ndarray, ndarray)
+        ndarray, ndarray
             Returns the mean vector and covariance matrix of the transformed
             state.
         """

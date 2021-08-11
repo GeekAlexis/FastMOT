@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
+from types import SimpleNamespace
 import argparse
 import logging
 import json
@@ -39,27 +40,27 @@ def main():
 
     # load config file
     with open(args.config) as cfg_file:
-        config = json.load(cfg_file, cls=ConfigDecoder)
+        config = json.load(cfg_file, cls=ConfigDecoder, object_hook=lambda d: SimpleNamespace(**d))
+
+    stream = fastmot.VideoIO(config.resize_to, args.input_uri, args.output_uri, **vars(config.stream_cfg))
 
     mot = None
     log = None
-    stream = fastmot.VideoIO(config['resize_to'], config['video_io'], args.input_uri, args.output_uri)
-
     if args.mot:
         draw = args.gui or args.output_uri is not None
-        mot = fastmot.MOT(config['resize_to'], config['mot'], draw=draw, verbose=args.verbose)
+        mot = fastmot.MOT(config.resize_to, **vars(config.mot_cfg), draw=draw)
         mot.reset(stream.cap_dt)
         if args.log is not None:
             Path(args.log).parent.mkdir(parents=True, exist_ok=True)
             log = open(args.log, 'w')
     if args.gui:
-        cv2.namedWindow("Video", cv2.WINDOW_AUTOSIZE)
+        cv2.namedWindow('Video', cv2.WINDOW_AUTOSIZE)
 
     logger.info('Starting video capture...')
     stream.start_capture()
     try:
         with Profiler('app') as prof:
-            while not args.gui or cv2.getWindowProperty("Video", 0) >= 0:
+            while not args.gui or cv2.getWindowProperty('Video', 0) >= 0:
                 frame = stream.read()
                 if frame is None:
                     break
@@ -67,9 +68,9 @@ def main():
                 if args.mot:
                     mot.step(frame)
                     if log is not None:
-                        for track in mot.visible_tracks:
-                            tl = track.tlbr[:2] / config['resize_to'] * stream.resolution
-                            br = track.tlbr[2:] / config['resize_to'] * stream.resolution
+                        for track in mot.visible_tracks():
+                            tl = track.tlbr[:2] / config.resize_to * stream.resolution
+                            br = track.tlbr[2:] / config.resize_to * stream.resolution
                             w, h = br - tl + 1
                             log.write(f'{mot.frame_count},{track.trk_id},{tl[0]:.6f},{tl[1]:.6f},'
                                       f'{w:.6f},{h:.6f},-1,-1,-1\n')
