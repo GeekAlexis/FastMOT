@@ -160,11 +160,6 @@ class MOT:
         LOGGER.debug(f"{'feature extract/kalman filter time:':<37}"
                      f"{Profiler.get_avg_millis('extract'):>6.3f} ms")
         LOGGER.debug(f"{'association time:':<37}{Profiler.get_avg_millis('assoc'):>6.3f} ms")
-        LOGGER.debug(f"{'match time:':<37}{Profiler.get_avg_millis('match'):>6.3f} ms")
-        LOGGER.debug(f"{'match time1:':<37}{Profiler.get_avg_millis('match1'):>6.3f} ms")
-        LOGGER.debug(f"{'match time2:':<37}{Profiler.get_avg_millis('match2'):>6.3f} ms")
-        LOGGER.debug(f"{'reid time:':<37}{Profiler.get_avg_millis('reid'):>6.3f} ms")
-        LOGGER.debug(f"{'update time:':<37}{Profiler.get_avg_millis('update'):>6.3f} ms")
 
     def _draw(self, frame, detections):
         visible_tracks = list(self.visible_tracks())

@@ -195,117 +195,103 @@ class MultiTracker:
         embeddings : ndarray
             NxM matrix of N extracted embeddings with dimension M.
         """
-        with Profiler('match'):
-            with Profiler('match1'):
-                occluded_det_mask = find_occluded(detections.tlbr, self.occlusion_thresh)
+        occluded_det_mask = find_occluded(detections.tlbr, self.occlusion_thresh)
+        confirmed_by_depth, unconfirmed = self._group_tracks_by_depth()
 
-                # det_ids = list(range(len(detections)))
-                # confirmed = [trk_id for trk_id, track in self.tracks.items() if track.confirmed]
-                # unconfirmed = [trk_id for trk_id, track in self.tracks.items() if not track.confirmed]
+        # association with motion and embeddings, tracks with small age are prioritized
+        matches1 = []
+        u_trk_ids1 = []
+        u_det_ids = list(range(len(detections)))
+        for depth, trk_ids in enumerate(confirmed_by_depth):
+            if len(u_det_ids) == 0:
+                u_trk_ids1.extend(itertools.chain.from_iterable(confirmed_by_depth[depth:]))
+                break
+            if len(trk_ids) == 0:
+                continue
+            u_detections, u_embeddings = detections[u_det_ids], embeddings[u_det_ids]
+            u_occluded_dmask = occluded_det_mask[u_det_ids]
+            cost = self._matching_cost(trk_ids, u_detections, u_embeddings, u_occluded_dmask)
+            matches, u_trk_ids, u_det_ids = linear_assignment(cost, trk_ids, u_det_ids)
+            matches1 += matches
+            u_trk_ids1 += u_trk_ids
 
-                # # association with motion and embeddings
-                # cost = self._matching_cost(confirmed, detections, embeddings, occluded_det_mask)
-                # matches1, u_trk_ids1, u_det_ids = linear_assignment(cost, confirmed, det_ids)
+        # 2nd association with IoU
+        active = [trk_id for trk_id in u_trk_ids1 if self.tracks[trk_id].active]
+        u_trk_ids1 = [trk_id for trk_id in u_trk_ids1 if not self.tracks[trk_id].active]
+        u_detections = detections[u_det_ids]
+        cost = self._iou_cost(active, u_detections)
+        matches2, u_trk_ids2, u_det_ids = linear_assignment(cost, active, u_det_ids)
 
-                confirmed_by_depth, unconfirmed = self._group_tracks_by_depth()
+        # 3rd association with unconfirmed tracks
+        u_detections = detections[u_det_ids]
+        cost = self._iou_cost(unconfirmed, u_detections)
+        matches3, u_trk_ids3, u_det_ids = linear_assignment(cost, unconfirmed, u_det_ids)
 
-                # association with motion and embeddings, tracks with small age are prioritized
-                matches1 = []
-                u_trk_ids1 = []
-                u_det_ids = list(range(len(detections)))
-                for depth, trk_ids in enumerate(confirmed_by_depth):
-                    if len(u_det_ids) == 0:
-                        u_trk_ids1.extend(itertools.chain.from_iterable(confirmed_by_depth[depth:]))
-                        break
-                    if len(trk_ids) == 0:
-                        continue
-                    u_detections, u_embeddings = detections[u_det_ids], embeddings[u_det_ids]
-                    u_occluded_dmask = occluded_det_mask[u_det_ids]
-                    cost = self._matching_cost(trk_ids, u_detections, u_embeddings, u_occluded_dmask)
-                    matches, u_trk_ids, u_det_ids = linear_assignment(cost, trk_ids, u_det_ids)
-                    matches1 += matches
-                    u_trk_ids1 += u_trk_ids
+        # reID with track history
+        hist_ids = [trk_id for trk_id, track in self.hist_tracks.items()
+                    if track.avg_feat.count >= 2]
 
-            with Profiler('match2'):
-                # 2nd association with IoU
-                active = [trk_id for trk_id in u_trk_ids1 if self.tracks[trk_id].active]
-                u_trk_ids1 = [trk_id for trk_id in u_trk_ids1 if not self.tracks[trk_id].active]
-                u_detections = detections[u_det_ids]
-                cost = self._iou_cost(active, u_detections)
-                matches2, u_trk_ids2, u_det_ids = linear_assignment(cost, active, u_det_ids)
+        u_det_ids = [det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh]
+        valid_u_det_ids = [det_id for det_id in u_det_ids if not occluded_det_mask[det_id]]
+        invalid_u_det_ids = [det_id for det_id in u_det_ids if occluded_det_mask[det_id]]
 
-                # 3rd association with unconfirmed tracks
-                u_detections = detections[u_det_ids]
-                cost = self._iou_cost(unconfirmed, u_detections)
-                matches3, u_trk_ids3, u_det_ids = linear_assignment(cost, unconfirmed, u_det_ids)
+        u_detections, u_embeddings = detections[valid_u_det_ids], embeddings[valid_u_det_ids]
+        cost = self._reid_cost(hist_ids, u_detections, u_embeddings)
 
-            with Profiler('reid'):
-                # reID with track history
-                hist_ids = [trk_id for trk_id, track in self.hist_tracks.items()
-                            if track.avg_feat.count >= 2]
+        reid_matches, _, reid_u_det_ids = greedy_match(cost, hist_ids, valid_u_det_ids,
+                                                       self.max_reid_cost)
 
-                u_det_ids = [det_id for det_id in u_det_ids if detections[det_id].conf >= self.conf_thresh]
-                valid_u_det_ids = [det_id for det_id in u_det_ids if not occluded_det_mask[det_id]]
-                invalid_u_det_ids = [det_id for det_id in u_det_ids if occluded_det_mask[det_id]]
+        matches = itertools.chain(matches1, matches2, matches3)
+        u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
 
-                u_detections, u_embeddings = detections[valid_u_det_ids], embeddings[valid_u_det_ids]
-                cost = self._reid_cost(hist_ids, u_detections, u_embeddings)
+        # rectify matches that may cause duplicate tracks
+        matches, u_trk_ids = self._rectify_matches(matches, u_trk_ids, detections)
 
-                reid_matches, _, reid_u_det_ids = greedy_match(cost, hist_ids, valid_u_det_ids,
-                                                            self.max_reid_cost)
+        # reinstate matched tracks
+        for trk_id, det_id in reid_matches:
+            track = self.hist_tracks.pop(trk_id)
+            det = detections[det_id]
+            LOGGER.info(f"{'Reidentified:':<14}{track}")
+            state = self.kf.create(det.tlbr)
+            track.reinstate(frame_id, det.tlbr, state, embeddings[det_id])
+            self.tracks[trk_id] = track
 
-        with Profiler('update'):
-            matches = itertools.chain(matches1, matches2, matches3)
-            u_trk_ids = itertools.chain(u_trk_ids1, u_trk_ids2, u_trk_ids3)
+        # update matched tracks
+        for trk_id, det_id in matches:
+            track = self.tracks[trk_id]
+            det = detections[det_id]
+            mean, cov = self.kf.update(*track.state, det.tlbr, MeasType.DETECTOR)
+            next_tlbr = as_tlbr(mean[:4])
+            is_valid = not occluded_det_mask[det_id]
+            if track.hits == self.confirm_hits - 1:
+                LOGGER.info(f"{'Found:':<14}{track}")
+            if ios(next_tlbr, self.frame_rect) < 0.5:
+                is_valid = False
+                if track.confirmed:
+                    LOGGER.info(f"{'Out:':<14}{track}")
+                self._mark_lost(trk_id)
+            track.add_detection(frame_id, next_tlbr, (mean, cov), embeddings[det_id], is_valid)
 
-            # rectify matches that may cause duplicate tracks
-            matches, u_trk_ids = self._rectify_matches(matches, u_trk_ids, detections)
+        # clean up lost tracks
+        for trk_id in u_trk_ids:
+            track = self.tracks[trk_id]
+            track.mark_missed()
+            if not track.confirmed:
+                LOGGER.debug(f"{'Unconfirmed:':<14}{track}")
+                del self.tracks[trk_id]
+                continue
+            if track.age > self.max_age:
+                LOGGER.info(f"{'Lost:':<14}{track}")
+                self._mark_lost(trk_id)
 
-            # reinstate matched tracks
-            for trk_id, det_id in reid_matches:
-                track = self.hist_tracks.pop(trk_id)
-                det = detections[det_id]
-                LOGGER.info(f"{'Reidentified:':<14}{track}")
-                state = self.kf.create(det.tlbr)
-                track.reinstate(frame_id, det.tlbr, state, embeddings[det_id])
-                self.tracks[trk_id] = track
-
-            # update matched tracks
-            for trk_id, det_id in matches:
-                track = self.tracks[trk_id]
-                det = detections[det_id]
-                mean, cov = self.kf.update(*track.state, det.tlbr, MeasType.DETECTOR)
-                next_tlbr = as_tlbr(mean[:4])
-                is_valid = not occluded_det_mask[det_id]
-                if track.hits == self.confirm_hits - 1:
-                    LOGGER.info(f"{'Found:':<14}{track}")
-                if ios(next_tlbr, self.frame_rect) < 0.5:
-                    is_valid = False
-                    if track.confirmed:
-                        LOGGER.info(f"{'Out:':<14}{track}")
-                    self._mark_lost(trk_id)
-                track.add_detection(frame_id, next_tlbr, (mean, cov), embeddings[det_id], is_valid)
-
-            # clean up lost tracks
-            for trk_id in u_trk_ids:
-                track = self.tracks[trk_id]
-                track.mark_missed()
-                if not track.confirmed:
-                    LOGGER.debug(f"{'Unconfirmed:':<14}{track}")
-                    del self.tracks[trk_id]
-                    continue
-                if track.age > self.max_age:
-                    LOGGER.info(f"{'Lost:':<14}{track}")
-                    self._mark_lost(trk_id)
-
-            u_det_ids = itertools.chain(invalid_u_det_ids, reid_u_det_ids)
-            # start new tracks
-            for det_id in u_det_ids:
-                det = detections[det_id]
-                state = self.kf.create(det.tlbr)
-                new_trk = Track(frame_id, det.tlbr, state, det.label, self.confirm_hits)
-                self.tracks[new_trk.trk_id] = new_trk
-                LOGGER.debug(f"{'Detected:':<14}{new_trk}")
+        u_det_ids = itertools.chain(invalid_u_det_ids, reid_u_det_ids)
+        # start new tracks
+        for det_id in u_det_ids:
+            det = detections[det_id]
+            state = self.kf.create(det.tlbr)
+            new_trk = Track(frame_id, det.tlbr, state, det.label, self.confirm_hits)
+            self.tracks[new_trk.trk_id] = new_trk
+            LOGGER.debug(f"{'Detected:':<14}{new_trk}")
 
     def _mark_lost(self, trk_id):
         track = self.tracks.pop(trk_id)
