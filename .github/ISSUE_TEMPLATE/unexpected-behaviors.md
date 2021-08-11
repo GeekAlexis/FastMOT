@@ -40,4 +40,5 @@ Please search the issues before creating one.
 ## Common issues
 1. GStreamer warnings are normal
 2. If you have issues with GStreamer on Desktop, disable GStreamer and build FFMPEG instead in Dockerfile
-2. TensorRT plugin and engine files have to be built on the target platform you plan to run
+2. TensorRT plugin and engine files have to be built on the target platform and cannot be copied from a different architecture
+3. Reinstalled OpenCV is usually not as optimized as the one shipped in Jetpack
