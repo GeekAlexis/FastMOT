@@ -14,7 +14,7 @@ class Metric(Enum):
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def cdist(XA, XB, metric=Metric.EUCLIDEAN, empty_mask=None):
+def cdist(XA, XB, metric, empty_mask=None, fill_val=None):
     """Numba implementation of Scipy's cdist"""
     assert XA.ndim == XB.ndim == 2
     assert XA.shape[1] == XB.shape[1]
@@ -22,17 +22,18 @@ def cdist(XA, XB, metric=Metric.EUCLIDEAN, empty_mask=None):
         assert empty_mask.ndim == 2
         assert empty_mask.shape[0] == XA.shape[0]
         assert empty_mask.shape[1] == XB.shape[0]
+    filler = 1. if fill_val is None else fill_val
 
     if metric == Metric.EUCLIDEAN:
-        return euclidean(XA, XB, empty_mask)
+        return euclidean(XA, XB, empty_mask, filler)
     elif metric == Metric.COSINE:
-        return cosine(XA, XB, empty_mask)
+        return cosine(XA, XB, empty_mask, filler)
     else:
         raise ValueError('Unsupported distance metric')
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def pdist(X, metric=Metric.EUCLIDEAN):
+def pdist(X, metric):
     """Numba implementation of Scipy's pdist"""
     assert X.ndim == 2
 
@@ -45,32 +46,34 @@ def pdist(X, metric=Metric.EUCLIDEAN):
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True, inline='always')
-def euclidean(XA, XB, empty_mask=None, symmetric=False, filler=1.):
+def euclidean(XA, XB, empty_mask=None, filler=1., symmetric=False):
     """Numba implementation of Scipy's euclidean"""
     Y = np.empty((XA.shape[0], XB.shape[0]))
     for i in nb.prange(XA.shape[0]):
         for j in range(XB.shape[0]):
-            if empty_mask is not None and empty_mask[i, j]:
+            if symmetric and i >= j:
+                Y[i, j] = INF_DIST
+            elif empty_mask is not None and empty_mask[i, j]:
                 Y[i, j] = filler
-            elif not symmetric or i < j:
+            else:
                 norm = 0.
                 for k in range(XA.shape[1]):
                     norm += (XA[i, k] - XB[j, k])**2
                 Y[i, j] = np.sqrt(norm)
-            else:
-                Y[i, j] = INF_DIST
     return Y
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True, inline='always')
-def cosine(XA, XB, empty_mask=None, symmetric=False, filler=1.):
+def cosine(XA, XB, empty_mask=None, filler=1., symmetric=False):
     """Numba implementation of Scipy's cosine"""
     Y = np.empty((XA.shape[0], XB.shape[0]))
     for i in nb.prange(XA.shape[0]):
         for j in range(XB.shape[0]):
-            if empty_mask is not None and empty_mask[i, j]:
+            if symmetric and i >= j:
+                Y[i, j] = INF_DIST
+            elif empty_mask is not None and empty_mask[i, j]:
                 Y[i, j] = filler
-            elif not symmetric or i < j:
+            else:
                 dot    = 0.
                 a_norm = 0.
                 b_norm = 0.
@@ -81,8 +84,6 @@ def cosine(XA, XB, empty_mask=None, symmetric=False, filler=1.):
                 a_norm = np.sqrt(a_norm)
                 b_norm = np.sqrt(b_norm)
                 Y[i, j] = 1. - dot / (a_norm * b_norm)
-            else:
-                Y[i, j] = INF_DIST
     return Y
 
 

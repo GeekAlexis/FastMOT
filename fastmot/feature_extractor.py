@@ -37,6 +37,7 @@ class FeatureExtractor:
         self.pool.join()
 
     def __call__(self, frame, tlbrs):
+        """Extract feature embeddings from bounding boxes synchronously."""
         self.extract_async(frame, tlbrs)
         return self.postprocess()
 

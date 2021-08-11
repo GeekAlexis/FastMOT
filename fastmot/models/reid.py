@@ -66,16 +66,9 @@ class OSNet025(ReID):
 
 
 class OSNet10(ReID):
-    ENGINE_PATH = Path(__file__).parent / 'osnet_x1_0_ms.trt'
-    MODEL_PATH = Path(__file__).parent / 'osnet_x1_0_ms.onnx'
-    INPUT_SHAPE = (3, 256, 128)
-    OUTPUT_LAYOUT = 512
-    METRIC = 'cosine'
-
-
-class OSNetAIN(ReID):
-    ENGINE_PATH = Path(__file__).parent / 'osnet_ain_ms.trt'
-    MODEL_PATH = Path(__file__).parent / 'osnet_ain_ms.onnx'
+    """Multi-source model trained on MSMT17, DukeMTMC, and CUHK03, not provided."""
+    ENGINE_PATH = Path(__file__).parent / 'osnet_x1_0_msdc.trt'
+    MODEL_PATH = Path(__file__).parent / 'osnet_x1_0_msdc.onnx'
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
     METRIC = 'cosine'

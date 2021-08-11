@@ -38,7 +38,7 @@ class KalmanFilter:
             for process noise.
         std_offset_acc : float, optional
             Object size offset to calculate acceleration standard deviation
-            for process noise.
+            for process noise. Set larger for fast moving objects.
         std_factor_det : tuple, optional
             Object width and height scale factors to calculate detector measurement
             noise standard deviation.
@@ -53,6 +53,7 @@ class KalmanFilter:
             Scale factor to initialize position state standard deviation.
         init_vel_weight : int, optional
             Scale factor to initialize velocity state standard deviation.
+            Set larger for fast moving objects.
         vel_coupling : float, optional
             Factor to couple bounding box corners.
             Set 0.5 for max coupling and 1.0 to disable coupling.

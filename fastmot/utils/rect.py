@@ -150,7 +150,7 @@ def find_occluded(tlbrs, occlusion_thresh):
                 ih = min(tlbrs[i, 3], tlbrs[j, 3]) - max(tlbrs[i, 1], tlbrs[j, 1]) + 1
                 if iw > 0 and ih > 0:
                     ios = iw * ih / area_self
-                    if ios > occlusion_thresh:
+                    if ios >= occlusion_thresh:
                         occluded_mask[i] = True
                         break
     return occluded_mask

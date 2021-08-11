@@ -37,7 +37,7 @@ class MOT:
         ----------
         size : tuple
             Width and height of each frame.
-        detector_type : {'SSD', 'YOLO', 'PUBLIC'}, optional
+        detector_type : {'SSD', 'YOLO', 'public'}, optional
             Type of detector to use.
         detector_frame_skip : int, optional
             Number of frames to skip for the detector.
@@ -101,8 +101,6 @@ class MOT:
         """
         return (track for track in self.tracker.tracks.values()
                 if track.confirmed and track.active)
-        # return (track for track in self.tracker.tracks.values()
-        #         if track.confirmed)
 
     def reset(self, cap_dt):
         """Resets multiple object tracker. Must be called before `step`.
@@ -165,7 +163,7 @@ class MOT:
         LOGGER.debug(f"{'match time:':<37}{Profiler.get_avg_millis('match'):>6.3f} ms")
         LOGGER.debug(f"{'match time1:':<37}{Profiler.get_avg_millis('match1'):>6.3f} ms")
         LOGGER.debug(f"{'match time2:':<37}{Profiler.get_avg_millis('match2'):>6.3f} ms")
-        LOGGER.debug(f"{'iou cost time:':<37}{Profiler.get_avg_millis('iou_cost'):>6.3f} ms")
+        LOGGER.debug(f"{'reid time:':<37}{Profiler.get_avg_millis('reid'):>6.3f} ms")
         LOGGER.debug(f"{'update time:':<37}{Profiler.get_avg_millis('update'):>6.3f} ms")
 
     def _draw(self, frame, detections):

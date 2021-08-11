@@ -28,6 +28,7 @@ class Detector(abc.ABC):
         self.size = size
 
     def __call__(self, frame):
+        """Detect objects synchronously."""
         self.detect_async(frame)
         return self.postprocess()
 

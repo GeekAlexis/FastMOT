@@ -41,9 +41,8 @@
         "tracker_cfg": {
             "max_age": 6,
             "age_penalty": 2,
-            "age_weight": 0.0,
             "motion_weight": 0.2,
-            "max_assoc_cost": 0.85,
+            "max_assoc_cost": 0.8,
             "max_reid_cost": 0.6,
             "iou_thresh": 0.4,
             "duplicate_thresh": 0.8,

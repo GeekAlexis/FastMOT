@@ -155,7 +155,7 @@ class Track:
         return self.__str__()
 
     def __len__(self):
-        return self.avg_feat.count
+        return self.end_frame - self.start_frame
 
     def __lt__(self, other):
         # ordered by approximate distance to the image plane, closer is greater
@@ -168,10 +168,6 @@ class Track:
     @property
     def end_frame(self):
         return self.frame_ids[-1]
-
-    @property
-    def prev_frame(self):
-        return self.frame_ids[-2]
 
     @property
     def active(self):
@@ -196,7 +192,8 @@ class Track:
         self.hits += 1
 
     def reinstate(self, frame_id, tlbr, state, embedding):
-        self.frame_ids.append(frame_id) # update start frame?
+        self.start_frame = frame_id
+        self.frame_ids.append(frame_id)
         self.bboxes.append(tlbr)
         self.state = state
         self.last_feat = embedding
@@ -209,8 +206,6 @@ class Track:
         self.age += 1
 
     def merge_continuation(self, other):
-        # assert self.end_frame < other.start_frame
-
         self.frame_ids.extend(other.frame_ids)
         self.bboxes.extend(other.bboxes)
         self.state = other.state
@@ -222,8 +217,7 @@ class Track:
 
         if other.last_feat is not None:
             self.last_feat = other.last_feat
-        if len(other) >= 2:
-            self.avg_feat.merge(other.avg_feat)
+        self.avg_feat.merge(other.avg_feat)
 
     @staticmethod
     def next_id():
