@@ -86,7 +86,7 @@ class SSDDetector(Detector):
         self.max_area = max_area
 
         class_ids = [] if class_ids is None else list(class_ids)
-        self.label_mask = np.zeros(len(models.LABEL_MAP), dtype=np.bool_)
+        self.label_mask = np.zeros(self.model.NUM_CLASSES, dtype=np.bool_)
         self.label_mask[class_ids] = True
 
         self.batch_size = int(np.prod(self.tiling_grid))
