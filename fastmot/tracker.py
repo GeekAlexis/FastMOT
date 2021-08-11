@@ -10,7 +10,6 @@ from .kalman_filter import MeasType, KalmanFilter
 from .utils.distance import Metric, cdist, iou_dist
 from .utils.matching import linear_assignment, greedy_match, fuse_motion, gate_cost
 from .utils.rect import as_tlbr, to_tlbr, ios, bbox_ious, find_occluded
-from .utils import Profiler
 
 
 LOGGER = logging.getLogger(__name__)
