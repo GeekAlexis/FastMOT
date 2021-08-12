@@ -49,13 +49,9 @@ class ReID:
         with trt.Builder(trt_logger) as builder, builder.create_network(EXPLICIT_BATCH) as network, \
             trt.OnnxParser(network, trt_logger) as parser:
 
-            builder.max_workspace_size = 1 << 30
             builder.max_batch_size = batch_size
             LOGGER.info('Building engine with batch size: %d', batch_size)
             LOGGER.info('This may take a while...')
-
-            if builder.platform_has_fast_fp16:
-                builder.fp16_mode = True
 
             # parse model file
             with open(cls.MODEL_PATH, 'rb') as model_file:
@@ -65,15 +61,33 @@ class ReID:
                         LOGGER.error(parser.get_error(err))
                     return None
 
-            # reshape input to the right batch_size
-            network.get_input(0).shape = [batch_size, *cls.INPUT_SHAPE]
-            engine = builder.build_cuda_engine(network)
+            # reshape input to the right batch size
+            net_input = network.get_input(0)
+            assert cls.INPUT_SHAPE == net_input.shape[1:]
+            net_input.shape = (batch_size, *cls.INPUT_SHAPE)
+
+            config = builder.create_builder_config()
+            config.max_workspace_size = 1 << 30
+            if builder.platform_has_fast_fp16:
+                config.set_flag(trt.BuilderFlag.FP16)
+
+            profile = builder.create_optimization_profile()
+            profile.set_shape(
+                net_input.name,                  # input tensor name
+                (batch_size, *cls.INPUT_SHAPE),  # min shape
+                (batch_size, *cls.INPUT_SHAPE),  # opt shape
+                (batch_size, *cls.INPUT_SHAPE)   # max shape
+            )
+            config.add_optimization_profile(profile)
+
+            # engine = builder.build_cuda_engine(network)
+            engine = builder.build_engine(network, config)
             if engine is None:
                 LOGGER.critical('Failed to build engine')
                 return None
 
             LOGGER.info("Completed creating engine")
-            with open(cls.ENGINE_PATH, "wb") as engine_file:
+            with open(cls.ENGINE_PATH, 'wb') as engine_file:
                 engine_file.write(engine.serialize())
             return engine
 

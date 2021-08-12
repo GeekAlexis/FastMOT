@@ -1,7 +1,6 @@
 import os
 import numpy as np
-import pycuda.driver as cuda
-import pycuda.autoinit
+import cupy as cp
 import tensorrt as trt
 import cv2
 
@@ -22,7 +21,7 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         self.calib_imgs = np.random.choice(calib_imgs, self.num_calib_imgs)
         self.counter = 0 # for keeping track of how many files we have read
 
-        self.device_input = cuda.mem_alloc(trt.volume(self.batch_shape) * trt.float32.itemsize)
+        self.input_dev = cp.empty(self.batch_shape, dtype=np.float32)
 
     def get_batch_size(self):
         return self.batch_size
@@ -53,8 +52,9 @@ class SSDEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         self.counter += self.batch_size
 
         # Copy to device, then return a list containing pointers to input device buffers.
-        cuda.memcpy_htod(self.device_input, batch_imgs.astype(np.float32))
-        return [int(self.device_input)]
+        batch_imgs = batch_imgs.astype(np.float32)
+        self.input_dev.data.copy_from_host(batch_imgs.ctypes.data, batch_imgs.nbytes)
+        return [self.input_dev.data.ptr]
 
     def read_calibration_cache(self):
         # If there is a cache, use it instead of calibrating again.

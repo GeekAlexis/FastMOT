@@ -1,5 +1,5 @@
 """
-90-class COCO labels
+91-class COCO labels
 `unlabled` (id = 0) is replaced with `head` for CrowdHuman
 These are different from the default 80-class COCO labels used by YOLO
 """

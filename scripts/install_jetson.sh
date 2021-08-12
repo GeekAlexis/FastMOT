@@ -9,14 +9,17 @@ fi
 JP_VERSION="${1//.}"
 
 # Jetpack>=4.4 (OpenCV, CUDA, TensorRT) is required
-if [[ $JP_VERSION == 45 ]]; then
+if [[ $JP_VERSION == 46 ]]; then
+    TF_VERSION=1.15.5
+    NV_VERSION=21.7
+elif [[ $JP_VERSION == 45 ]]; then
     TF_VERSION=1.15.4
     NV_VERSION=20.12
 elif [[ $JP_VERSION == 44 ]]; then
     TF_VERSION=1.15.2
     NV_VERSION=20.4
 else
-    echo "Error: unsupported Jetpack Version, 4.4+ is required"
+    echo "Error: unsupported Jetpack version"
     exit 1
 fi
 

@@ -59,6 +59,9 @@ class SSD:
         import uff
         from . import calibrator
 
+        if trt.__version__[0] >= '8':
+            raise RuntimeError('SSD requires TensorRT version < 8')
+
         # convert TensorFlow graph into UFF
         dynamic_graph = gs.DynamicGraph(str(cls.MODEL_PATH))
         dynamic_graph = cls.add_plugin(dynamic_graph)
