@@ -9,6 +9,33 @@ LOGGER = logging.getLogger(__name__)
 
 
 class YOLO:
+    """Base class for YOLO models.
+
+    Attributes
+    ----------
+    PLUGIN_PATH : Path, optional
+        Path to TensorRT plugin.
+    ENGINE_PATH : Path
+        Path to TensorRT engine.
+        If not found, TensorRT engine will be converted from ONNX weights
+        at runtime and cached for later use.
+    MODEL_PATH : Path
+        Path to ONNX weights.
+    NUM_CLASSES : int
+        Total number of trained classes.
+    LETTERBOX : bool
+        Keep aspect ratio when resizing.
+    NEW_COORDS : bool
+        new_coords Darknet parameter for each yolo layer.
+    INPUT_SHAPE : tuple
+        Input size in the format `(channel, height, width)`.
+    LAYER_FACTORS : List[int]
+        Scale factors with respect to the input size for each yolo layer.
+    SCALES : List[float]
+        scale_x_y Darknet parameter for each yolo layer.
+    ANCHORS : List[List[int]]
+        Anchors grouped by each yolo layer.
+    """
     __registry = {}
 
     PLUGIN_PATH = Path(__file__).parents[1] / 'plugins' / 'libyolo_layer.so'

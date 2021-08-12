@@ -7,6 +7,29 @@ LOGGER = logging.getLogger(__name__)
 
 
 class SSD:
+    """Base class for SSD models.
+
+    Attributes
+    ----------
+    PLUGIN_PATH : Path, optional
+        Path to TensorRT plugin.
+    ENGINE_PATH : Path
+        Path to TensorRT engine.
+        If not found, TensorRT engine will be converted from ONNX weights
+        at runtime and cached for later use.
+    MODEL_PATH : Path
+        Path to TensorFlow weights.
+    NUM_CLASSES : int
+        Total number of trained classes.s
+    INPUT_SHAPE : tuple
+        Input size in the format `(channel, height, width)`.
+    OUTPUT_NAME : str
+        Output tensor name.
+    NMS_THRESH : float
+        Nonmaximum suppression threshold.
+    TOPK : int
+        Max number of detections to output.
+    """
     __registry = {}
 
     PLUGIN_PATH = None
@@ -15,6 +38,8 @@ class SSD:
     NUM_CLASSES = None
     INPUT_SHAPE = None
     OUTPUT_NAME = None
+    NMS_THRESH = None
+    TOPK = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -212,7 +237,7 @@ class SSDMobileNetV2(SSD):
             confidenceThreshold=1e-8,
             nmsThreshold=cls.NMS_THRESH,
             topK=100,
-            keepTopK=100, 
+            keepTopK=100,
             numClasses=91,
             inputOrder=[1, 0, 2],
             confSigmoid=1,

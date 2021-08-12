@@ -28,7 +28,7 @@ class VideoIO:
                  frame_rate=30,
                  buffer_size=10,
                  proc_fps=30):
-        """Class for capturing from a video/image sequence/camera, and saving video output.
+        """Class for video capturing and output saving.
         Encoding, decoding, and scaling can be accelerated using the GStreamer backend.
 
         Parameters
@@ -36,13 +36,19 @@ class VideoIO:
         size : tuple
             Width and height of each frame to output.
         input_uri : str
-            URI to an input video file or capturing device.
-        output_uri : str, optional
+            URI to input stream. It could be image sequence (e.g. '%06d.jpg'), video file (e.g. 'video.mp4'),
+            MIPI CSI camera (e.g. 'csi://0'), USB/V4L2 camera (e.g. '/dev/video0'),
+            RTSP stream (e.g. 'rtsp://<user>:<password>@<ip>:<port>/<path>'),
+            or HTTP live stream (e.g. 'http://<user>:<password>@<ip>:<port>/<path>')
+        output_uri : str, optionals
             URI to an output video file.
         resolution : tuple, optional
-            Resolution of the input source.
+            Original resolution of the input source.
+            Useful to set a certain capture mode of a USB/CSI camera.
         frame_rate : int, optional
             Frame rate of the input source.
+            Required if frame rate cannot be deduced, e.g. image sequence and/or RTSP.
+            Useful to set a certain capture mode of a USB/CSI camera.
         buffer_size : int, optional
             Number of frames to buffer.
             For live sources, a larger buffer drops less frames but increases latency.

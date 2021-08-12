@@ -15,15 +15,15 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-i', '--input_uri', metavar="URI", required=True, help=
                         'URI to input stream\n'
-                        '1) image sequence (e.g. img_%%06d.jpg)\n'
+                        '1) image sequence (e.g. %%06d.jpg)\n'
                         '2) video file (e.g. video.mp4)\n'
                         '3) MIPI CSI camera (e.g. csi://0)\n'
-                        '4) USB/V4L2 camera (e.g. /dev/video0)\n'
-                        '5) RTSP stream (rtsp://<user>:<password>@<ip>:<port>/<path>)\n'
-                        '6) HTTP stream (http://<user>:<password>@<ip>:<port>/<path>)\n')
+                        '4) USB camera (e.g. /dev/video0)\n'
+                        '5) RTSP stream (e.g. rtsp://<user>:<password>@<ip>:<port>/<path>)\n'
+                        '6) HTTP stream (e.g. http://<user>:<password>@<ip>:<port>/<path>)\n')
     parser.add_argument('-c', '--config', metavar="FILE",
                         default=Path(__file__).parent / 'cfg' / 'mot.json',
-                        help='path to configuration JSON file')
+                        help='path to JSON configuration file')
     parser.add_argument('-o', '--output_uri', metavar="URI",
                         help='URI to output video (e.g. output.mp4)')
     parser.add_argument('-l', '--log', metavar="FILE",

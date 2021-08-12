@@ -8,12 +8,33 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ReID:
+    """Base class for ReID models.
+
+    Attributes
+    ----------
+    PLUGIN_PATH : Path, optional
+        Path to TensorRT plugin.
+    ENGINE_PATH : Path
+        Path to TensorRT engine.
+        If not found, TensorRT engine will be converted from ONNX weights
+        at runtime and cached for later use.
+    MODEL_PATH : Path
+        Path to ONNX weights.
+    INPUT_SHAPE : tuple
+        Input size in the format `(channel, height, width)`.
+    OUTPUT_LAYOUT : int
+        Feature dimension output by the model.
+    METRIC : {'euclidean', 'cosine'}
+        Distance metric used to match features.
+    """
     __registry = {}
 
     PLUGIN_PATH = None
     ENGINE_PATH = None
     MODEL_PATH = None
     INPUT_SHAPE = None
+    OUTPUT_LAYOUT = None
+    METRIC = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
