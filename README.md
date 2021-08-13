@@ -17,9 +17,9 @@ FastMOT is a custom multiple object tracker that implements:
   - KLT tracker
   - Camera motion compensation
 
-Deep SORT is a two-stage tracker that runs detection and feature extraction sequentially, which often becomes a bottleneck for real-time applications. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson devices. Motion compensation improves tracking for non-stationary camera where Deep SORT/FairMOT usually fail.
+Two-stage trackers like Deep SORT runs detection and feature extraction sequentially, which often becomes a bottleneck. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson. Motion compensation improves tracking for scenes with moving camera, where Deep SORT and FairMOT fail.
 
-To achieve faster processing, FastMOT only runs the detector and feature extractor every N frames, while KLT fills in the gaps efficiently. FastMOT also re-identifies objects that moved out of frame and will keep the same IDs.
+To achieve faster processing, FastMOT only runs the detector and feature extractor every N frames, while KLT fills in the gaps efficiently. FastMOT also re-identifies objects that moved out of frame to keep the same IDs.
 
 YOLOv4 was trained on CrowdHuman (82% mAP@0.5) and SSD's are pretrained COCO models from TensorFlow. Both detection and feature extraction use the **TensorRT** backend and perform asynchronous inference. In addition, most algorithms, including KLT, Kalman filter, and data association, are optimized using Numba.
 
@@ -92,10 +92,14 @@ Only required for SSD (not supported on Ubuntu 20.04)
 - MIPI CSI camera: `--input_uri csi://0`
 - RTSP stream: `--input_uri rtsp://<user>:<password>@<ip>:<port>/<path>`
 - HTTP stream: `--input_uri http://<user>:<password>@<ip>:<port>/<path>`
-- Use `--gui` to visualize, `--output_uri` to save output, and `--txt` for MOT compliant results
-- Use `-h` to show help message for all options
-- Note that the first run will be slow due to Numba compilation
-- To disable the GStreamer backend on x86, set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11)
+
+Use `--gui` to visualize, `--output_uri` to save output, and `--txt` for MOT compliant results.
+
+Show help message for all options:
+```bash
+  python3 app.py -h
+```
+Note that the first run will be slow due to Numba compilation. To use the FFMPEG backend on x86, set `WITH_GSTREAMER = False` [here](https://github.com/GeekAlexis/FastMOT/blob/3a4cad87743c226cf603a70b3f15961b9baf6873/fastmot/videoio.py#L11)
 <details>
 <summary> More options can be configured in cfg/mot.json </summary>
 
@@ -111,7 +115,9 @@ Only required for SSD (not supported on Ubuntu 20.04)
 </details>
 
  ## Track custom classes
-FastMOT can be easily extended to a custom class (e.g. vehicle). You need to train both YOLO and a ReID model on your object class. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format. The TensorRT plugin adapted from [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/) is only compatible with Darknet. FastMOT also supports multi-class tracking. It is recommended to train a ReID network for each class. You should also implement a new MOT class that extracts features separately and concatenates them before feeding into the tracker.
+FastMOT can be easily extended to a custom class (e.g. vehicle). You need to train both YOLO and a ReID model on your object class. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format. The TensorRT plugin adapted from [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/) is only compatible with Darknet.
+
+FastMOT also supports multi-class tracking. It is recommended to train a ReID network for each class and implement a new Python class that extracts features separately and concatenates them before feeding into the tracker.
 ### Convert YOLO to ONNX
 1. Install ONNX version 1.4.1 (not the latest version)
     ```bash
