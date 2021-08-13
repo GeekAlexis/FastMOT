@@ -36,7 +36,7 @@ class VideoIO:
         size : tuple
             Width and height of each frame to output.
         input_uri : str
-            URI to input stream. It could be image sequence (e.g. '%06d.jpg'), video file (e.g. 'video.mp4'),
+            URI to input stream. It could be image sequence (e.g. '%06d.jpg'), video file (e.g. 'file.mp4'),
             MIPI CSI camera (e.g. 'csi://0'), USB/V4L2 camera (e.g. '/dev/video0'),
             RTSP stream (e.g. 'rtsp://<user>:<password>@<ip>:<port>/<path>'),
             or HTTP live stream (e.g. 'http://<user>:<password>@<ip>:<port>/<path>')

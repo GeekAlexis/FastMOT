@@ -60,7 +60,7 @@ class SSDDetector(Detector):
             SSD model to use.
             Must be the name of a class that inherits `models.SSD`.
         class_ids : tuple, optional
-            Class IDs to detect.
+            Class IDs to detect. Note class ID starts at zero.
         tile_overlap : float, optional
             Ratio of overlap to width and height of each tile.
         tiling_grid : tuple, optional
@@ -228,7 +228,7 @@ class YOLODetector(Detector):
             YOLO model to use.
             Must be the name of a class that inherits `models.YOLO`.
         class_ids : tuple, optional
-            Class IDs to detect.
+            Class IDs to detect. Note class ID starts at zero.
         conf_thresh : float, optional
             Detection confidence threshold.
         nms_thresh : float, optional
@@ -264,6 +264,7 @@ class YOLODetector(Detector):
         """Synchronizes, applies postprocessing, and returns a record array
         of detections (DET_DTYPE).
         This function should be called after `detect_async`.
+        Detections with the same labels have consecutive indices.
         """
         det_out = self.backend.synchronize()
         det_out = np.concatenate(det_out).reshape(-1, 7)

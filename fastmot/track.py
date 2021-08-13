@@ -2,7 +2,7 @@ from collections import deque
 import numpy as np
 import numba as nb
 
-from .models import LABEL_MAP
+from .models import get_label_name
 from .utils.distance import cdist, cosine
 from .utils.numba import apply_along_axis, normalize_vec
 from .utils.rect import get_center
@@ -149,7 +149,7 @@ class Track:
 
     def __str__(self):
         x, y = get_center(self.tlbr)
-        return f'{LABEL_MAP[self.label]} {self.trk_id:>3} at ({int(x):>4}, {int(y):>3})'
+        return f'{get_label_name(self.label)} {self.trk_id:>3} at ({int(x):>4}, {int(y):>3})'
 
     def __repr__(self):
         return self.__str__()

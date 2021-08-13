@@ -81,6 +81,7 @@ def enclosing(tlbr1, tlbr2):
 
 @nb.njit(cache=True, inline='always')
 def crop(img, tlbr):
+    assert tlbr is not None
     xmin = max(int(tlbr[0]), 0)
     ymin = max(int(tlbr[1]), 0)
     xmax = max(int(tlbr[2]), 0)

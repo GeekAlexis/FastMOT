@@ -99,7 +99,7 @@ class SSD:
 class SSDMobileNetV1(SSD):
     ENGINE_PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco.trt'
     MODEL_PATH = Path(__file__).parent / 'ssd_mobilenet_v1_coco.pb'
-    NUM_CLASSES = 90
+    NUM_CLASSES = 91
     INPUT_SHAPE = (3, 300, 300)
     OUTPUT_NAME = 'NMS'
     NMS_THRESH = 0.5
@@ -197,7 +197,7 @@ class SSDMobileNetV1(SSD):
 class SSDMobileNetV2(SSD):
     ENGINE_PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco.trt'
     MODEL_PATH = Path(__file__).parent / 'ssd_mobilenet_v2_coco.pb'
-    NUM_CLASSES = 90
+    NUM_CLASSES = 91
     INPUT_SHAPE = (3, 300, 300)
     OUTPUT_NAME = 'NMS'
     NMS_THRESH = 0.5
@@ -294,7 +294,7 @@ class SSDMobileNetV2(SSD):
 class SSDInceptionV2(SSD):
     ENGINE_PATH = Path(__file__).parent / 'ssd_inception_v2_coco.trt'
     MODEL_PATH = Path(__file__).parent / 'ssd_inception_v2_coco.pb'
-    NUM_CLASSES = 90
+    NUM_CLASSES = 91
     INPUT_SHAPE = (3, 300, 300)
     OUTPUT_NAME = 'NMS'
     NMS_THRESH = 0.5
