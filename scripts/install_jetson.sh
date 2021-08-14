@@ -2,24 +2,20 @@
 
 set -e
 
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <Jetpack Version>"
-    exit 1
-fi
-JP_VERSION="${1//.}"
+L4T_VERSION=$(dpkg-query --showformat='${Version}' --show nvidia-l4t-core | cut -f1 -d'-')
 
 # Jetpack>=4.4 (OpenCV, CUDA, TensorRT) is required
-if [[ $JP_VERSION == 46 ]]; then
+if dpkg --compare-versions $L4T_VERSION ge 32.6; then
     TF_VERSION=1.15.5
     NV_VERSION=21.7
-elif [[ $JP_VERSION == 45 ]]; then
+elif dpkg --compare-versions $L4T_VERSION ge 32.5; then
     TF_VERSION=1.15.4
     NV_VERSION=20.12
-elif [[ $JP_VERSION == 44 ]]; then
+elif dpkg --compare-versions $L4T_VERSION ge 32.4; then
     TF_VERSION=1.15.2
     NV_VERSION=20.4
 else
-    echo "Error: unsupported Jetpack version"
+    echo "Error: unsupported L4T version $L4T_VERSION"
     exit 1
 fi
 

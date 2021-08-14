@@ -79,11 +79,11 @@ COPY requirements.txt .
 # Specify your GPU compute with --build-arg for CuPy (e.g. "arch=compute_75,code=sm_75")
 ARG CUPY_NVCC_GENERATE_CODE
 
-# TensorFlow is not supported in 21.05
+# TensorFlow < 2 is not supported in ubuntu 20.04
 RUN if [[ -z ${CUPY_NVCC_GENERATE_CODE} ]]; then \
         echo "CUPY_NVCC_GENERATE_CODE not set, building CuPy for all architectures (slower)"; \
     fi && \
-    if [[ ${TRT_IMAGE_VERSION} == 21.05 ]]; then \
+    if dpkg --compare-versions ${TRT_IMAGE_VERSION} ge 20.12; then \
         CUPY_NUM_BUILD_JOBS=$(nproc) pip install --no-cache-dir -r <(grep -ivE "tensorflow" requirements.txt); \
     else \
         dpkg -i ${SCRIPT_DIR}/*-tf_*.deb && \
