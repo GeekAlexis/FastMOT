@@ -15,10 +15,10 @@ class SSD:
         Path to TensorRT plugin.
     ENGINE_PATH : Path
         Path to TensorRT engine.
-        If not found, TensorRT engine will be converted from ONNX weights
+        If not found, TensorRT engine will be converted from TensorFlow model
         at runtime and cached for later use.
     MODEL_PATH : Path
-        Path to TensorFlow weights.
+        Path to TensorFlow model.
     NUM_CLASSES : int
         Total number of trained classes.s
     INPUT_SHAPE : tuple

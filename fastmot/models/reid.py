@@ -16,10 +16,10 @@ class ReID:
         Path to TensorRT plugin.
     ENGINE_PATH : Path
         Path to TensorRT engine.
-        If not found, TensorRT engine will be converted from ONNX weights
+        If not found, TensorRT engine will be converted from the ONNX model
         at runtime and cached for later use.
     MODEL_PATH : Path
-        Path to ONNX weights.
+        Path to ONNX model.
     INPUT_SHAPE : tuple
         Input size in the format `(channel, height, width)`.
     OUTPUT_LAYOUT : int

@@ -56,6 +56,7 @@ FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Chal
 Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires an NVIDIA Driver version >= 450 for Ubuntu 18.04 and >= 465.19.01 for Ubuntu 20.04. Build and run the docker image:
   ```bash
   # Add --build-arg TRT_IMAGE_VERSION=21.05 for Ubuntu 20.04
+  # Add --build-arg CUPY_NVCC_GENERATE_CODE=... to speed up build for your GPU, e.g. "arch=compute_75,code=sm_75"
   docker build -t fastmot:latest .
   
   # Run xhost local:root first if you cannot visualize inside the container
@@ -64,10 +65,10 @@ Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-nativ
 ### Install for Jetson Nano/TX2/Xavier NX/Xavier
 Make sure to have [JetPack >= 4.4](https://developer.nvidia.com/embedded/jetpack) installed and run the script:
   ```bash
-  ./scripts/install_jetson.sh <Jetpack Version>
+  ./scripts/install_jetson.sh
   ```
 ### Download models
-This includes both pretrained OSNet, SSD, and my custom YOLOv4 ONNX model
+This includes pretrained OSNet, SSD, and my YOLOv4 ONNX model
   ```bash
   ./scripts/download_models.sh
   ```
@@ -84,16 +85,16 @@ Only required for SSD (not supported on Ubuntu 20.04)
 
 ## Usage
 ```bash
-  python3 app.py --input_uri ... --mot
+  python3 app.py --input-uri ... --mot
 ```
-- Image sequence: `--input_uri %06d.jpg`
-- Video file: `--input_uri file.mp4`
-- USB webcam: `--input_uri /dev/video0`
-- MIPI CSI camera: `--input_uri csi://0`
-- RTSP stream: `--input_uri rtsp://<user>:<password>@<ip>:<port>/<path>`
-- HTTP stream: `--input_uri http://<user>:<password>@<ip>:<port>/<path>`
+- Image sequence: `--input-uri %06d.jpg`
+- Video file: `--input-uri file.mp4`
+- USB webcam: `--input-uri /dev/video0`
+- MIPI CSI camera: `--input-uri csi://0`
+- RTSP stream: `--input-uri rtsp://<user>:<password>@<ip>:<port>/<path>`
+- HTTP stream: `--input-uri http://<user>:<password>@<ip>:<port>/<path>`
 
-Use `--gui` to visualize, `--output_uri` to save output, and `--txt` for MOT compliant results.
+Use `--show` to visualize, `--output-uri` to save output, and `--txt` for MOT compliant results.
 
 Show help message for all options:
 ```bash
@@ -115,7 +116,7 @@ Note that the first run will be slow due to Numba compilation. To use the FFMPEG
 </details>
 
  ## Track custom classes
-FastMOT can be easily extended to a custom class (e.g. vehicle). You need to train both YOLO and a ReID model on your object class. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert the model to ONNX format. The TensorRT plugin adapted from [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/) is only compatible with Darknet.
+FastMOT can be easily extended to a custom class (e.g. vehicle). You need to train both YOLO and a ReID network on your object class. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert weights to ONNX format. The TensorRT plugin adapted from [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/) is only compatible with Darknet.
 
 FastMOT also supports multi-class tracking. It is recommended to train a ReID network for each class and implement a new Python class that extracts features separately and concatenates them before feeding into the tracker.
 ### Convert YOLO to ONNX
@@ -132,10 +133,10 @@ FastMOT also supports multi-class tracking. It is recommended to train a ReID ne
     ```
     ENGINE_PATH : Path
         Path to TensorRT engine.
-        If not found, TensorRT engine will be converted from ONNX weights
+        If not found, TensorRT engine will be converted from the ONNX model
         at runtime and cached for later use.
     MODEL_PATH : Path
-        Path to ONNX weights.
+        Path to ONNX model.
     NUM_CLASSES : int
         Total number of trained classes.
     LETTERBOX : bool
@@ -160,10 +161,10 @@ FastMOT also supports multi-class tracking. It is recommended to train a ReID ne
     ```
     ENGINE_PATH : Path
         Path to TensorRT engine.
-        If not found, TensorRT engine will be converted from ONNX weights
+        If not found, TensorRT engine will be converted from the ONNX model
         at runtime and cached for later use.
     MODEL_PATH : Path
-        Path to ONNX weights.
+        Path to ONNX model.
     INPUT_SHAPE : tuple
         Input size in the format `(channel, height, width)`.
     OUTPUT_LAYOUT : int

@@ -17,10 +17,10 @@ class YOLO:
         Path to TensorRT plugin.
     ENGINE_PATH : Path
         Path to TensorRT engine.
-        If not found, TensorRT engine will be converted from ONNX weights
+        If not found, TensorRT engine will be converted from the ONNX model
         at runtime and cached for later use.
     MODEL_PATH : Path
-        Path to ONNX weights.
+        Path to ONNX model.
     NUM_CLASSES : int
         Total number of trained classes.
     LETTERBOX : bool
