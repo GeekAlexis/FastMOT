@@ -10,10 +10,10 @@
     "mot_cfg": {
         "detector_type": "YOLO",
         "detector_frame_skip": 5,
+        "class_ids": [1],
 
         "ssd_detector_cfg": {
             "model": "SSDInceptionV2",
-            "class_ids": [1],
             "tile_overlap": 0.25,
             "tiling_grid": [4, 2],
             "conf_thresh": 0.5,
@@ -22,7 +22,6 @@
         },
         "yolo_detector_cfg": {
             "model": "YOLOv4",
-            "class_ids": [1],
             "conf_thresh": 0.25,
             "nms_thresh": 0.5,
             "max_area": 800000,
@@ -33,10 +32,13 @@
             "conf_thresh": 0.5,
             "max_area": 800000
         },
-        "feature_extractor_cfg": {
-            "model": "OSNet025",
-            "batch_size": 16
-        },
+
+        "feature_extractor_cfgs": [
+            {
+                "model": "OSNet025",
+                "batch_size": 16
+            }
+        ],
 
         "tracker_cfg": {
             "max_age": 6,
