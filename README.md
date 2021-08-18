@@ -173,7 +173,7 @@ FastMOT also supports multi-class tracking. It is recommended to train a ReID ne
     METRIC : {'euclidean', 'cosine'}
         Distance metric used to match features.
     ```
-2. Modify cfg/mot.json: set `model` in `feature_extractor_cfgs` to the added Python class name. For more than one class, add more feature extractors to the list in `feature_extractor_cfgs`. You may want to play with `max_assoc_cost` and `max_reid_cost` based on model performance
+2. Modify cfg/mot.json: set `model` in `feature_extractor_cfgs` to the added Python class name. For more than one class, add more feature extractor configurations to the list `feature_extractor_cfgs`. You may want to play with `max_assoc_cost` and `max_reid_cost` based on model performance
 
  ## Citation
  If you find this repo useful in your project or research, please star and consider citing it:
