@@ -133,35 +133,33 @@ class MOT:
         if self.frame_count == 0:
             detections = self.detector(frame)
             self.tracker.init(frame, detections)
-        else:
-            if self.frame_count % self.detector_frame_skip == 0:
-                with Profiler('preproc'):
-                    self.detector.detect_async(frame)
+        elif self.frame_count % self.detector_frame_skip == 0:
+            with Profiler('preproc'):
+                self.detector.detect_async(frame)
 
-                with Profiler('detect'):
-                    with Profiler('track'):
-                        self.tracker.compute_flow(frame)
-                    detections = self.detector.postprocess()
-
-                with Profiler('extract'):
-                    cls_bboxes = np.split(detections.tlbr, find_split_indices(detections.label))
-                    for extractor, bboxes in zip(self.extractors, cls_bboxes):
-                        extractor.extract_async(frame, bboxes)
-
-                    with Profiler('track', aggregate=True):
-                        self.tracker.apply_kalman()
-
-                    embeddings = []
-                    for extractor in self.extractors:
-                        embeddings.append(extractor.postprocess())
-                    embeddings = (np.concatenate(embeddings)
-                                  if len(embeddings) > 1 else embeddings[0])
-
-                with Profiler('assoc'):
-                    self.tracker.update(self.frame_count, detections, embeddings)
-            else:
+            with Profiler('detect'):
                 with Profiler('track'):
-                    self.tracker.track(frame)
+                    self.tracker.compute_flow(frame)
+                detections = self.detector.postprocess()
+
+            with Profiler('extract'):
+                cls_bboxes = np.split(detections.tlbr, find_split_indices(detections.label))
+                for extractor, bboxes in zip(self.extractors, cls_bboxes):
+                    extractor.extract_async(frame, bboxes)
+
+                with Profiler('track', aggregate=True):
+                    self.tracker.apply_kalman()
+
+                embeddings = []
+                for extractor in self.extractors:
+                    embeddings.append(extractor.postprocess())
+                embeddings = np.concatenate(embeddings) if len(embeddings) > 1 else embeddings[0]
+
+            with Profiler('assoc'):
+                self.tracker.update(self.frame_count, detections, embeddings)
+        else:
+            with Profiler('track'):
+                self.tracker.track(frame)
 
         if self.draw:
             self._draw(frame, detections)
