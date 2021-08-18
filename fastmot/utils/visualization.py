@@ -17,7 +17,7 @@ def draw_tracks(frame, tracks, show_flow=False, show_cov=False):
 
 def draw_detections(frame, detections, color=(255, 255, 255), show_conf=False):
     for det in detections:
-        text = f'{det.conf:.2f}' if show_conf else None
+        text = f'{det.label}: {det.conf:.2f}' if show_conf else None
         draw_bbox(frame, det.tlbr, color, 1, text)
 
 

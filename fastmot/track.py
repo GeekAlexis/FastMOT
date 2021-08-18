@@ -149,7 +149,7 @@ class Track:
 
     def __str__(self):
         x, y = get_center(self.tlbr)
-        return f'{get_label_name(self.label)} {self.trk_id:>3} at ({int(x):>4}, {int(y):>3})'
+        return f'{get_label_name(self.label):<10} {self.trk_id:>3} at ({int(x):>4}, {int(y):>4})'
 
     def __repr__(self):
         return self.__str__()

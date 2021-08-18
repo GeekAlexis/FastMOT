@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from enum import Enum
 import logging
+import numpy as np
 import cv2
 
 from .detector import SSDDetector, YOLODetector, PublicDetector
@@ -8,6 +9,7 @@ from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import Profiler
 from .utils.visualization import Visualizer
+from .utils.numba import find_split_indices
 
 
 LOGGER = logging.getLogger(__name__)
@@ -23,10 +25,11 @@ class MOT:
     def __init__(self, size,
                  detector_type='YOLO',
                  detector_frame_skip=5,
+                 class_ids=(1,),
                  ssd_detector_cfg=None,
                  yolo_detector_cfg=None,
                  public_detector_cfg=None,
-                 feature_extractor_cfg=None,
+                 feature_extractor_cfgs=None,
                  tracker_cfg=None,
                  visualizer_cfg=None,
                  draw=False):
@@ -41,25 +44,29 @@ class MOT:
             Type of detector to use.
         detector_frame_skip : int, optional
             Number of frames to skip for the detector.
+        class_ids : sequence, optional
+            Class IDs to track. Note class ID starts at zero.
         ssd_detector_cfg : SimpleNamespace, optional
             SSD detector configuration.
         yolo_detector_cfg : SimpleNamespace, optional
             YOLO detector configuration.
         public_detector_cfg : SimpleNamespace, optional
             Public detector configuration.
-        feature_extractor_cfg : SimpleNamespace, optional
-            Feature extractor configuration.
+        feature_extractor_cfgs : List[SimpleNamespace], optional
+            Feature extractor configurations for all classes.
+            Each configuration corresponds to the class at the same index in sorted `class_ids`.
         tracker_cfg : SimpleNamespace, optional
             Tracker configuration.
         visualizer_cfg : SimpleNamespace, optional
             Visualization configuration.
         draw : bool, optional
-            Enable visualization.
+            Draw visualizations.
         """
         self.size = size
         self.detector_type = DetectorType[detector_type.upper()]
         assert detector_frame_skip >= 1
         self.detector_frame_skip = detector_frame_skip
+        self.class_ids = tuple(np.unique(class_ids))
         self.draw = draw
 
         if ssd_detector_cfg is None:
@@ -68,26 +75,27 @@ class MOT:
             yolo_detector_cfg = SimpleNamespace()
         if public_detector_cfg is None:
             public_detector_cfg = SimpleNamespace()
-        if feature_extractor_cfg is None:
-            feature_extractor_cfg = SimpleNamespace()
+        if feature_extractor_cfgs is None:
+            feature_extractor_cfgs = (SimpleNamespace(),)
         if tracker_cfg is None:
             tracker_cfg = SimpleNamespace()
         if visualizer_cfg is None:
             visualizer_cfg = SimpleNamespace()
+        if len(feature_extractor_cfgs) != len(class_ids):
+            raise ValueError('Number of feature extractors must match length of class IDs')
 
         LOGGER.info('Loading detector model...')
         if self.detector_type == DetectorType.SSD:
-            self.detector = SSDDetector(self.size, **vars(ssd_detector_cfg))
+            self.detector = SSDDetector(self.size, self.class_ids, **vars(ssd_detector_cfg))
         elif self.detector_type == DetectorType.YOLO:
-            self.detector = YOLODetector(self.size, **vars(yolo_detector_cfg))
+            self.detector = YOLODetector(self.size, self.class_ids, **vars(yolo_detector_cfg))
         elif self.detector_type == DetectorType.PUBLIC:
-            self.detector = PublicDetector(self.size, self.detector_frame_skip,
+            self.detector = PublicDetector(self.size, self.class_ids, self.detector_frame_skip,
                                            **vars(public_detector_cfg))
 
-        LOGGER.info('Loading feature extractor model...')
-        self.extractor = FeatureExtractor(**vars(feature_extractor_cfg))
-        self.tracker = MultiTracker(self.size, self.extractor.metric, **vars(tracker_cfg))
-
+        LOGGER.info('Loading feature extractor models...')
+        self.extractors = [FeatureExtractor(**vars(cfg)) for cfg in feature_extractor_cfgs]
+        self.tracker = MultiTracker(self.size, self.extractors[0].metric, **vars(tracker_cfg))
         self.visualizer = Visualizer(**vars(visualizer_cfg))
         self.frame_count = 0
 
@@ -136,10 +144,18 @@ class MOT:
                     detections = self.detector.postprocess()
 
                 with Profiler('extract'):
-                    self.extractor.extract_async(frame, detections.tlbr)
+                    cls_bboxes = np.split(detections.tlbr, find_split_indices(detections.label))
+                    for extractor, bboxes in zip(self.extractors, cls_bboxes):
+                        extractor.extract_async(frame, bboxes)
+
                     with Profiler('track', aggregate=True):
                         self.tracker.apply_kalman()
-                    embeddings = self.extractor.postprocess()
+
+                    embeddings = []
+                    for extractor in self.extractors:
+                        embeddings.append(extractor.postprocess())
+                    embeddings = (np.concatenate(embeddings)
+                                  if len(embeddings) > 1 else embeddings[0])
 
                 with Profiler('assoc'):
                     self.tracker.update(self.frame_count, detections, embeddings)

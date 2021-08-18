@@ -33,11 +33,22 @@ def normalize_vec(vectors):
 def mask_area(mask):
     """Utility to calculate the area of a mask."""
     count = 0
-    m_raveled = mask.ravel()
-    for i in range(mask.size):
-        if m_raveled[i] != 0:
+    for val in mask.ravel():
+        if val != 0:
             count += 1
     return count
+
+
+@nb.njit(fastmath=True, cache=True)
+def find_split_indices(arr):
+    """Utility to find indices of unique elements in sorted array."""
+    prev = arr[0]
+    split_indices = []
+    for i, val in enumerate(arr[1:], 1):
+        if val != prev:
+            split_indices.append(i)
+            prev = val
+    return np.array(split_indices)
 
 
 @nb.njit(fastmath=True, cache=True, inline='always')

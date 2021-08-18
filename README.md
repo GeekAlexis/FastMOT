@@ -4,8 +4,9 @@
 <img src="assets/dense_demo.gif" width="400"/> <img src="assets/aerial_demo.gif" width="400"/>
 
 ## News
+  - (2021.8.17) Support multi-class tracking
   - (2021.7.4) Support yolov4-p5 and yolov4-p6
-  - (2021.2.13) Support Scaled-YOLOv4 (i.e. yolov4-csp and yolov4x-mish)
+  - (2021.2.13) Support Scaled-YOLOv4 (i.e. yolov4-csp/yolov4x-mish/yolov4-csp-swish)
   - (2021.1.3) Add DIoU-NMS for postprocessing
   - (2020.11.28) Docker container provided for x86 Ubuntu
 
@@ -17,7 +18,7 @@ FastMOT is a custom multiple object tracker that implements:
   - KLT tracker
   - Camera motion compensation
 
-Two-stage trackers like Deep SORT runs detection and feature extraction sequentially, which often becomes a bottleneck. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson. Motion compensation improves tracking for scenes with moving camera, where Deep SORT and FairMOT fail.
+Two-stage trackers like Deep SORT run detection and feature extraction sequentially, which often becomes a bottleneck. FastMOT significantly speeds up the entire system to run in **real-time** even on Jetson. Motion compensation improves tracking for scenes with moving camera, where Deep SORT and FairMOT fail.
 
 To achieve faster processing, FastMOT only runs the detector and feature extractor every N frames, while KLT fills in the gaps efficiently. FastMOT also re-identifies objects that moved out of frame to keep the same IDs.
 
@@ -53,7 +54,7 @@ FastMOT has MOTA scores close to **state-of-the-art** trackers from the MOT Chal
 - TensorFlow < 2.0 (for SSD support)
 
 ### Install for x86 Ubuntu
-Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires an NVIDIA Driver version >= 450 for Ubuntu 18.04 and >= 465.19.01 for Ubuntu 20.04. Build and run the docker image:
+Make sure to have [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) installed. The image requires NVIDIA Driver version >= 450 for Ubuntu 18.04 and >= 465.19.01 for Ubuntu 20.04. Build and run the docker image:
   ```bash
   # Add --build-arg TRT_IMAGE_VERSION=21.05 for Ubuntu 20.04
   # Add --build-arg CUPY_NVCC_GENERATE_CODE=... to speed up build for your GPU, e.g. "arch=compute_75,code=sm_75"
@@ -68,7 +69,7 @@ Make sure to have [JetPack >= 4.4](https://developer.nvidia.com/embedded/jetpack
   ./scripts/install_jetson.sh
   ```
 ### Download models
-This includes pretrained OSNet, SSD, and my YOLOv4 ONNX model
+Pretrained OSNet, SSD, and my YOLOv4 ONNX model are included.
   ```bash
   ./scripts/download_models.sh
   ```
@@ -118,7 +119,7 @@ Note that the first run will be slow due to Numba compilation. To use the FFMPEG
  ## Track custom classes
 FastMOT can be easily extended to a custom class (e.g. vehicle). You need to train both YOLO and a ReID network on your object class. Check [Darknet](https://github.com/AlexeyAB/darknet) for training YOLO and [fast-reid](https://github.com/JDAI-CV/fast-reid) for training ReID. After training, convert weights to ONNX format. The TensorRT plugin adapted from [tensorrt_demos](https://github.com/jkjung-avt/tensorrt_demos/) is only compatible with Darknet.
 
-FastMOT also supports multi-class tracking. It is recommended to train a ReID network for each class and implement a new Python class that extracts features separately and concatenates them before feeding into the tracker.
+FastMOT also supports multi-class tracking. It is recommended to train a ReID network for each class to extract features separately.
 ### Convert YOLO to ONNX
 1. Install ONNX version 1.4.1 (not the latest version)
     ```bash
@@ -172,7 +173,7 @@ FastMOT also supports multi-class tracking. It is recommended to train a ReID ne
     METRIC : {'euclidean', 'cosine'}
         Distance metric used to match features.
     ```
-2. Modify cfg/mot.json: set `model` in `feature_extractor_cfg` to the added Python class name. You may want to play with `max_assoc_cost` and `max_reid_cost` based on model performance
+2. Modify cfg/mot.json: set `model` in `feature_extractor_cfgs` to the added Python class name. For more than one class, add more feature extractors to the list in `feature_extractor_cfgs`. You may want to play with `max_assoc_cost` and `max_reid_cost` based on model performance
 
  ## Citation
  If you find this repo useful in your project or research, please star and consider citing it:

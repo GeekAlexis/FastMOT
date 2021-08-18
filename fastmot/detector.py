@@ -12,6 +12,7 @@ from . import models
 from .utils import TRTInference
 from .utils.rect import as_tlbr, aspect_ratio, to_tlbr, get_size, area
 from .utils.rect import enclosing, multi_crop, iom, diou_nms
+from .utils.numba import find_split_indices
 
 
 DET_DTYPE = np.dtype(
@@ -43,8 +44,8 @@ class Detector(abc.ABC):
 
 class SSDDetector(Detector):
     def __init__(self, size,
+                 class_ids,
                  model='SSDInceptionV2',
-                 class_ids=None,
                  tile_overlap=0.25,
                  tiling_grid=(4, 2),
                  conf_thresh=0.5,
@@ -56,11 +57,11 @@ class SSDDetector(Detector):
         ----------
         size : tuple
             Width and height of each frame.
+        class_ids : sequence
+            Class IDs to detect. Note class ID starts at zero.
         model : str, optional
             SSD model to use.
             Must be the name of a class that inherits `models.SSD`.
-        class_ids : tuple, optional
-            Class IDs to detect. Note class ID starts at zero.
         tile_overlap : float, optional
             Ratio of overlap to width and height of each tile.
         tiling_grid : tuple, optional
@@ -85,13 +86,15 @@ class SSDDetector(Detector):
         assert max_area >= 0
         self.max_area = max_area
 
-        class_ids = [] if class_ids is None else list(class_ids)
         self.label_mask = np.zeros(self.model.NUM_CLASSES, dtype=np.bool_)
-        self.label_mask[class_ids] = True
+        try:
+            self.label_mask[tuple(class_ids),] = True
+        except IndexError as err:
+            raise ValueError('Unsupported class IDs') from err
 
         self.batch_size = int(np.prod(self.tiling_grid))
         self.tiles, self.tiling_region_sz = self._generate_tiles()
-        self.scale_factor = np.array(self.size) / self.tiling_region_sz
+        self.scale_factor = tuple(np.array(self.size) / self.tiling_region_sz)
         self.backend = TRTInference(self.model, self.batch_size)
         self.inp_handle = self.backend.input.host.reshape(self.batch_size, *self.model.INPUT_SHAPE)
 
@@ -103,7 +106,8 @@ class SSDDetector(Detector):
     def postprocess(self):
         """Synchronizes, applies postprocessing, and returns a record array
         of detections (DET_DTYPE).
-        This function should be called after `detect_async`.
+        This API should be called after `detect_async`.
+        Detections are sorted in ascending order by class ID.
         """
         det_out = self.backend.synchronize()[0]
         detections, tile_ids = self._filter_dets(det_out, self.tiles, self.model.TOPK,
@@ -206,14 +210,17 @@ class SSDDetector(Detector):
                     dets[i].tlbr[:] = enclosing(dets[i].tlbr, dets[k].tlbr)
                     dets[i].conf = max(dets[i].conf, dets[k].conf)
                     keep.discard(k)
-        keep = np.array(list(keep))
-        return dets[keep]
+        dets = dets[np.array(list(keep))]
+
+        # sort detections by class
+        dets = dets[np.argsort(dets.label)]
+        return dets
 
 
 class YOLODetector(Detector):
     def __init__(self, size,
+                 class_ids,
                  model='YOLOv4',
-                 class_ids=None,
                  conf_thresh=0.25,
                  nms_thresh=0.5,
                  max_area=800000,
@@ -224,11 +231,11 @@ class YOLODetector(Detector):
         ----------
         size : tuple
             Width and height of each frame.
+        class_ids : sequence
+            Class IDs to detect. Note class ID starts at zero.
         model : str, optional
             YOLO model to use.
             Must be the name of a class that inherits `models.YOLO`.
-        class_ids : tuple, optional
-            Class IDs to detect. Note class ID starts at zero.
         conf_thresh : float, optional
             Detection confidence threshold.
         nms_thresh : float, optional
@@ -242,7 +249,6 @@ class YOLODetector(Detector):
         """
         super().__init__(size)
         self.model = models.YOLO.get_model(model)
-        self.class_ids = tuple() if class_ids is None else class_ids
         assert 0 <= conf_thresh <= 1
         self.conf_thresh = conf_thresh
         assert 0 <= nms_thresh <= 1
@@ -251,6 +257,12 @@ class YOLODetector(Detector):
         self.max_area = max_area
         assert min_aspect_ratio >= 0
         self.min_aspect_ratio = min_aspect_ratio
+
+        self.label_mask = np.zeros(self.model.NUM_CLASSES, dtype=np.bool_)
+        try:
+            self.label_mask[tuple(class_ids),] = True
+        except IndexError as err:
+            raise ValueError('Unsupported class IDs') from err
 
         self.backend = TRTInference(self.model, 1)
         self.inp_handle, self.upscaled_sz, self.bbox_offset = self._create_letterbox()
@@ -263,14 +275,14 @@ class YOLODetector(Detector):
     def postprocess(self):
         """Synchronizes, applies postprocessing, and returns a record array
         of detections (DET_DTYPE).
-        This function should be called after `detect_async`.
-        Detections with the same labels have consecutive indices.
+        This API should be called after `detect_async`.
+        Detections are sorted in ascending order by class ID.
         """
         det_out = self.backend.synchronize()
         det_out = np.concatenate(det_out).reshape(-1, 7)
-        detections = self._filter_dets(det_out, self.upscaled_sz, self.class_ids, self.conf_thresh,
-                                       self.nms_thresh, self.max_area, self.min_aspect_ratio,
-                                       self.bbox_offset)
+        detections = self._filter_dets(det_out, self.upscaled_sz, self.bbox_offset,
+                                       self.label_mask, self.conf_thresh, self.nms_thresh,
+                                       self.max_area, self.min_aspect_ratio)
         detections = np.fromiter(detections, DET_DTYPE, len(detections)).view(np.recarray)
         return detections
 
@@ -309,30 +321,40 @@ class YOLODetector(Detector):
 
     @staticmethod
     @nb.njit(fastmath=True, cache=True)
-    def _filter_dets(det_out, size, class_ids, conf_thresh, nms_thresh, max_area, min_ar, offset):
+    def _filter_dets(det_out, size, offset, label_mask, conf_thresh, nms_thresh, max_area, min_ar):
         """
         det_out: a list of 3 tensors, where each tensor
                  contains a multiple of 7 float32 numbers in
                  the order of [x, y, w, h, box_confidence, class_id, class_prob]
         """
-        # drop detections with low score
-        scores = det_out[:, 4] * det_out[:, 6]
-        keep = np.where(scores >= conf_thresh)
-        det_out = det_out[keep]
+        # filter by class and score
+        keep = []
+        for i in range(len(det_out)):
+            if label_mask[int(det_out[i, 5])]:
+                score = det_out[i, 4] * det_out[i, 6]
+                if score >= conf_thresh:
+                    keep.append(i)
+        det_out = det_out[np.array(keep)]
 
         # scale to pixel values
         det_out[:, :4] *= np.append(size, size)
         det_out[:, :2] -= offset
 
-        keep = []
-        for class_id in class_ids:
-            class_idx = np.where(det_out[:, 5] == class_id)[0]
-            class_dets = det_out[class_idx]
-            class_keep = diou_nms(class_dets[:, :4], class_dets[:, 4], nms_thresh)
-            keep.extend(class_idx[class_keep])
-        keep = np.array(keep)
-        nms_dets = det_out[keep]
+        # per-class NMS
+        det_out = det_out[np.argsort(det_out[:, 5])]
+        split_indices = find_split_indices(det_out[:, 5])
+        all_indices = np.arange(len(det_out))
 
+        keep = []
+        for i in range(len(split_indices) + 1):
+            begin = 0 if i == 0 else split_indices[i - 1]
+            end = len(det_out) if i == len(split_indices) else split_indices[i]
+            cls_dets = det_out[begin:end]
+            cls_keep = diou_nms(cls_dets[:, :4], cls_dets[:, 4], nms_thresh)
+            keep.extend(all_indices[begin:end][cls_keep])
+        nms_dets = det_out[np.array(keep)]
+
+        # create detections
         detections = []
         for i in range(len(nms_dets)):
             tlbr = to_tlbr(nms_dets[i, :4])
@@ -344,13 +366,20 @@ class YOLODetector(Detector):
 
 
 class PublicDetector(Detector):
-    def __init__(self, size, frame_skip, sequence_path=None, conf_thresh=0.5, max_area=800000):
+    def __init__(self, size,
+                 class_ids,
+                 frame_skip,
+                 sequence_path=None,
+                 conf_thresh=0.5,
+                 max_area=800000):
         """Class to use MOT Challenge's public detections.
 
         Parameters
         ----------
         size : tuple
             Width and height of each frame.
+        class_ids : sequence
+            Class IDs to detect. Only 1 (i.e. person) is supported.
         frame_skip : int
             Detector frame skip.
         sequence_path : str, optional
@@ -361,6 +390,7 @@ class PublicDetector(Detector):
             Max area of bounding boxes to detect.
         """
         super().__init__(size)
+        assert tuple(class_ids) == (1,)
         self.frame_skip = frame_skip
         assert sequence_path is not None
         self.seq_root = Path(__file__).parents[1] / sequence_path
