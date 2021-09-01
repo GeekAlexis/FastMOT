@@ -107,21 +107,3 @@ class OSNet10(ReID):
     INPUT_SHAPE = (3, 256, 128)
     OUTPUT_LAYOUT = 512
     METRIC = 'cosine'
-
-
-class VERIWild(ReID):
-    """Model trained on VERIWild dataset using fastreid library"""
-    ENGINE_PATH = Path(__file__).parent / 'veriwild_r50ibn.trt'
-    MODEL_PATH = Path(__file__).parent / 'veriwild_r50ibn.onnx'
-    INPUT_SHAPE = (3, 256, 256)
-    OUTPUT_LAYOUT = 2048
-    METRIC = 'cosine'
-
-
-class VehicleID(ReID):
-    """Model trained on VehicleID dataset using fastreid library"""
-    ENGINE_PATH = Path(__file__).parent / 'vehicleid_r50ibn.trt'
-    MODEL_PATH = Path(__file__).parent / 'vehicleid_r50ibn.onnx'
-    INPUT_SHAPE = (3, 256, 256)
-    OUTPUT_LAYOUT = 2048
-    METRIC = 'cosine'

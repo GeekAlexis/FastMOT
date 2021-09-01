@@ -70,7 +70,7 @@ Make sure to have [JetPack >= 4.4](https://developer.nvidia.com/embedded/jetpack
   ./scripts/install_jetson.sh
   ```
 ### Download models
-Pretrained OSNet, SSD, my YOLOv4 and fastreid pretrained ONNX model are included.
+Pretrained OSNet, SSD, and my YOLOv4 ONNX model are included.
   ```bash
   ./scripts/download_models.sh
   ```
@@ -196,12 +196,14 @@ FastMOT also supports multi-class tracking. It is recommended to train a ReID ne
 Here we will demonstrate the steps outlined above for extending fastmot to track custom classes (e.g. car in this case). We will use [YOLOv4](https://github.com/AlexeyAB/darknet#pre-trained-models) model for detecting cars and [VeRIWild](https://github.com/JDAI-CV/fast-reid/blob/master/MODEL_ZOO.md#veri-wild-baseline) model as feature extractor. Download any video with cars (for ex: [cars](https://github.com/theAIGuysCode/yolov4-deepsort/blob/master/data/video/cars.mp4)).
 
 1. Convert YOLOv4 model to onnx using `scripts/yolo2onnx.py`. After installing the recommended version of `onnx==1.4.1`, download the [weights](https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.weights) and [cfg](https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4.cfg) corresponding to YOLOv4 model. 
-[Optional step] Test YOLOv4 weights and cfg on the input video.
+    [Optional step] Test YOLOv4 weights and cfg on the input video.
+
 2. Convert YOLOv4 weights and cfg to onnx model.
     ```bash
     ./scripts/yolo2onnx.py --config yolov4.cfg --weights yolov4.weights
     ```
     [Optional step] Cross verify the values from cfg with https://github.com/GeekAlexis/FastMOT/blob/32c217a7d289f15a3bb0c1820982df947c82a650/fastmot/models/yolo.py#L301-L312
+    
 3. Replace the `_label_map` inside `fastmot/models/label.py` with [YOLOv4 class mapping](https://github.com/AlexeyAB/darknet/blob/master/data/coco.names).
 
     <details>
@@ -292,15 +294,42 @@ Here we will demonstrate the steps outlined above for extending fastmot to track
     </pre>
     </details>
     
-4. Inside docker run the following command
+4. Add the following classes in `fastmot/models/reid.py`. These ReID models will be used as feature extractor.
+    ```python
+    class VERIWild(ReID):
+    	"""Model trained on VERIWild dataset using fastreid library"""
+    	ENGINE_PATH = Path(__file__).parent / 'veriwild_r50ibn.trt'
+    	MODEL_PATH = Path(__file__).parent / 'veriwild_r50ibn.onnx'
+    	INPUT_SHAPE = (3, 256, 256)
+    	OUTPUT_LAYOUT = 2048
+    	METRIC = 'cosine'
+    
+    class VehicleID(ReID)
+    	"""Model trained on VehicleID dataset using fastreid library"""
+    	ENGINE_PATH = Path(__file__).parent / 'vehicleid_r50ibn.trt'
+    	MODEL_PATH = Path(__file__).parent / 'vehicleid_r50ibn.onnx'
+    	INPUT_SHAPE = (3, 256, 256)
+    	OUTPUT_LAYOUT = 2048
+    	METRIC = 'cosine'
+    ```
+	[Optional step] Download the [pytorch models](https://github.com/JDAI-CV/fast-reid/blob/ced654431be28492066f4746d23c1ff89d26acbd/MODEL_ZOO.md) from fastreid library and [convert to onnx](https://github.com/JDAI-CV/fast-reid/tree/ced654431be28492066f4746d23c1ff89d26acbd/tools/deploy#onnx-convert) or directly downloading the converted models: [veriwild_r50ibn.onnx](https://drive.google.com/uc?id=1Nyxj_muAKwQOrdk6ftdcq0e0di51nTi-) and [vehicleid_r50ibn.onnx](https://drive.google.com/uc?id=1nk5GqReWBZ4xWoUgNdjqp8fusD8wT9ch) 
+5. After visualizing the onnx model in [netron.app](netron.app/), the model already performs normalization step. Replace the lines starting with `out` in `fastmot/feature_extractor.py` to following
+    ```python
+    # Normalize according to fastreid model
+    out[0, ...] = chw[0, ...]
+    out[1, ...] = chw[1, ...]
+    out[2, ...] = chw[2, ...]
+    ```
+
+6. Inside docker run the following command
 
     VERIWild reid model
-    
+
     ```bash
     python3 app.py -i ./videos/cars.mp4 -c ./cfg/veriwild.json -s -v -m
     ```
     VehicleID reid model
-    
+
     - Replace `VERIWild` in `cfg/veriwild.json` to `VehicleID` to run VehicleID as feature extractor.
 
 ### Vehicles
