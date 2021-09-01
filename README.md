@@ -312,8 +312,10 @@ Here we will demonstrate the steps outlined above for extending fastmot to track
     	OUTPUT_LAYOUT = 2048
     	METRIC = 'cosine'
     ```
-	[Optional step] Download the [pytorch models](https://github.com/JDAI-CV/fast-reid/blob/ced654431be28492066f4746d23c1ff89d26acbd/MODEL_ZOO.md) from fastreid library and [convert to onnx](https://github.com/JDAI-CV/fast-reid/tree/ced654431be28492066f4746d23c1ff89d26acbd/tools/deploy#onnx-convert) or directly downloading the converted models: [veriwild_r50ibn.onnx](https://drive.google.com/uc?id=1Nyxj_muAKwQOrdk6ftdcq0e0di51nTi-) and [vehicleid_r50ibn.onnx](https://drive.google.com/uc?id=1nk5GqReWBZ4xWoUgNdjqp8fusD8wT9ch) 
-5. After visualizing the onnx model in [netron.app](netron.app/), the model already performs normalization step. Replace the lines starting with `out` in `fastmot/feature_extractor.py` to following
+	Download the [pytorch models](https://github.com/JDAI-CV/fast-reid/blob/ced654431be28492066f4746d23c1ff89d26acbd/MODEL_ZOO.md) from fastreid library and [convert to onnx](https://github.com/JDAI-CV/fast-reid/tree/ced654431be28492066f4746d23c1ff89d26acbd/tools/deploy#onnx-convert) or directly downloading the converted models: [veriwild_r50ibn.onnx](https://drive.google.com/uc?id=1Nyxj_muAKwQOrdk6ftdcq0e0di51nTi-) and [vehicleid_r50ibn.onnx](https://drive.google.com/uc?id=1nk5GqReWBZ4xWoUgNdjqp8fusD8wT9ch). Move the onnx model to `fastmot/models` directory.
+	
+	[Optional step] [Verify](https://github.com/JDAI-CV/fast-reid/tree/ced654431be28492066f4746d23c1ff89d26acbd/tools/deploy#onnx-convert) the onnx and pytorch model provide same output and visualize the onnx model in [netron](netron.app/).
+5. After visualizing the onnx model in [netron.app](netron.app/), the model already performs normalization step. Replace the lines starting with `out[]` in `fastmot/feature_extractor.py` with the following
     ```python
     # Normalize according to fastreid model
     out[0, ...] = chw[0, ...]
@@ -330,7 +332,7 @@ Here we will demonstrate the steps outlined above for extending fastmot to track
     ```
     VehicleID reid model
 
-    - Replace `VERIWild` in `cfg/veriwild.json` to `VehicleID` to run VehicleID as feature extractor.
+    - Replace `VERIWild` in `cfg/veriwild.json` to `VehicleID` to run VehicleID as ReID feature extractor.
 
 ### Vehicles
 
