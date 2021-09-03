@@ -202,7 +202,6 @@ Here we will demonstrate the steps outlined above for extending fastmot to track
     ```bash
     ./scripts/yolo2onnx.py --config yolov4.cfg --weights yolov4.weights
     ```
-    [Optional step] Cross verify the values from cfg with https://github.com/GeekAlexis/FastMOT/blob/32c217a7d289f15a3bb0c1820982df947c82a650/fastmot/models/yolo.py#L301-L312
     
 3. Replace the `_label_map` inside `fastmot/models/label.py` with [YOLOv4 class mapping](https://github.com/AlexeyAB/darknet/blob/master/data/coco.names).
 
@@ -294,7 +293,26 @@ Here we will demonstrate the steps outlined above for extending fastmot to track
     </pre>
     </details>
     
-4. Add the following classes in `fastmot/models/reid.py`. These ReID models will be used as feature extractor.
+4. Add following code to `fastmot/models/yolo.py`
+    
+    ```python
+    class YOLOv4Original(YOLO):
+        ENGINE_PATH = Path(__file__).parent / 'yolov4.trt'
+        MODEL_PATH = Path(__file__).parent /  'yolov4.onnx'
+        NUM_CLASSES = 80
+        INPUT_SHAPE = (3, 608, 608)
+        LAYER_FACTORS = [8, 16, 32]
+        SCALES = [1.2, 1.1, 1.05]
+        ANCHORS = [[12,16, 19,36, 40,28],
+                   [36,75, 76,55, 72,146],
+                   [142,110, 192,243, 459,401]]
+    ```
+    
+    
+    [Optional step] Cross verify the values from [cfg](https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4.cfg) with the above class.
+    
+5. Add the following classes in `fastmot/models/reid.py`. These ReID models will be used as feature extractor.
+
     ```python
     class VERIWild(ReID):
     	"""Model trained on VERIWild dataset using fastreid library"""
@@ -312,10 +330,15 @@ Here we will demonstrate the steps outlined above for extending fastmot to track
     	OUTPUT_LAYOUT = 2048
     	METRIC = 'cosine'
     ```
-	Download the [pytorch models](https://github.com/JDAI-CV/fast-reid/blob/ced654431be28492066f4746d23c1ff89d26acbd/MODEL_ZOO.md) from fastreid library and [convert to onnx](https://github.com/JDAI-CV/fast-reid/tree/ced654431be28492066f4746d23c1ff89d26acbd/tools/deploy#onnx-convert) or directly downloading the converted models: [veriwild_r50ibn.onnx](https://drive.google.com/uc?id=1Nyxj_muAKwQOrdk6ftdcq0e0di51nTi-) and [vehicleid_r50ibn.onnx](https://drive.google.com/uc?id=1nk5GqReWBZ4xWoUgNdjqp8fusD8wT9ch). Move the onnx model to `fastmot/models` directory.
-	
-	[Optional step] [Verify](https://github.com/JDAI-CV/fast-reid/tree/ced654431be28492066f4746d23c1ff89d26acbd/tools/deploy#onnx-convert) the onnx and pytorch model provide same output and visualize the onnx model in [netron](netron.app/).
-5. After visualizing the onnx model in [netron.app](netron.app/), the model already performs normalization step. Replace the lines starting with `out[]` in `fastmot/feature_extractor.py` with the following
+    Download the [pytorch models](https://github.com/JDAI-CV/fast-reid/blob/ced654431be28492066f4746d23c1ff89d26acbd/MODEL_ZOO.md) from fastreid library and [convert to onnx](https://github.com/JDAI-CV/fast-reid/tree/ced654431be28492066f4746d23c1ff89d26acbd/tools/deploy#onnx-convert) or directly downloading the converted models: [veriwild_r50ibn.onnx](https://drive.google.com/uc?id=1Nyxj_muAKwQOrdk6ftdcq0e0di51nTi-) and [vehicleid_r50ibn.onnx](https://drive.google.com/uc?id=1nk5GqReWBZ4xWoUgNdjqp8fusD8wT9ch). Move the onnx model to `fastmot/models` directory.
+
+    
+
+    [Optional step] [Verify](https://github.com/JDAI-CV/fast-reid/tree/ced654431be28492066f4746d23c1ff89d26acbd/tools/deploy#onnx-convert) the onnx and pytorch model provide same output and visualize the onnx model in [netron](netron.app/).
+
+    
+
+6. After visualizing the onnx model in [netron.app](netron.app/), the model already performs normalization step. Replace the lines starting with `out[]` in `fastmot/feature_extractor.py` with the following
     ```python
     # Normalize according to fastreid model
     out[0, ...] = chw[0, ...]
@@ -323,7 +346,7 @@ Here we will demonstrate the steps outlined above for extending fastmot to track
     out[2, ...] = chw[2, ...]
     ```
 
-6. Inside docker run the following command
+7. Inside docker run the following command
 
     VERIWild reid model
 
@@ -343,8 +366,7 @@ We can easily extend the example of cars to track vehicles (i.e. cars, motorbike
         if label == 7: # trucks
             label = 2  # cars
     ```
-    https://github.com/GeekAlexis/FastMOT/blob/9aee101b1ac83a5fea8cece1f8cfda8030adb743/fastmot/detector.py#L357-L365
-
+    
 2. Modify `cfg/veriwild.json`. Detect and track cars & trucks by modifying `class_ids` and `feature_extractor_cfgs`.
     ```bash
         "class_ids": [ 2, 7], 
@@ -367,8 +389,12 @@ We can easily extend the example of cars to track vehicles (i.e. cars, motorbike
     ```bash
     python3 app.py -i ./videos/nv.mp4 -c ./cfg/veriwild.json -s -v -m
     ```
-
-You may want to play with different parameters based on model performance.
+    
+    VehicleID reid model
+    
+    - Replace `VERIWild` in `cfg/veriwild.json` to `VehicleID` to run VehicleID as ReID feature extractor.
+    
+    You may want to play with different parameters based on model performance.
 
 
  ## Citation
@@ -385,3 +411,4 @@ You may want to play with different parameters based on model performance.
   url          = {https://doi.org/10.5281/zenodo.4294717}
 }
  ```
+
