@@ -1,10 +1,17 @@
 import colorsys
 import numpy as np
 import cv2
-
+from .rect import get_center
 
 GOLDEN_RATIO = 0.618033988749895
 
+def draw_trajectories(frame, tracks):
+    for track in tracks:
+        tlbrs = np.reshape(list(track.bboxes), (len(track.bboxes), 4))
+        centers = tuple(map(lambda box: get_center(box), tlbrs[::10]))
+        color = get_color(track.trk_id)
+        pts = np.array(centers, dtype=np.int32)
+        cv2.polylines(frame, [pts], False, color, thickness=1)
 
 def draw_tracks(frame, tracks, show_flow=False, show_cov=False):
     for track in tracks:
@@ -92,7 +99,8 @@ class Visualizer:
                  draw_covariance=False,
                  draw_klt=False,
                  draw_obj_flow=False,
-                 draw_bg_flow=False):
+                 draw_bg_flow=False,
+                 draw_trajectories=False):
         """Class for visualization.
 
         Parameters
@@ -116,6 +124,7 @@ class Visualizer:
         self.draw_klt = draw_klt
         self.draw_obj_flow = draw_obj_flow
         self.draw_bg_flow = draw_bg_flow
+        self.draw_trajectories = draw_trajectories
 
     def render(self, frame, tracks, detections, klt_bboxes, prev_bg_keypoints, bg_keypoints):
         """Render visualizations onto the frame."""
@@ -126,3 +135,5 @@ class Visualizer:
             draw_klt_bboxes(frame, klt_bboxes)
         if self.draw_bg_flow:
             draw_background_flow(frame, prev_bg_keypoints, bg_keypoints)
+        if self.draw_trajectories:
+            draw_trajectories(frame, tracks)
