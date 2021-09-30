@@ -118,6 +118,8 @@ class Visualizer:
             Enable drawing object flow matches.
         draw_bg_flow : bool, optional
             Enable drawing background flow matches.
+        draw_trajectories: bool, optional
+            Enable drawing trajecctories of boxes
         """
         self.draw_detections = draw_detections
         self.draw_confidence = draw_confidence
