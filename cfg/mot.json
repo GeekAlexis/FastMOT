@@ -96,7 +96,7 @@
             "draw_klt": false,
             "draw_obj_flow": false,
             "draw_bg_flow": false,
-            "draw_trajectories": true
+            "draw_trajectories": false
 
         }
     }
