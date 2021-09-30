@@ -5,17 +5,18 @@ from .rect import get_center
 
 GOLDEN_RATIO = 0.618033988749895
 
-def draw_trajectories(frame, tracks):
-    for track in tracks:
-        tlbrs = np.reshape(list(track.bboxes), (len(track.bboxes), 4))
-        centers = tuple(map(lambda box: get_center(box), tlbrs[::10]))
-        color = get_color(track.trk_id)
-        pts = np.array(centers, dtype=np.int32)
-        cv2.polylines(frame, [pts], False, color, thickness=1)
+def draw_trajectories(frame, track):
+    tlbrs = np.reshape(list(track.bboxes), (len(track.bboxes), 4))
+    centers = tuple(map(lambda box: get_center(box), tlbrs[::4]))
+    color = get_color(track.trk_id)
+    pts = np.array(centers, dtype=np.int32)
+    cv2.polylines(frame, [pts], False, color, thickness=1)
 
-def draw_tracks(frame, tracks, show_flow=False, show_cov=False):
+def draw_tracks(frame, tracks, show_flow=False, show_cov=False, show_traj=False):
     for track in tracks:
         draw_bbox(frame, track.tlbr, get_color(track.trk_id), 2, str(track.trk_id))
+        if show_traj:
+            draw_trajectories(frame,track)
         if show_flow:
             draw_feature_match(frame, track.prev_keypoints, track.keypoints, (0, 255, 255))
         if show_cov:
@@ -128,12 +129,11 @@ class Visualizer:
 
     def render(self, frame, tracks, detections, klt_bboxes, prev_bg_keypoints, bg_keypoints):
         """Render visualizations onto the frame."""
-        draw_tracks(frame, tracks, show_flow=self.draw_obj_flow, show_cov=self.draw_covariance)
+        draw_tracks(frame, tracks, show_flow=self.draw_obj_flow, show_cov=self.draw_covariance,
+                    show_traj=self.draw_trajectories)
         if self.draw_detections:
             draw_detections(frame, detections, show_conf=self.draw_confidence)
         if self.draw_klt:
             draw_klt_bboxes(frame, klt_bboxes)
         if self.draw_bg_flow:
             draw_background_flow(frame, prev_bg_keypoints, bg_keypoints)
-        if self.draw_trajectories:
-            draw_trajectories(frame, tracks)
