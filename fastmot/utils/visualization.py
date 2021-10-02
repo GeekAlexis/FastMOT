@@ -7,7 +7,8 @@ from .rect import get_center
 GOLDEN_RATIO = 0.618033988749895
 
 
-def draw_tracks(frame, tracks, show_flow=False, show_cov=False, show_traj=False):
+def draw_tracks(frame, tracks, show_flow=False, show_cov=False,
+                show_traj=False):
     for track in tracks:
         draw_bbox(frame, track.tlbr, get_color(track.trk_id), 2, str(track.trk_id))
         if show_traj:
@@ -134,7 +135,8 @@ class Visualizer:
 
     def render(self, frame, tracks, detections, klt_bboxes, prev_bg_keypoints, bg_keypoints):
         """Render visualizations onto the frame."""
-        draw_tracks(frame, tracks, show_flow=self.draw_obj_flow, show_cov=self.draw_covariance,
+        draw_tracks(frame, tracks, show_flow=self.draw_obj_flow,
+                    show_cov=self.draw_covariance,
                     show_traj=self.draw_trajectory)
         if self.draw_detections:
             draw_detections(frame, detections, show_conf=self.draw_confidence)
