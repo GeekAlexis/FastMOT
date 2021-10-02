@@ -1,14 +1,18 @@
 import colorsys
 import numpy as np
 import cv2
+from .rect import get_center
 
 
 GOLDEN_RATIO = 0.618033988749895
 
 
-def draw_tracks(frame, tracks, show_flow=False, show_cov=False):
+def draw_tracks(frame, tracks, show_flow=False, show_cov=False,
+                show_traj=False):
     for track in tracks:
         draw_bbox(frame, track.tlbr, get_color(track.trk_id), 2, str(track.trk_id))
+        if show_traj:
+            draw_trajectory(frame, track.bboxes, track.trk_id)
         if show_flow:
             draw_feature_match(frame, track.prev_keypoints, track.keypoints, (0, 255, 255))
         if show_cov:
@@ -19,6 +23,14 @@ def draw_detections(frame, detections, color=(255, 255, 255), show_conf=False):
     for det in detections:
         text = f'{det.label}: {det.conf:.2f}' if show_conf else None
         draw_bbox(frame, det.tlbr, color, 1, text)
+
+
+def draw_trajectory(frame, bboxes, trk_id):
+    tlbrs = np.reshape(list(bboxes), (len(bboxes), 4))
+    centers = tuple(map(lambda box: get_center(box), tlbrs[::4]))
+    color = get_color(trk_id)
+    pts = np.array(centers, dtype=np.int32)
+    cv2.polylines(frame, [pts], False, color, thickness=1)
 
 
 def draw_klt_bboxes(frame, klt_bboxes, color=(0, 0, 0)):
@@ -92,7 +104,8 @@ class Visualizer:
                  draw_covariance=False,
                  draw_klt=False,
                  draw_obj_flow=False,
-                 draw_bg_flow=False):
+                 draw_bg_flow=False,
+                 draw_trajectory=False):
         """Class for visualization.
 
         Parameters
@@ -109,6 +122,8 @@ class Visualizer:
             Enable drawing object flow matches.
         draw_bg_flow : bool, optional
             Enable drawing background flow matches.
+        draw_trajectory: bool, optional
+            Enable drawing trajectories of boxes
         """
         self.draw_detections = draw_detections
         self.draw_confidence = draw_confidence
@@ -116,10 +131,13 @@ class Visualizer:
         self.draw_klt = draw_klt
         self.draw_obj_flow = draw_obj_flow
         self.draw_bg_flow = draw_bg_flow
+        self.draw_trajectory = draw_trajectory
 
     def render(self, frame, tracks, detections, klt_bboxes, prev_bg_keypoints, bg_keypoints):
         """Render visualizations onto the frame."""
-        draw_tracks(frame, tracks, show_flow=self.draw_obj_flow, show_cov=self.draw_covariance)
+        draw_tracks(frame, tracks, show_flow=self.draw_obj_flow,
+                    show_cov=self.draw_covariance,
+                    show_traj=self.draw_trajectory)
         if self.draw_detections:
             draw_detections(frame, detections, show_conf=self.draw_confidence)
         if self.draw_klt:
