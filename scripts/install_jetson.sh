@@ -8,12 +8,15 @@ L4T_VERSION=$(dpkg-query --showformat='${Version}' --show nvidia-l4t-core | cut 
 if dpkg --compare-versions $L4T_VERSION ge 32.6; then
     TF_VERSION=1.15.5
     NV_VERSION=21.6
+    JP_VERSION=46
 elif dpkg --compare-versions $L4T_VERSION ge 32.5; then
     TF_VERSION=1.15.4
     NV_VERSION=20.12
+    JP_VERSION=45
 elif dpkg --compare-versions $L4T_VERSION ge 32.4; then
     TF_VERSION=1.15.2
     NV_VERSION=20.4
+    JP_VERSION=44
 else
     echo "Error: unsupported L4T version $L4T_VERSION"
     exit 1
