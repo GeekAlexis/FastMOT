@@ -42,7 +42,6 @@ def mask_area(mask):
 @nb.njit(fastmath=True, cache=True)
 def bisect_right(arr, val, left=0):
     """Utility to search a value in a sorted array."""
-    left = 0
     right = len(arr)
     while left < right:
         mid = left + (right - left) // 2
