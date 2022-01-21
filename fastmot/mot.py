@@ -176,7 +176,7 @@ class MOT:
         LOGGER.debug(f"{'association time:':<37}{Profiler.get_avg_millis('assoc'):>6.3f} ms")
 
     @staticmethod
-    @nb.njit(fastmath=True, cache=True)
+    @nb.njit(cache=True)
     def _split_bboxes_by_cls(bboxes, labels, class_ids):
         cls_bboxes = []
         begin = 0
