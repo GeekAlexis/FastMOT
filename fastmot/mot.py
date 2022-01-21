@@ -143,7 +143,8 @@ class MOT:
                 detections = self.detector.postprocess()
 
             with Profiler('extract'):
-                cls_bboxes = self._split_bboxes_by_cls(detections.tlbr, detections.label, self.class_ids)
+                cls_bboxes = self._split_bboxes_by_cls(detections.tlbr, detections.label,
+                                                       self.class_ids)
                 for extractor, bboxes in zip(self.extractors, cls_bboxes):
                     extractor.extract_async(frame, bboxes)
 
