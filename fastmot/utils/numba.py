@@ -52,6 +52,18 @@ def bisect_right(arr, val, left=0):
     return left
 
 
+@nb.njit(fastmath=True, cache=True)
+def find_split_indices(arr):
+    """Utility to find indices of unique elements in sorted array."""
+    prev = arr[0]
+    split_indices = []
+    for i, val in enumerate(arr[1:], 1):
+        if val != prev:
+            split_indices.append(i)
+            prev = val
+    return np.array(split_indices)
+
+
 @nb.njit(fastmath=True, cache=True, inline='always')
 def transform(pts, m):
     """Numba implementation of OpenCV's transform."""

@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from enum import Enum
 import logging
 import numpy as np
+import numba as nb
 import cv2
 
 from .detector import SSDDetector, YOLODetector, PublicDetector
