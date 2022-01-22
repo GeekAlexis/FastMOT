@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from enum import Enum
 import logging
 import numpy as np
+import numba as nb
 import cv2
 
 from .detector import SSDDetector, YOLODetector, PublicDetector
@@ -9,7 +10,7 @@ from .feature_extractor import FeatureExtractor
 from .tracker import MultiTracker
 from .utils import Profiler
 from .utils.visualization import Visualizer
-from .utils.numba import find_split_indices
+from .utils.numba import bisect_right
 
 
 LOGGER = logging.getLogger(__name__)
@@ -143,7 +144,8 @@ class MOT:
                 detections = self.detector.postprocess()
 
             with Profiler('extract'):
-                cls_bboxes = np.split(detections.tlbr, find_split_indices(detections.label))
+                cls_bboxes = self._split_bboxes_by_cls(detections.tlbr, detections.label,
+                                                       self.class_ids)
                 for extractor, bboxes in zip(self.extractors, cls_bboxes):
                     extractor.extract_async(frame, bboxes)
 
@@ -174,6 +176,17 @@ class MOT:
         LOGGER.debug(f"{'feature extract/kalman filter time:':<37}"
                      f"{Profiler.get_avg_millis('extract'):>6.3f} ms")
         LOGGER.debug(f"{'association time:':<37}{Profiler.get_avg_millis('assoc'):>6.3f} ms")
+
+    @staticmethod
+    @nb.njit(cache=True)
+    def _split_bboxes_by_cls(bboxes, labels, class_ids):
+        cls_bboxes = []
+        begin = 0
+        for cls_id in class_ids:
+            end = bisect_right(labels, cls_id, begin)
+            cls_bboxes.append(bboxes[begin:end])
+            begin = end
+        return cls_bboxes
 
     def _draw(self, frame, detections):
         visible_tracks = list(self.visible_tracks())

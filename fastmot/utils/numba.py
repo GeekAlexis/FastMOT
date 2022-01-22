@@ -40,6 +40,19 @@ def mask_area(mask):
 
 
 @nb.njit(fastmath=True, cache=True)
+def bisect_right(arr, val, left=0):
+    """Utility to search a value in a sorted array."""
+    right = len(arr)
+    while left < right:
+        mid = left + (right - left) // 2
+        if arr[mid] >= val:
+            left = mid + 1
+        else:
+            right = mid
+    return left
+
+
+@nb.njit(fastmath=True, cache=True)
 def find_split_indices(arr):
     """Utility to find indices of unique elements in sorted array."""
     prev = arr[0]
