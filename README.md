@@ -1,7 +1,7 @@
 # FastMOT
 ### Sponsor
-Thank you to [Roboflow](https://roboflow.com/?ref=tensorrt_demos) for supporting our work. Over 500,000 developers and machine learning engineers use Roboflow to build and deploy computer vision models. 
-[![roboflow_full_logo_color](https://github.com/jkjung-avt/tensorrt_demos/assets/173217521/dc78877e-ce4f-4cfb-bad0-9417b950e1ff)](https://roboflow.com/?ref=tensorrt_demos)
+Thank you to [Roboflow](https://roboflow.com/?ref=fastMOT) for supporting our work. Over 500,000 developers and machine learning engineers use Roboflow to build and deploy computer vision models. 
+[![roboflow_full_logo_color](https://github.com/gitsponsored/FastMOT/assets/173217521/67f4b8b8-0c28-4907-8268-349027375038)
 
 
 
